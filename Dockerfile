@@ -41,9 +41,10 @@ COPY --from=builder /root/.local /root/.local
 # Install Playwright + Chromium (pinned to match requirements.txt)
 # PLAYWRIGHT_BROWSERS_PATH must be outside /root/.cache so rm -rf below doesn't wipe them
 ENV PLAYWRIGHT_BROWSERS_PATH=/root/playwright-browsers
+# Install browsers with ALL system dependencies
 RUN pip install --no-cache-dir "playwright==1.60.0" && \
-    playwright install chromium && \
-    playwright install firefox && \
+    playwright install --with-deps chromium && \
+    playwright install --with-deps firefox && \
     rm -rf /root/.cache && \
     rm -rf /var/lib/apt/lists/*
 
