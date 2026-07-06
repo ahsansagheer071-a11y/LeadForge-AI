@@ -2830,12 +2830,16 @@ class WebsiteIntelligenceService:
                 usage = "body"
             fonts.append(FontInfo(family=f, usage=usage))
 
+        h1 = computed.get("h1Font")
+        body = computed.get("bodyFont")
         return Typography(
             fonts=fonts,
-            heading_h1=computed.get("h1Font"),
+            heading_h1=h1,
             heading_h2=computed.get("h2Font"),
             heading_h3=computed.get("h3Font"),
-            body=computed.get("bodyFont"),
+            body=body,
+            heading_font=h1,
+            body_font=body,
         )
 
     def _extract_navigation(self, soup: BeautifulSoup, base_url: str) -> List[NavigationItem]:

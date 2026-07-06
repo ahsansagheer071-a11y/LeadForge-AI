@@ -70,6 +70,8 @@ class Typography(BaseModel):
     heading_h2: Optional[str] = None
     heading_h3: Optional[str] = None
     body: Optional[str] = None
+    heading_font: Optional[str] = None
+    body_font: Optional[str] = None
 
 
 class NavigationItem(BaseModel):
