@@ -140,10 +140,11 @@ class BrowserManager:
         if self._state.playwright is None:
             self._state.playwright = await async_playwright().start()
 
-        try:
-            browser = await self._state.playwright.chromium.launch(
-                headless=True,
-                args=[
+                try:
+                    logger.info("_launch_browser: trying chromium (v3)")
+                    browser = await self._state.playwright.chromium.launch(
+                        headless=True,
+                        args=[
                     "--no-sandbox",
                     "--disable-dev-shm-usage",
                     "--single-process",
