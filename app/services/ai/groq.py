@@ -105,6 +105,8 @@ class GroqProvider(AIBaseProvider):
         last_error = None
 
         for attempt_idx, attempt_config in enumerate(attempts):
+            if attempt_idx > 0:
+                await asyncio.sleep(3)
             for retry_count in range(self.max_retries + 1):
                 try:
                     logger.info(
@@ -202,7 +204,7 @@ class GroqProvider(AIBaseProvider):
                     )
 
                     if "rate_limit" in str(e).lower() or "429" in str(e):
-                        wait = self.retry_delay * (2 ** retry_count) * 3
+                        wait = min(self.retry_delay * (2 ** retry_count) * 10, 60)
                         logger.warning("Rate limited, waiting %ds before retry", wait)
                         await asyncio.sleep(wait)
                     else:
