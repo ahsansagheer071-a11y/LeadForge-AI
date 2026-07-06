@@ -850,8 +850,13 @@ class WebsiteIntelligenceService:
         profile.quality_metrics = self.calculate_quality_metrics(profile)
         profile.blueprint = self.generate_website_blueprint(profile)
 
-        await website_intelligence_repository.create(db, lead_id=lead.id, profile=profile)
-        logger.info("Website intelligence extracted and saved | lead_id=%s", lead.id)
+        existing = await website_intelligence_repository.get_by_lead(db, lead_id=lead.id)
+        if existing:
+            await website_intelligence_repository.update(db, lead_id=lead.id, profile=profile)
+            logger.info("Website intelligence updated | lead_id=%s", lead.id)
+        else:
+            await website_intelligence_repository.create(db, lead_id=lead.id, profile=profile)
+            logger.info("Website intelligence extracted and saved | lead_id=%s", lead.id)
         return profile
 
     async def validate_profile(

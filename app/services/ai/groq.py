@@ -31,8 +31,8 @@ class GroqProvider(AIBaseProvider):
         """Initialize Groq client with proper error handling."""
         self.api_key = settings.GROQ_API_KEY
         self.model = "llama-3.3-70b-versatile"
-        self.max_retries = 1
-        self.retry_delay = 2
+        self.max_retries = 3
+        self.retry_delay = 3
         self.timeout = 30
 
         if not self.api_key:
@@ -202,7 +202,9 @@ class GroqProvider(AIBaseProvider):
                     )
 
                     if "rate_limit" in str(e).lower() or "429" in str(e):
-                        await asyncio.sleep(self.retry_delay * 2)
+                        wait = self.retry_delay * (2 ** retry_count) * 3
+                        logger.warning("Rate limited, waiting %ds before retry", wait)
+                        await asyncio.sleep(wait)
                     else:
                         await asyncio.sleep(self.retry_delay)
 
@@ -310,6 +312,11 @@ class GroqProvider(AIBaseProvider):
                     retry_count + 1,
                     str(e),
                 )
+                if "rate_limit" in str(e).lower() or "429" in str(e):
+                    wait = self.retry_delay * (2 ** retry_count) * 3
+                    logger.warning("Rate limited, waiting %ds before retry", wait)
+                    await asyncio.sleep(wait)
+                    continue
 
             if retry_count < self.max_retries:
                 await asyncio.sleep(self.retry_delay * (retry_count + 1))
