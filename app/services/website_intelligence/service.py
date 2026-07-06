@@ -23,11 +23,11 @@ except ImportError:
     _COLORTHIEF_AVAILABLE = False
 
 from bs4 import BeautifulSoup
-from playwright.async_api import async_playwright
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import logger
 from app.models.lead import Lead
+from app.services.screenshot import _browser_mgr
 from app.services.website_intelligence.schemas import (
     BrandIdentity,
     BrandPersonalityResult,
@@ -688,30 +688,18 @@ class WebsiteIntelligenceService:
         html: Optional[str] = None
         computed = {}
 
-        playwright = await async_playwright().start()
-        try:
-            browser = await playwright.chromium.launch(
-                headless=True,
-                args=[
-                    "--no-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-gpu",
-                    "--disable-background-networking",
-                    "--no-first-run",
-                    "--no-default-browser-check",
-                    "--disable-extensions",
-                ],
-            )
-            context = await browser.new_context(
-                viewport={"width": 1920, "height": 1080},
-                user_agent=(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/126.0.0.0 Safari/537.36"
-                ),
-            )
-            page = await context.new_page()
+        browser = await _browser_mgr.get_browser()
+        context = await browser.new_context(
+            viewport={"width": 1920, "height": 1080},
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/126.0.0.0 Safari/537.36"
+            ),
+        )
+        page = await context.new_page()
 
+        try:
             await page.goto(url, wait_until="networkidle", timeout=30000)
 
             await page.wait_for_load_state("domcontentloaded")
@@ -775,16 +763,12 @@ class WebsiteIntelligenceService:
             }""")
 
             color_palette = await self.extract_color_palette(page)
-
-            await context.close()
-            await browser.close()
-
         except Exception as exc:
             logger.error("Playwright extraction failed | url=%s | error=%s", url, exc)
             return None
         finally:
             try:
-                await playwright.stop()
+                await context.close()
             except Exception:
                 pass
 
