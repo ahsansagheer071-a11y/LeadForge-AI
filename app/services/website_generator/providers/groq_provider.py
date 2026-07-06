@@ -32,6 +32,11 @@ class GroqProvider(AIProvider):
         self._api_key = api_key or settings.GROQ_API_KEY
         self._model = model or settings.GROQ_DEFAULT_MODEL
         self._base_url = (base_url or settings.GROQ_BASE_URL).rstrip("/")
+        # Normalize: remove trailing /v1 or /openai/v1 since GROQ_CHAT_ENDPOINT already includes it
+        for suffix in ["/openai/v1", "/v1"]:
+            if self._base_url.endswith(suffix):
+                self._base_url = self._base_url[: -len(suffix)]
+                break
 
     def provider_name(self) -> str:
         return "groq"

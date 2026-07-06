@@ -42,6 +42,7 @@ class GroqProvider(AIBaseProvider):
             try:
                 self.client = Groq(
                     api_key=self.api_key,
+                    base_url="https://api.groq.com",
                     timeout=self.timeout,
                     max_retries=1,
                 )
