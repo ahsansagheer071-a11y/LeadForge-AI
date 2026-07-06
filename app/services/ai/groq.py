@@ -99,14 +99,11 @@ class GroqProvider(AIBaseProvider):
 
         attempts = [
             {"prompt": base_prompt, "description": "Standard prompt"},
-            {"prompt": strict_prompt, "description": "Strict format prompt"},
         ]
 
         last_error = None
 
         for attempt_idx, attempt_config in enumerate(attempts):
-            if attempt_idx > 0:
-                await asyncio.sleep(3)
             for retry_count in range(self.max_retries + 1):
                 try:
                     logger.info(
@@ -204,7 +201,7 @@ class GroqProvider(AIBaseProvider):
                     )
 
                     if "rate_limit" in str(e).lower() or "429" in str(e):
-                        wait = 60
+                        wait = 65
                         logger.warning("Rate limited, waiting %ds before retry", wait)
                         await asyncio.sleep(wait)
                     else:
