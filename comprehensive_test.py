@@ -33,7 +33,12 @@ def req(method, path, headers=None, data=None, form=None):
     url = f"{BASE}{path}"
     r = urllib.request.Request(url, data=body, headers=hdrs, method=method)
     try:
-        resp = urllib.request.urlopen(r, timeout=120)
+        timeout_map = {
+            "/api/v1/audits/run": 300,
+            "/api/v1/outreach/generate": 300,
+        }
+        req_timeout = timeout_map.get(path, 180)
+        resp = urllib.request.urlopen(r, timeout=req_timeout)
         raw = resp.read()
         try: return resp.status, json.loads(raw)
         except: return resp.status, raw.decode()
