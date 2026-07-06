@@ -479,38 +479,26 @@ class ScreenshotService:
             try:
                 browser = await _browser_mgr.get_browser()
 
-                # Desktop + Mobile concurrently
-                results = await asyncio.gather(
-                    _capture_single_viewport(
-                        url, browser, desktop_path, DESKTOP_VIEWPORT,
-                        full_page=False, is_mobile=False
-                    ),
-                    _capture_single_viewport(
-                        url, browser, mobile_path, MOBILE_VIEWPORT,
-                        full_page=False, is_mobile=True,
-                        user_agent=(
-                            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 "
-                            "like Mac OS X) AppleWebKit/605.1.15 "
-                            "(KHTML, like Gecko) Version/17.0 "
-                            "Mobile/15E148 Safari/604.1"
-                        )
-                    ),
-                    return_exceptions=True,
+                # Run all captures sequentially to avoid resource contention
+                desktop_timings = await _capture_single_viewport(
+                    url, browser, desktop_path, DESKTOP_VIEWPORT,
+                    full_page=False, is_mobile=False
                 )
-
-                # Check for exceptions
-                errors = [r for r in results if isinstance(r, Exception)]
-                if errors:
-                    raise errors[0]
-                desktop_timings, mobile_timings = results
-
-                # Full page (sequential to limit memory)
+                mobile_timings = await _capture_single_viewport(
+                    url, browser, mobile_path, MOBILE_VIEWPORT,
+                    full_page=False, is_mobile=True,
+                    user_agent=(
+                        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 "
+                        "like Mac OS X) AppleWebKit/605.1.15 "
+                        "(KHTML, like Gecko) Version/17.0 "
+                        "Mobile/15E148 Safari/604.1"
+                    )
+                )
                 full_timings = await _capture_single_viewport(
                     url, browser, full_page_path, DESKTOP_VIEWPORT,
                     full_page=True, is_mobile=False
                 )
 
-                # Success
                 timings = {
                     "desktop": desktop_timings,
                     "mobile": mobile_timings,
