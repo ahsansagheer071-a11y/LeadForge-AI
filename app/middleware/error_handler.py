@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from app.core.config import settings
 from app.core.exceptions import BaseAppException
 from app.core.logging import logger
 import traceback
@@ -74,7 +75,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "success": False,
                 "error": {
                     "code": "InternalServerError",
-                    "message": "An unexpected internal server error occurred. Please try again later.",
+                    "message": f"An unexpected internal server error occurred: {exc}",
                     "detail": None
                 }
             }
