@@ -140,30 +140,39 @@ class BrowserManager:
         if self._state.playwright is None:
             self._state.playwright = await async_playwright().start()
 
-        browser = await self._state.playwright.chromium.launch(
-            headless=True,
-            args=[
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-gpu",
-                "--disable-background-networking",
-                "--disable-background-timer-throttling",
-                "--disable-client-side-phishing-detection",
-                "--disable-component-update",
-                "--disable-features=TranslateUI,OptimizationHints",
-                "--disable-hang-monitor",
-                "--disable-ipc-flooding-protection",
-                "--disable-popup-blocking",
-                "--disable-prompt-on-repost",
-                "--disable-sync",
-                "--no-first-run",
-                "--no-default-browser-check",
-                "--disable-extensions",
-                "--disable-default-apps",
-                "--memory-pressure-off",
-                "--max_old_space_size=512",
-            ],
-        )
+        try:
+            browser = await self._state.playwright.chromium.launch(
+                headless=True,
+                args=[
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--single-process",
+                    "--disable-background-networking",
+                    "--disable-background-timer-throttling",
+                    "--disable-client-side-phishing-detection",
+                    "--disable-component-update",
+                    "--disable-features=TranslateUI,OptimizationHints",
+                    "--disable-popup-blocking",
+                    "--disable-prompt-on-repost",
+                    "--disable-sync",
+                    "--no-first-run",
+                    "--no-default-browser-check",
+                    "--disable-extensions",
+                    "--disable-default-apps",
+                    "--memory-pressure-off",
+                    "--max_old_space_size=256",
+                ],
+            )
+        except Exception as e:
+            logger.error(f"Chromium launch failed: {e}")
+            logger.info("Falling back to Firefox")
+            if self._state.playwright is not None:
+                await self._state.playwright.stop()
+            self._state.playwright = await async_playwright().start()
+            browser = await self._state.playwright.firefox.launch(
+                headless=True,
+                args=["--no-sandbox"],
+            )
 
         self._state.browser = browser
         self._state.launched_at = time.monotonic()
