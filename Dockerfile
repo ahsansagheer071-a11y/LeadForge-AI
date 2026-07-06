@@ -34,6 +34,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libdrm2 libdbus-1-3 libxcb1 libxkbcommon0 libxdamage1 \
     libxcomposite1 libxrandr2 libgbm1 libpango-1.0-0 \
     libcairo2 libasound2 libatspi2.0-0 \
+    libxcursor1 libxfixes3 libgtk-3-0 libpangocairo-1.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /root/.local /root/.local
