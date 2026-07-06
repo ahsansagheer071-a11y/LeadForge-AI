@@ -143,13 +143,11 @@ class BrowserManager:
         try:
             logger.info("_launch_browser: trying chromium")
             browser = await self._state.playwright.chromium.launch(
-                headless=False,
+                headless=True,
                 args=[
-                    "--headless=new",
                     "--no-sandbox",
                     "--disable-dev-shm-usage",
-                    "--single-process",
-                    "--no-zygote",
+                    "--disable-gpu",
                     "--disable-background-networking",
                     "--disable-background-timer-throttling",
                     "--disable-client-side-phishing-detection",
@@ -162,8 +160,6 @@ class BrowserManager:
                     "--no-default-browser-check",
                     "--disable-extensions",
                     "--disable-default-apps",
-                    "--disable-gpu",
-                    "--disable-software-rasterizer",
                 ],
             )
         except Exception as e:
