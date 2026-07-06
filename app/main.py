@@ -62,17 +62,21 @@ origins = [
 ]
 
 
-app.add_middleware(
-
-    CORSMiddleware,
-
-    allow_origins=origins if origins else ["*"],
-
-    allow_credentials=True if origins else False,
-
+cors_kwargs = dict(
+    allow_credentials=bool(origins),
     allow_methods=["*"],
-
     allow_headers=["*"],
+)
+
+if origins:
+    cors_kwargs["allow_origins"] = origins
+else:
+    cors_kwargs["allow_origin_regex"] = ".*"
+
+
+app.add_middleware(
+    CORSMiddleware,
+    **cors_kwargs,
 )
 
 
