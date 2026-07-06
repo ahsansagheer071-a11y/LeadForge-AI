@@ -231,10 +231,13 @@ async def startup_event():
     except Exception as e:
 
         logger.critical(
-            f"Database connection failed: {str(e)}"
+            f"Database connection failed at startup: {str(e)}"
         )
 
-        raise
+        logger.warning(
+            "App will start in degraded mode. "
+            "Health endpoint will report database status."
+        )
 
 
     if not settings.GROQ_API_KEY:
