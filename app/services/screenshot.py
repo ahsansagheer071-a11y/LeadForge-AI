@@ -519,7 +519,12 @@ class ScreenshotService:
                         f"Failed to capture screenshots after {max_retries + 1} attempts: {last_error}"
                     )
 
-                # Wait before retry (browser recovery happens automatically in get_browser)
+                # Force-close browser on PlaywrightError to ensure fresh instance on next retry
+                if isinstance(e, (PlaywrightError, TargetClosedErrorImpl)):
+                    await _browser_mgr.close()
+                    await asyncio.sleep(1)
+
+                # Wait before retry 
                 await asyncio.sleep(1.5 * attempt)
 
             except Exception as e:
