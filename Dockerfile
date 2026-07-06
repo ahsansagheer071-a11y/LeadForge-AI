@@ -1,22 +1,3 @@
-# ===================================================
-# Stage 1 — Build dependencies
-# ===================================================
-FROM python:3.12-slim AS builder
-
-WORKDIR /build
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
-
-
-# ===================================================
-# Stage 2 — Runtime production image
-# ===================================================
 FROM python:3.12-slim AS runner
 
 WORKDIR /app
@@ -24,10 +5,13 @@ WORKDIR /app
 ENV \
   PYTHONUNBUFFERED=1 \
   PYTHONDONTWRITEBYTECODE=1 \
-  PATH="/root/.local/bin:$PATH"
+  PATH="/root/.local/bin:$PATH" \
+  PLAYWRIGHT_BROWSERS_PATH=/root/playwright-browsers
 
-# Runtime deps: PostgreSQL client, curl (healthcheck), Playwright OS deps
+# Install ALL system dependencies in one layer
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
     curl \
     libpq5 \
     libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
@@ -35,17 +19,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxcomposite1 libxrandr2 libgbm1 libpango-1.0-0 \
     libcairo2 libasound2 libatspi2.0-0 \
     libxcursor1 libxfixes3 libgtk-3-0 libpangocairo-1.0-0 \
-    libgdk-pixbuf2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /root/.local /root/.local
-
-# Install Playwright + Chromium
-# PLAYWRIGHT_BROWSERS_PATH must be outside /root/.cache so rm -rf doesn't wipe browsers
-ENV PLAYWRIGHT_BROWSERS_PATH=/root/playwright-browsers
-RUN pip install --no-cache-dir "playwright==1.60.0" && \
-    python -m playwright install --with-deps chromium && \
-    rm -rf /root/.cache /var/lib/apt/lists/*
+# Install Python deps + Playwright + Chromium
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt "playwright==1.60.0" && \
+    playwright install chromium && \
+    rm -rf /root/.cache
 
 # Copy application code (only what's needed at runtime)
 COPY requirements.txt alembic.ini ./
