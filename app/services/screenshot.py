@@ -147,21 +147,19 @@ class BrowserManager:
                 args=[
                     "--no-sandbox",
                     "--disable-dev-shm-usage",
-                    "--disable-gpu",
                     "--disable-background-networking",
                     "--disable-background-timer-throttling",
                     "--disable-client-side-phishing-detection",
                     "--disable-component-update",
                     "--disable-features=TranslateUI,OptimizationHints",
                     "--disable-popup-blocking",
-                    "--disable-prompt-on-repost",
                     "--disable-sync",
                     "--no-first-run",
-                    "--no-default-browser-check",
                     "--disable-extensions",
-                    "--disable-default-apps",
                 ],
             )
+            # Give browser time to stabilize in constrained environments
+            await asyncio.sleep(1.0)
         except Exception as e:
             logger.error(f"Chromium launch failed: {e}")
             raise ServiceUnavailableException(f"Browser launch failed: {e}") from e
