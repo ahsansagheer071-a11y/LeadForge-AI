@@ -35,17 +35,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxcomposite1 libxrandr2 libgbm1 libpango-1.0-0 \
     libcairo2 libasound2 libatspi2.0-0 \
     libxcursor1 libxfixes3 libgtk-3-0 libpangocairo-1.0-0 \
+    libgdk-pixbuf2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /root/.local /root/.local
 
-# Install Playwright + Chromium (pinned to match requirements.txt)
-# PLAYWRIGHT_BROWSERS_PATH must be outside /root/.cache so rm -rf below doesn't wipe them
+# Install Playwright + Chromium
+# PLAYWRIGHT_BROWSERS_PATH must be outside /root/.cache so rm -rf doesn't wipe browsers
 ENV PLAYWRIGHT_BROWSERS_PATH=/root/playwright-browsers
-# Force fresh build for Playwright system deps — cachebuster: 2026-07-06-v4
-RUN PLAYWRIGHT_BROWSERS_PATH=/root/playwright-browsers pip install --no-cache-dir "playwright==1.60.0" && \
-    PLAYWRIGHT_BROWSERS_PATH=/root/playwright-browsers playwright install --with-deps chromium && \
-    PLAYWRIGHT_BROWSERS_PATH=/root/playwright-browsers playwright install --with-deps firefox && \
+RUN pip install --no-cache-dir "playwright==1.60.0" && \
+    python -m playwright install --with-deps chromium && \
     rm -rf /root/.cache /var/lib/apt/lists/*
 
 # Copy application code (only what's needed at runtime)
