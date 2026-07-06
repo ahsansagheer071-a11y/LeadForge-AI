@@ -41,10 +41,14 @@ COPY --from=builder /root/.local /root/.local
 # Install Playwright + Chromium (pinned to match requirements.txt)
 # PLAYWRIGHT_BROWSERS_PATH must be outside /root/.cache so rm -rf below doesn't wipe them
 ENV PLAYWRIGHT_BROWSERS_PATH=/root/playwright-browsers
-# Install browsers with ALL system dependencies
+# Install browsers and their system dependencies
 RUN pip install --no-cache-dir "playwright==1.60.0" && \
-    playwright install --with-deps chromium && \
-    playwright install --with-deps firefox && \
+    # Use full Chromium (not headless_shell) for stability in AWS
+    PLAYWRIGHT_BROWSERS_PATH=/root/playwright-browsers playwright install --with-deps chromium && \
+    # Reinstall system dependencies to ensure all required libs are present
+    playwright install-deps chromium && \
+    # Fallback
+    playwright install-deps firefox && \
     rm -rf /root/.cache && \
     rm -rf /var/lib/apt/lists/*
 
