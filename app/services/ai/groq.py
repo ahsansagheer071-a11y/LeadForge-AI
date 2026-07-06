@@ -31,9 +31,9 @@ class GroqProvider(AIBaseProvider):
         """Initialize Groq client with proper error handling."""
         self.api_key = settings.GROQ_API_KEY
         self.model = "llama-3.3-70b-versatile"
-        self.max_retries = 2
+        self.max_retries = 1
         self.retry_delay = 2
-        self.timeout = 60
+        self.timeout = 45
 
         if not self.api_key:
             logger.warning("GROQ_API_KEY is not set in configuration.")

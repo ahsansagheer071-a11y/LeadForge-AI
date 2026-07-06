@@ -66,10 +66,6 @@ async def build_website_intelligence(
             f"Failed to crawl website for lead '{payload.lead_id}'."
         )
 
-    await website_intelligence_service.save_profile(
-        db, lead_id=payload.lead_id, website_url=lead.website, profile=profile
-    )
-
     return StandardResponse(
         success=True,
         message="Website intelligence profile built successfully.",
@@ -115,9 +111,6 @@ async def generate_website(
             raise ServiceUnavailableException(
                 f"Website crawl returned no profile for lead '{payload.lead_id}'."
             )
-        await website_intelligence_service.save_profile(
-            db, lead_id=payload.lead_id, website_url=lead.website, profile=profile
-        )
     else:
         profile = response.profile
 

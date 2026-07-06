@@ -634,9 +634,11 @@ class WebsiteIntelligenceService:
         website_url: str,
         profile: WebsiteProfile,
     ) -> WebsiteIntelligenceResponse:
-        db_obj = await website_intelligence_repository.create(
-            db, lead_id=lead_id, profile=profile
-        )
+        existing = await website_intelligence_repository.get_by_lead(db, lead_id=lead_id)
+        if existing:
+            await website_intelligence_repository.update(db, lead_id=lead_id, profile=profile)
+        else:
+            await website_intelligence_repository.create(db, lead_id=lead_id, profile=profile)
         logger.info("Website intelligence saved | lead_id=%s", lead_id)
         return WebsiteIntelligenceResponse(
             lead_id=lead_id,
