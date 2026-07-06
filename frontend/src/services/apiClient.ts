@@ -16,7 +16,7 @@ import axios, {
 import { getErrorMessage } from '@/utils';
 import type { APIErrorShape } from '@/types';
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://leadforge-ai-production-eff1.up.railway.app';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://leadforge-ai-production-eff1.up.railway.app/api/v1';
 console.log('API Base URL:', BASE_URL);
 const ACCESS_KEY = 'lf_access_token';
 const REFRESH_KEY = 'lf_refresh_token';
