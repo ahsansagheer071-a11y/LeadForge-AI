@@ -1,3 +1,5 @@
+import uuid
+
 import colorsys
 import io
 import json
