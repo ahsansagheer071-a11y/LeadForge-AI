@@ -301,8 +301,10 @@ class GroqProvider(AIBaseProvider):
                 return normalized_result
 
             except asyncio.TimeoutError:
+                last_error = Exception("Groq API call timed out")
                 logger.error("Groq outreach timed out on attempt %d", retry_count + 1)
             except Exception as e:
+                last_error = e
                 logger.error(
                     "Groq outreach attempt %d failed. Error: %s",
                     retry_count + 1,
@@ -314,7 +316,7 @@ class GroqProvider(AIBaseProvider):
             else:
                 raise ServiceUnavailableException(
                     f"Failed to generate AI Outreach using Groq after {self.max_retries + 1} attempts. "
-                    f"Last error: {str(e)}"
+                    f"Last error: {last_error}"
                 )
 
     def _build_audit_prompt(
