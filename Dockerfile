@@ -43,6 +43,7 @@ COPY --from=builder /root/.local /root/.local
 ENV PLAYWRIGHT_BROWSERS_PATH=/root/playwright-browsers
 RUN pip install --no-cache-dir "playwright==1.60.0" && \
     playwright install chromium && \
+    playwright install firefox && \
     rm -rf /root/.cache && \
     rm -rf /var/lib/apt/lists/*
 
