@@ -42,16 +42,11 @@ COPY --from=builder /root/.local /root/.local
 # Install Playwright + Chromium (pinned to match requirements.txt)
 # PLAYWRIGHT_BROWSERS_PATH must be outside /root/.cache so rm -rf below doesn't wipe them
 ENV PLAYWRIGHT_BROWSERS_PATH=/root/playwright-browsers
-# Install browsers and their system dependencies
-RUN pip install --no-cache-dir "playwright==1.60.0" && \
-    # Use full Chromium (not headless_shell) for stability in AWS
+# Force fresh build for Playwright system deps — cachebuster: 2026-07-06-v4
+RUN PLAYWRIGHT_BROWSERS_PATH=/root/playwright-browsers pip install --no-cache-dir "playwright==1.60.0" && \
     PLAYWRIGHT_BROWSERS_PATH=/root/playwright-browsers playwright install --with-deps chromium && \
-    # Reinstall system dependencies to ensure all required libs are present
-    playwright install-deps chromium && \
-    # Fallback
-    playwright install-deps firefox && \
-    rm -rf /root/.cache && \
-    rm -rf /var/lib/apt/lists/*
+    PLAYWRIGHT_BROWSERS_PATH=/root/playwright-browsers playwright install --with-deps firefox && \
+    rm -rf /root/.cache /var/lib/apt/lists/*
 
 # Copy application code (only what's needed at runtime)
 COPY requirements.txt alembic.ini ./
