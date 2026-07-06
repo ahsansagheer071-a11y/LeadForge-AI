@@ -239,6 +239,38 @@ async def startup_event():
             "Health endpoint will report database status."
         )
 
+        return
+
+
+    from alembic.config import Config
+    from alembic import command
+
+
+    try:
+
+        alembic_cfg = Config("alembic.ini")
+
+        def run_migrations():
+            command.upgrade(alembic_cfg, "head")
+
+        await asyncio.to_thread(run_migrations)
+
+        logger.info(
+            "Database migrations completed successfully."
+        )
+
+
+    except Exception as e:
+
+        logger.critical(
+            f"Database migrations failed: {str(e)}"
+        )
+
+        logger.warning(
+            "App will continue but tables may be missing. "
+            "Some endpoints may fail until migrations are applied."
+        )
+
 
     if not settings.GROQ_API_KEY:
 
