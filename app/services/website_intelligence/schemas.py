@@ -379,17 +379,21 @@ class DesignLanguageResult(BaseModel):
     design_language: str = "Unclassified"
     confidence_score: float = 0.0
     all_scores: Dict[str, float] = Field(default_factory=dict)
+    era: Optional[str] = None
+    aesthetic: Optional[str] = None
 
 
 class BrandPersonalityTrait(BaseModel):
     trait: str
     score: float = 0.0
-    matched_signals: Dict[str, List[str]] = Field(default_factory=dict)
+    matched_signals: Dict[str, List[str]] = Field(default_factory=list)
 
 
 class BrandPersonalityResult(BaseModel):
     personality_traits: List[str] = Field(default_factory=list)
     confidence_percentages: Dict[str, float] = Field(default_factory=dict)
+    traits: List[str] = Field(default_factory=list)
+    archetype: Optional[str] = None
 
 
 class ConsistencyReport(BaseModel):
