@@ -12,6 +12,7 @@ from app.schemas.lead import (
     LeadResponse,
     LeadDetailResponse,
     LeadUpdate,
+    CreateLeadRequest,
     BulkActionResponse,
     BulkDeleteRequest,
     BulkStatusUpdateRequest
@@ -23,6 +24,30 @@ from app.services.lead import lead_service
 from app.repositories.lead import lead_repository
 
 router = APIRouter()
+
+
+@router.post(
+    "",
+    response_model=StandardResponse[LeadResponse],
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a lead manually",
+    description="Create a new lead by providing company details and website URL.",
+    responses={
+        201: {"description": "Lead created successfully."},
+        401: {"description": "Missing or invalid session credentials."},
+    },
+)
+async def create_lead(
+    payload: CreateLeadRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await lead_service.create_lead(db, user=current_user, data=payload)
+    return StandardResponse(
+        success=True,
+        message="Lead created successfully.",
+        data=result
+    )
 
 
 @router.post(

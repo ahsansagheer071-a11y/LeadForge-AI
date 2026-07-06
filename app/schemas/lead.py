@@ -78,6 +78,16 @@ class LeadDiscoveryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CreateLeadRequest(BaseModel):
+    url: Optional[str] = Field(default=None, max_length=2083, description="Website URL")
+    company_name: str = Field(..., max_length=255)
+    industry: str = Field(..., max_length=100)
+    phone: Optional[str] = Field(default=None, max_length=50)
+    address: Optional[str] = Field(default=None, max_length=500)
+    city: str = Field(default="Unknown", max_length=100)
+    country: str = Field(default="Unknown", max_length=100)
+
+
 # ---------------------------------------------------------------------------
 # Valid pipeline statuses — single source of truth
 # ---------------------------------------------------------------------------

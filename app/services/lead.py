@@ -14,6 +14,8 @@ from app.schemas.lead import (
     BulkActionResponse,
     BulkDeleteRequest,
     BulkStatusUpdateRequest,
+    CreateLeadRequest,
+    LeadCreate,
     LeadResponse,
     LeadDetailResponse,
     LeadUpdate,
@@ -24,6 +26,23 @@ class LeadService:
     """
     Orchestrates lead management operations: CRUD, bulk actions, and CSV export.
     """
+
+    async def create_lead(
+        self, db: AsyncSession, user: User, data: CreateLeadRequest
+    ) -> LeadResponse:
+        lead_in = LeadCreate(
+            user_id=user.id,
+            name=data.company_name,
+            website=data.url,
+            phone=data.phone,
+            address=data.address,
+            city=data.city,
+            country=data.country,
+            industry=data.industry,
+        )
+        lead = await lead_repository.create(db, obj_in=lead_in)
+        logger.info("Lead created | lead_id=%s | user_id=%s", lead.id, user.id)
+        return LeadResponse.model_validate(lead)
 
     async def get_lead(self, db: AsyncSession, lead_id: uuid.UUID, user: User) -> LeadDetailResponse:
         lead = await lead_repository.get_lead_details(db, lead_id)
