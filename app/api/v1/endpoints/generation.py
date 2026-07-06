@@ -11,7 +11,8 @@ from app.schemas.response import StandardResponse
 from app.services.website_intelligence import website_intelligence_service
 from app.services.markdown_engine.builder import MarkdownBuilder
 from app.services.website_generator.static_html_generator import StaticHTMLGenerator
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import NotFoundException, ServiceUnavailableException
+from app.repositories.lead import lead_repository
 
 router = APIRouter()
 
@@ -20,10 +21,60 @@ class GenerateRequest(BaseModel):
     lead_id: uuid.UUID = Field(..., description="The UUID of the lead to generate a website for.")
 
 
+class BuildProfileRequest(BaseModel):
+    lead_id: uuid.UUID = Field(..., description="The UUID of the lead to build website intelligence for.")
+
+
 class GenerateResponse(BaseModel):
     html: str
     generation_time: float = 0.0
     project_name: Optional[str] = None
+
+
+@router.post(
+    "/build",
+    response_model=StandardResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Build website intelligence profile for a lead",
+    description=(
+        "Uses Playwright to crawl the lead's website and extract structured data "
+        "(brand identity, content sections, SEO metadata, design tokens, etc.). "
+        "Required before generating a website."
+    ),
+    responses={
+        200: {"description": "Profile built successfully."},
+        404: {"description": "Lead not found or has no website URL."},
+        503: {"description": "Playwright crawl failed."},
+    }
+)
+async def build_website_intelligence(
+    payload: BuildProfileRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    lead = await lead_repository.get(db, id=payload.lead_id)
+    if not lead:
+        raise NotFoundException(f"Lead '{payload.lead_id}' not found.")
+    if not lead.website:
+        raise NotFoundException(f"Lead '{payload.lead_id}' has no website URL set.")
+
+    profile = await website_intelligence_service.build_profile(
+        db, lead=lead, url=lead.website
+    )
+    if not profile:
+        raise ServiceUnavailableException(
+            f"Failed to crawl website for lead '{payload.lead_id}'."
+        )
+
+    await website_intelligence_service.save_profile(
+        db, lead_id=payload.lead_id, website_url=lead.website, profile=profile
+    )
+
+    return StandardResponse(
+        success=True,
+        message="Website intelligence profile built successfully.",
+        data={"lead_id": str(payload.lead_id)},
+    )
 
 
 @router.post(
@@ -47,15 +98,28 @@ async def generate_website(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # 1. Fetch WebsiteProfile
+    # 1. Fetch or build WebsiteProfile
     response = await website_intelligence_service.load_profile(
         db, lead_id=payload.lead_id
     )
     if not response:
-        raise NotFoundException(
-            f"Website intelligence not found for lead {payload.lead_id}"
+        lead = await lead_repository.get(db, id=payload.lead_id)
+        if not lead or not lead.website:
+            raise NotFoundException(
+                f"Website intelligence not found for lead {payload.lead_id}"
+            )
+        profile = await website_intelligence_service.build_profile(
+            db, lead=lead, url=lead.website
         )
-    profile = response.profile
+        if not profile:
+            raise ServiceUnavailableException(
+                f"Failed to crawl website for lead '{payload.lead_id}'."
+            )
+        await website_intelligence_service.save_profile(
+            db, lead_id=payload.lead_id, website_url=lead.website, profile=profile
+        )
+    else:
+        profile = response.profile
 
     # 2. Build MarkdownPackage from the profile
     builder = MarkdownBuilder(blueprint=profile)
