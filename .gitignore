@@ -1,7 +1,38 @@
+# Python
 venv/
-.env
+.venv/
 __pycache__/
-*.pyc
+*.py[cod]
+*.egg-info/
+dist/
+
+# Secrets
+.env
+.env.local
+.env.*.local
+
+# Logs
 logs/
+*.log
+
+# Node / frontend
 node_modules/
 frontend/node_modules/
+frontend/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker
+.dockerignore
+
+# Backend static screenshots (generated at runtime)
+app/static/screenshots/*
+!app/static/screenshots/.gitkeep

@@ -1,137 +1,132 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '@/contexts/AuthContext'
-import { getErrorMessage } from '@/utils'
-import { Zap, Loader } from 'lucide-react'
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Zap } from 'lucide-react';
+import { Button } from '@/components/Button';
+import { Input, Label, FormError } from '@/components/Input';
+import { useAuthStore } from '@/store';
+import { getErrorMessage } from '@/utils';
 
-export default function RegisterPage() {
-  const { register, login } = useAuth()
-  const navigate = useNavigate()
+const registerSchema = z
+  .object({
+    full_name: z.string().min(2, 'Name must be at least 2 characters'),
+    email: z.string().email('Enter a valid email'),
+    password: z.string().min(8, 'Password must be at least 8 characters').regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d|.*[!@#$%^&*()\-_=+{};:,<.>]).{8,}$/, 'Password must be at least 8 characters, contain at least one uppercase letter, one lowercase letter, and one digit or special character'),
+    confirm: z.string().min(1, 'Please confirm your password'),
+  })
+  .refine((data) => data.password === data.confirm, {
+    message: 'Passwords do not match',
+    path: ['confirm'],
+  });
 
-  const [fullName, setFullName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
+type RegisterForm = z.infer<typeof registerSchema>;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters long')
-      return
-    }
-    setIsLoading(true)
+export function RegisterPage() {
+  const navigate = useNavigate();
+  const storeRegister = useAuthStore((s) => s.register);
+  const [serverError, setServerError] = useState('');
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<RegisterForm>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: { full_name: '', email: '', password: '', confirm: '' },
+  });
+
+  const onSubmit = async (data: RegisterForm) => {
+    setServerError('');
     try {
-      await register(email, password, fullName || undefined)
-      // Auto-login after register
-      await login(email, password)
-      navigate('/dashboard')
+      await storeRegister(data.email, data.password, data.full_name);
+      // Backend does NOT return tokens on register — redirect to login with success flag
+      navigate('/login', { replace: true, state: { registered: true } });
     } catch (err) {
-      setError(getErrorMessage(err))
-    } finally {
-      setIsLoading(false)
+      setServerError(getErrorMessage(err));
     }
-  }
+  };
 
   return (
-    <div className="auth-bg">
-      <div className="auth-card animate-fade-in">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 32 }}>
-          <div style={{
-            width: 36, height: 36, background: 'var(--color-brand)',
-            borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center'
-          }}>
-            <Zap size={18} color="#fff" strokeWidth={2.5} />
+    <div className="min-h-screen w-full bg-[var(--color-bg)] flex items-center justify-center p-4">
+      <div className="w-full max-w-sm">
+        <div className="flex flex-col items-center mb-8">
+          <div className="size-12 rounded-[14px] bg-[var(--color-brand)] flex items-center justify-center shadow-[0_4px_20px_color-mix(in_oklab,var(--color-brand)_35%,transparent)] mb-4">
+            <Zap className="size-6 text-white" strokeWidth={2.5} />
           </div>
-          <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: '-0.02em' }}>
-            LeadForge AI
-          </span>
+          <h1 className="text-xl font-bold tracking-tight">Create an account</h1>
+          <p className="text-[13px] text-[var(--color-text-muted)] mt-1">Get started with LeadForge AI</p>
         </div>
 
-        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>Create your account</h1>
-        <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, marginBottom: 28 }}>
-          Start discovering and converting leads with AI
-        </p>
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="rounded-[14px] bg-[var(--color-surface)] border border-[var(--color-border)] shadow-[var(--shadow-card)] p-6 space-y-4"
+        >
+          {serverError && (
+            <div className="rounded-[10px] bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-[12.5px] p-3">
+              {serverError}
+            </div>
+          )}
 
-        {error && (
-          <div style={{
-            background: 'var(--color-error-subtle)', border: '1px solid #ef444420',
-            borderRadius: 8, padding: '10px 14px', marginBottom: 20,
-            color: 'var(--color-error)', fontSize: 13
-          }}>
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
-            <label className="label">Full name (optional)</label>
-            <input
-              className="input"
-              type="text"
+            <Label htmlFor="name">Full name</Label>
+            <Input
+              id="name"
               placeholder="Jane Smith"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
+              invalid={!!errors.full_name}
+              {...register('full_name')}
             />
-          </div>
-          <div>
-            <label className="label">Email address</label>
-            <input
-              className="input"
-              type="email"
-              placeholder="you@agency.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label className="label">Password</label>
-            <input
-              className="input"
-              type="password"
-              placeholder="Min. 8 characters"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+            <FormError>{errors.full_name?.message}</FormError>
           </div>
 
-          <button className="btn btn-primary btn-lg" type="submit" disabled={isLoading}
-            style={{ marginTop: 4 }}>
-            {isLoading ? <Loader size={16} className="animate-spin" /> : null}
-            {isLoading ? 'Creating account…' : 'Create account'}
-          </button>
+          <div>
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="you@company.com"
+              invalid={!!errors.email}
+              {...register('email')}
+            />
+            <FormError>{errors.email?.message}</FormError>
+          </div>
+
+          <div>
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="••••••••"
+              invalid={!!errors.password}
+              {...register('password')}
+            />
+            <FormError>{errors.password?.message}</FormError>
+          </div>
+
+          <div>
+            <Label htmlFor="confirm">Confirm password</Label>
+            <Input
+              id="confirm"
+              type="password"
+              placeholder="••••••••"
+              invalid={!!errors.confirm}
+              {...register('confirm')}
+            />
+            <FormError>{errors.confirm?.message}</FormError>
+          </div>
+
+          <Button type="submit" fullWidth loading={isSubmitting}>
+            Create account
+          </Button>
         </form>
 
-        <p style={{ marginTop: 24, textAlign: 'center', fontSize: 13, color: 'var(--color-text-secondary)' }}>
+        <p className="text-center text-[12.5px] text-[var(--color-text-muted)] mt-6">
           Already have an account?{' '}
-          <Link to="/login" style={{ color: 'var(--color-brand)', fontWeight: 500 }}>
+          <Link to="/login" className="text-[var(--color-brand)] hover:underline font-medium">
             Sign in
           </Link>
         </p>
       </div>
-
-      <style>{`
-        .auth-bg {
-          min-height: 100vh;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: var(--color-background);
-          background-image: radial-gradient(ellipse at 50% 0%, #6366f115 0%, transparent 60%);
-          padding: 24px;
-        }
-        .auth-card {
-          width: 100%;
-          max-width: 400px;
-          background: var(--color-surface);
-          border: 1px solid var(--color-border);
-          border-radius: var(--radius-xl);
-          padding: 36px;
-        }
-      `}</style>
     </div>
-  )
+  );
 }

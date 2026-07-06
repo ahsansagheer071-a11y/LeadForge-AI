@@ -124,4 +124,4 @@ Deploying with Docker is the recommended route for production environments.
 | `JWT_SECRET` | Signing secret for OAuth tokens | `super-secret-hex-key` |
 | `DATABASE_URL` | PostgreSQL Async connection string | `postgresql://user:pass@db:5432/leadforge_ai` |
 | `SERPAPI_KEY` | Key for Lead discovery engine | (Optional per-user) |
-| `GEMINI_API_KEY` | Key for AI audits & Outreach generation | (Optional per-user) |
+| `GROQ_API_KEY` | Key for AI audits & Outreach generation | (Optional per-user) |

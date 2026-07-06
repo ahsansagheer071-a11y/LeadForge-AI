@@ -1,138 +1,112 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '@/contexts/AuthContext'
-import { getErrorMessage } from '@/utils'
-import { Zap, Eye, EyeOff, Loader } from 'lucide-react'
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { toast } from 'sonner';
+import { Zap } from 'lucide-react';
+import { Button } from '@/components/Button';
+import { Input, Label, FormError } from '@/components/Input';
+import { useAuthStore } from '@/store';
+import { getErrorMessage } from '@/utils';
 
-export default function LoginPage() {
-  const { login } = useAuth()
-  const navigate = useNavigate()
+const loginSchema = z.object({
+  email: z.string().email('Enter a valid email'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+});
 
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPw, setShowPw] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
+type LoginForm = z.infer<typeof loginSchema>;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    setIsLoading(true)
-    try {
-      await login(email, password)
-      navigate('/dashboard')
-    } catch (err) {
-      setError(getErrorMessage(err))
-    } finally {
-      setIsLoading(false)
+export function LoginPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const storeLogin = useAuthStore((s) => s.login);
+  const [serverError, setServerError] = useState('');
+  const justRegistered = location.state?.registered === true;
+
+  useEffect(() => {
+    if (justRegistered) {
+      toast.success('Account created successfully. Sign in to continue.');
     }
-  }
+  }, [justRegistered]);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginForm>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: '', password: '' },
+  });
+
+  const onSubmit = async (data: LoginForm) => {
+    setServerError('');
+    try {
+      await storeLogin(data.email, data.password);
+      navigate('/dashboard', { replace: true });
+    } catch (err) {
+      setServerError(getErrorMessage(err));
+    }
+  };
 
   return (
-    <div className="auth-bg">
-      <div className="auth-card animate-fade-in">
+    <div className="min-h-screen w-full bg-[var(--color-bg)] flex items-center justify-center p-4">
+      <div className="w-full max-w-sm">
         {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 32 }}>
-          <div style={{
-            width: 36, height: 36, background: 'var(--color-brand)',
-            borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center'
-          }}>
-            <Zap size={18} color="#fff" strokeWidth={2.5} />
+        <div className="flex flex-col items-center mb-8">
+          <div className="size-12 rounded-[14px] bg-[var(--color-brand)] flex items-center justify-center shadow-[0_4px_20px_color-mix(in_oklab,var(--color-brand)_35%,transparent)] mb-4">
+            <Zap className="size-6 text-white" strokeWidth={2.5} />
           </div>
-          <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: '-0.02em' }}>
-            LeadForge AI
-          </span>
+          <h1 className="text-xl font-bold tracking-tight">Welcome back</h1>
+          <p className="text-[13px] text-[var(--color-text-muted)] mt-1">Sign in to LeadForge AI</p>
         </div>
 
-        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>Welcome back</h1>
-        <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, marginBottom: 28 }}>
-          Sign in to your account to continue
-        </p>
-
-        {error && (
-          <div style={{
-            background: 'var(--color-error-subtle)', border: '1px solid #ef444420',
-            borderRadius: 8, padding: '10px 14px', marginBottom: 20,
-            color: 'var(--color-error)', fontSize: 13
-          }}>
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div>
-            <label className="label">Email address</label>
-            <input
-              className="input"
-              type="email"
-              placeholder="you@agency.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoFocus
-            />
-          </div>
-
-          <div>
-            <label className="label">Password</label>
-            <div style={{ position: 'relative' }}>
-              <input
-                className="input"
-                type={showPw ? 'text' : 'password'}
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                style={{ paddingRight: 40 }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPw(!showPw)}
-                style={{
-                  position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  color: 'var(--color-text-muted)', padding: 4
-                }}
-              >
-                {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="rounded-[14px] bg-[var(--color-surface)] border border-[var(--color-border)] shadow-[var(--shadow-card)] p-6 space-y-4"
+        >
+          {serverError && (
+            <div className="rounded-[10px] bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-[12.5px] p-3">
+              {serverError}
             </div>
+          )}
+
+          <div>
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="you@company.com"
+              invalid={!!errors.email}
+              {...register('email')}
+            />
+            <FormError>{errors.email?.message}</FormError>
           </div>
 
-          <button className="btn btn-primary btn-lg" type="submit" disabled={isLoading}
-            style={{ marginTop: 4 }}>
-            {isLoading ? <Loader size={16} className="animate-spin" /> : null}
-            {isLoading ? 'Signing in…' : 'Sign in'}
-          </button>
+          <div>
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="••••••••"
+              invalid={!!errors.password}
+              {...register('password')}
+            />
+            <FormError>{errors.password?.message}</FormError>
+          </div>
+
+          <Button type="submit" fullWidth loading={isSubmitting}>
+            Sign in
+          </Button>
         </form>
 
-        <p style={{ marginTop: 24, textAlign: 'center', fontSize: 13, color: 'var(--color-text-secondary)' }}>
+        <p className="text-center text-[12.5px] text-[var(--color-text-muted)] mt-6">
           Don't have an account?{' '}
-          <Link to="/register" style={{ color: 'var(--color-brand)', fontWeight: 500 }}>
+          <Link to="/register" className="text-[var(--color-brand)] hover:underline font-medium">
             Create one
           </Link>
         </p>
       </div>
-
-      <style>{`
-        .auth-bg {
-          min-height: 100vh;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: var(--color-background);
-          background-image: radial-gradient(ellipse at 50% 0%, #6366f115 0%, transparent 60%);
-          padding: 24px;
-        }
-        .auth-card {
-          width: 100%;
-          max-width: 400px;
-          background: var(--color-surface);
-          border: 1px solid var(--color-border);
-          border-radius: var(--radius-xl);
-          padding: 36px;
-        }
-      `}</style>
     </div>
-  )
+  );
 }

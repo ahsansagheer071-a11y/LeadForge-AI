@@ -1,107 +1,127 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { useAuth } from '@/contexts/AuthContext'
+import { lazy, Suspense, useEffect } from 'react';
+import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from 'sonner';
+import { ThemeProvider } from '@/contexts/ThemeContext';
+import { ErrorContextProvider } from '@/contexts/ErrorContext';
+import { DashboardLayout, Workspace } from '@/layouts/DashboardLayout';
+import { TopBar } from '@/layouts/TopBar';
+import { Sidebar } from '@/layouts/Sidebar';
+import { RightActivityPanel } from '@/layouts/RightActivityPanel';
+import { FooterStatusBar } from '@/layouts/FooterStatusBar';
+import { PageLoader } from '@/components/Loading';
+import { ErrorBoundary } from '@/components/ErrorStates';
+import { ProtectedRoute, PublicRoute } from '@/components/ProtectedRoute';
+import { useAuthStore } from '@/store';
+import { useLocalStorage } from '@/hooks/hooks';
 
-// Layouts
-import AppLayout from '@/layouts/AppLayout'
+const LoginPage = lazy(() => import('@/pages/LoginPage').then((m) => ({ default: m.LoginPage })));
+const RegisterPage = lazy(() => import('@/pages/RegisterPage').then((m) => ({ default: m.RegisterPage })));
+const DashboardPage = lazy(() => import('@/pages/DashboardPage').then((m) => ({ default: m.DashboardPage })));
+const ProjectsPage = lazy(() => import('@/pages/ProjectsPage').then((m) => ({ default: m.ProjectsPage })));
+const GenerationPage = lazy(() => import('@/pages/GenerationPage').then((m) => ({ default: m.GenerationPage })));
+const PreviewPage = lazy(() => import('@/pages/PreviewPage').then((m) => ({ default: m.PreviewPage })));
+const DeploymentPage = lazy(() => import('@/pages/DeploymentPage').then((m) => ({ default: m.DeploymentPage })));
+const HistoryPage = lazy(() => import('@/pages/HistoryPage').then((m) => ({ default: m.HistoryPage })));
+const AnalyticsPage = lazy(() => import('@/pages/AnalyticsPage').then((m) => ({ default: m.AnalyticsPage })));
+const SettingsPage = lazy(() => import('@/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const HelpPage = lazy(() => import('@/pages/HelpPage').then((m) => ({ default: m.HelpPage })));
+const LeadDetailPage = lazy(() => import('@/pages/LeadDetailPage').then((m) => ({ default: m.LeadDetailPage })));
+const NotFoundPage = lazy(() => import('@/pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })));
 
-// Auth pages
-import LoginPage from '@/pages/LoginPage'
-import RegisterPage from '@/pages/RegisterPage'
+function DashboardShell() {
+  const [activityOpen, setActivityOpen] = useLocalStorage('lf_activity_open', false);
 
-// App pages — lazy loaded for performance
-import { lazy, Suspense } from 'react'
-
-const DashboardPage        = lazy(() => import('@/pages/DashboardPage'))
-const LeadManagementPage   = lazy(() => import('@/pages/LeadManagementPage'))
-const LeadDetailsPage      = lazy(() => import('@/pages/LeadDetailsPage'))
-const LeadDiscoveryPage    = lazy(() => import('@/pages/LeadDiscoveryPage'))
-const AnalysisPage         = lazy(() => import('@/pages/AnalysisPage'))
-const ScreenshotPage       = lazy(() => import('@/pages/ScreenshotPage'))
-const AuditPage            = lazy(() => import('@/pages/AuditPage'))
-const OutreachPage         = lazy(() => import('@/pages/OutreachPage'))
-const SettingsPage         = lazy(() => import('@/pages/SettingsPage'))
-const NotFoundPage         = lazy(() => import('@/pages/NotFoundPage'))
-
-// Full-screen loading spinner shown during code splits
-function PageLoader() {
   return (
-    <div
-      style={{
-        height: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--color-background)',
-      }}
-    >
-      <div className="spinner" style={{ width: 32, height: 32 }} />
-    </div>
-  )
+    <ProtectedRoute>
+      <DashboardLayout
+        topBar={<TopBar />}
+        sidebar={<Sidebar />}
+        activityPanel={
+          <RightActivityPanel open={activityOpen} onClose={() => setActivityOpen(false)} />
+        }
+        footer={<FooterStatusBar />}
+        activityOpen={activityOpen}
+      >
+        <Workspace>
+          <Suspense fallback={<PageLoader />}>
+            <Outlet />
+          </Suspense>
+        </Workspace>
+      </DashboardLayout>
+    </ProtectedRoute>
+  );
 }
 
-// Protect routes that require authentication
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth()
-  if (isLoading) return <PageLoader />
-  if (!isAuthenticated) return <Navigate to="/login" replace />
-  return <>{children}</>
-}
+const router = createBrowserRouter([
+  { path: '/login', element: <PublicRoute><LoginPage /></PublicRoute> },
+  { path: '/register', element: <PublicRoute><RegisterPage /></PublicRoute> },
+  {
+    path: '/',
+    element: <DashboardShell />,
+    errorElement: <DashboardShell />,
+    children: [
+      { index: true, element: <Navigate to="/dashboard" replace /> },
+      { path: 'dashboard', element: <DashboardPage /> },
+      { path: 'projects', element: <ProjectsPage /> },
+      { path: 'generation', element: <GenerationPage /> },
+      { path: 'preview', element: <PreviewPage /> },
+      { path: 'project/:id', element: <LeadDetailPage /> },
+      { path: 'deployment', element: <DeploymentPage /> },
+      { path: 'history', element: <HistoryPage /> },
+      { path: 'analytics', element: <AnalyticsPage /> },
+      { path: 'settings', element: <SettingsPage /> },
+      { path: 'help', element: <HelpPage /> },
+      { path: '*', element: <NotFoundPage /> },
+    ],
+  },
+]);
 
-// Redirect already-logged-in users away from auth pages
-function GuestRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth()
-  if (isLoading) return <PageLoader />
-  if (isAuthenticated) return <Navigate to="/dashboard" replace />
-  return <>{children}</>
-}
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 30_000 },
+  },
+});
 
 export default function App() {
+  const initialised = useAuthStore((s) => s.initialised);
+  const checkAuth = useAuthStore((s) => s.checkAuth);
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  // Wait for Zustand rehydration + initial checkAuth() before rendering routes.
+  // Theme CSS variables are already active via the <script> in index.html.
+  if (!initialised) {
+    return (
+      <div className="min-h-screen w-full bg-[var(--color-bg)] flex items-center justify-center">
+        <PageLoader />
+      </div>
+    );
+  }
+
   return (
-    <BrowserRouter>
-      <Suspense fallback={<PageLoader />}>
-        <Routes>
-          {/* Guest-only routes */}
-          <Route
-            path="/login"
-            element={
-              <GuestRoute>
-                <LoginPage />
-              </GuestRoute>
-            }
-          />
-          <Route
-            path="/register"
-            element={
-              <GuestRoute>
-                <RegisterPage />
-              </GuestRoute>
-            }
-          />
-
-          {/* Protected app routes — wrapped in sidebar layout */}
-          <Route
-            element={
-              <ProtectedRoute>
-                <AppLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard"   element={<DashboardPage />} />
-            <Route path="/leads"       element={<LeadManagementPage />} />
-            <Route path="/leads/:id"   element={<LeadDetailsPage />} />
-            <Route path="/discover"    element={<LeadDiscoveryPage />} />
-            <Route path="/analysis"    element={<AnalysisPage />} />
-            <Route path="/screenshots" element={<ScreenshotPage />} />
-            <Route path="/audit"       element={<AuditPage />} />
-            <Route path="/outreach"    element={<OutreachPage />} />
-            <Route path="/settings"    element={<SettingsPage />} />
-          </Route>
-
-          {/* 404 */}
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
-      </Suspense>
-    </BrowserRouter>
-  )
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <ErrorContextProvider>
+            <RouterProvider router={router} />
+            <Toaster
+              position="bottom-right"
+              toastOptions={{
+                style: {
+                  background: 'var(--color-surface)',
+                  color: 'var(--color-text)',
+                  border: '1px solid var(--color-border)',
+                  fontSize: '13px',
+                  borderRadius: '10px',
+                },
+              }}
+            />
+          </ErrorContextProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
+  );
 }

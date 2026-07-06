@@ -1,8 +1,10 @@
 import uuid
+import time
+import asyncio
 from typing import Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundException, ValidationException
+from app.core.exceptions import NotFoundException, ValidationException, ServiceUnavailableException
 from app.core.logging import logger
 from app.models.user import User
 from app.repositories.lead import lead_repository
@@ -23,30 +25,28 @@ class AuditEngineService:
         *,
         lead_id: uuid.UUID,
         user: User,
-        provider: str = "gemini"
+        provider: str = "groq",
     ) -> Dict[str, Any]:
         logger.info("AI Audit initiated | lead_id=%s | provider=%s", lead_id, provider)
+        t_start = time.perf_counter()
 
-        # 1. Load lead
-        lead = await lead_repository.get(db, id=lead_id)
+        # 1. Load lead, audit, and screenshot data concurrently
+        lead, audit_record, screenshot_record = await asyncio.gather(
+            lead_repository.get(db, id=lead_id),
+            audit_repository.get_by_lead_id(db, lead_id=lead_id),
+            screenshot_repository.get_by_lead_id(db, lead_id=lead_id),
+        )
+
+        t_load = time.perf_counter()
+        logger.info("DB load phase | lead_id=%s | took=%.2fs", lead_id, t_load - t_start)
+
         if not lead or lead.user_id != user.id:
             raise NotFoundException(f"Lead with id '{lead_id}' not found.")
 
-        # 2. Load website analysis (from Audit table)
-        audit_record = await audit_repository.get_by_lead_id(db, lead_id=lead_id)
         if not audit_record:
             raise ValidationException("Please analyze the website using Website Analyzer first.")
 
-        # 3. Load screenshot URLs
-        screenshot_record = await screenshot_repository.get_by_lead_id(db, lead_id=lead_id)
-        screenshot_urls = {}
-        if screenshot_record:
-            screenshot_urls = {
-                "desktop_url": screenshot_record.desktop_cloudinary_url,
-                "mobile_url": screenshot_record.mobile_cloudinary_url,
-                "full_page_url": screenshot_record.full_page_cloudinary_url,
-            }
-
+        # 2. Build lead info
         lead_info = {
             "name": lead.name,
             "industry": lead.industry,
@@ -56,7 +56,16 @@ class AuditEngineService:
             "reviews_count": lead.reviews_count,
         }
 
-        # Prepare website analysis dictionary for the AI prompt
+        # 3. Build screenshot URLs
+        screenshot_urls = {}
+        if screenshot_record:
+            screenshot_urls = {
+                "desktop_url": screenshot_record.desktop_cloudinary_url,
+                "mobile_url": screenshot_record.mobile_cloudinary_url,
+                "full_page_url": screenshot_record.full_page_cloudinary_url,
+            }
+
+        # 4. Build website analysis dict
         website_analysis = {
             "website_title": audit_record.website_title,
             "meta_description": audit_record.meta_description,
@@ -93,12 +102,28 @@ class AuditEngineService:
             "response_time_ms": audit_record.response_time_ms,
         }
 
-        # 4. Invoke AI Provider
+        # 5. Invoke AI Provider with timeout guard
         ai_provider = ai_factory.get_provider(provider)
-        ai_result = await ai_provider.audit_website(lead_info, website_analysis, screenshot_urls)
 
-        # 5. Update Audit Record
-        # Map fields to database record
+        t_ai_start = time.perf_counter()
+        try:
+            ai_result = await asyncio.wait_for(
+                ai_provider.audit_website(lead_info, website_analysis, screenshot_urls),
+                timeout=120.0,
+            )
+        except asyncio.TimeoutError:
+            logger.error("AI audit timed out | lead_id=%s | provider=%s", lead_id, provider)
+            raise ServiceUnavailableException(
+                f"AI audit timed out after 120s for lead '{lead_id}'."
+            )
+        t_ai_end = time.perf_counter()
+        logger.info(
+            "AI provider phase | lead_id=%s | took=%.2fs",
+            lead_id,
+            t_ai_end - t_ai_start,
+        )
+
+        # 6. Update Audit Record
         update_data = {
             "executive_summary": ai_result.get("Business Summary"),
             "weaknesses": ai_result.get("Top Weaknesses"),
@@ -106,7 +131,12 @@ class AuditEngineService:
         }
         await audit_repository.update(db, db_obj=audit_record, obj_in=update_data)
 
-        logger.info("AI Audit completed and saved to DB for lead_id=%s", lead_id)
+        t_total = time.perf_counter()
+        logger.info(
+            "AI Audit completed | lead_id=%s | total=%.2fs",
+            lead_id,
+            t_total - t_start,
+        )
         return ai_result
 
 

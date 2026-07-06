@@ -23,7 +23,7 @@ class OutreachService:
         *,
         lead_id: uuid.UUID,
         user: User,
-        provider: str = "gemini"
+        provider: str = "groq"  # CHANGED: Default to groq instead of gemini
     ) -> OutreachResponse:
         logger.info("Outreach generation initiated | lead_id=%s | provider=%s", lead_id, provider)
 
@@ -70,6 +70,11 @@ class OutreachService:
         }
 
         # 4. Invoke AI Provider
+        # Safety check: If provider is gemini, force it to groq
+        if provider and provider.lower() == "gemini":
+            logger.warning("Gemini provider requested but not available. Falling back to Groq.")
+            provider = "groq"
+        
         ai_provider = ai_factory.get_provider(provider)
         ai_result = await ai_provider.generate_outreach(lead_info, website_analysis, audit_data, score_data)
 

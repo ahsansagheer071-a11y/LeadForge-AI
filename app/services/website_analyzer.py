@@ -2,7 +2,7 @@ import re
 import time
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -20,12 +20,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # -------------------------------------------------------
 # Constants
 # -------------------------------------------------------
-DEFAULT_TIMEOUT_SECONDS = 20.0
-MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10 MB cap
+DEFAULT_TIMEOUT_SECONDS = 30.0
+MAX_CONTENT_LENGTH = 2 * 1024 * 1024  # 2 MB cap (more than enough for any homepage)
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/126.0.0.0 Safari/537.36"
+)
+
+# Shared HTTP client for connection reuse across requests
+_http_client = httpx.AsyncClient(
+    timeout=DEFAULT_TIMEOUT_SECONDS,
+    follow_redirects=True,
+    max_redirects=5,
+    headers={
+        "User-Agent": USER_AGENT,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+    },
+    limits=httpx.Limits(max_keepalive_connections=10, max_connections=50),
 )
 
 # Regex patterns compiled once at module level
@@ -37,7 +50,7 @@ PHONE_REGEX = re.compile(
     r"(?:\+?\d{1,4}[\s\-.]?)?\(?\d{1,5}\)?[\s\-.]?\d{1,5}[\s\-.]?\d{1,9}",
 )
 
-# Social domain → field mapping
+# Social domain -> field mapping
 SOCIAL_DOMAINS: Dict[str, str] = {
     "facebook.com": "social_facebook",
     "fb.com": "social_facebook",
@@ -66,10 +79,6 @@ class WebsiteAnalyzerService:
         lead_id: uuid.UUID,
         user: User,
     ) -> WebsiteAnalysisResponse:
-        """
-        Analyse the website of the given lead and persist results into the
-        Audit table.  Returns a structured response with all extracted fields.
-        """
         logger.info(
             "Website analysis started | lead_id=%s | user_id=%s",
             lead_id,
@@ -175,7 +184,6 @@ class WebsiteAnalyzerService:
     # ------------------------------------------------------------------
     @staticmethod
     def _validate_url(website: Optional[str]) -> str:
-        """Ensure the lead has a usable website URL."""
         if not website or not website.strip():
             raise ValidationException(
                 "This lead does not have a website URL to analyze.",
@@ -194,35 +202,20 @@ class WebsiteAnalyzerService:
         return url
 
     # ------------------------------------------------------------------
-    # HTTP fetch
+    # HTTP fetch (reuses module-level client for connection pooling)
     # ------------------------------------------------------------------
     async def _fetch_page(
         self, url: str
     ) -> Tuple[str, int, float, int]:
-        """
-        Download the homepage and return (html, status_code, response_time_ms,
-        content_length_bytes).
-        """
-        headers = {
-            "User-Agent": USER_AGENT,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-        }
-
         try:
             start = time.perf_counter()
-            async with httpx.AsyncClient(
-                timeout=DEFAULT_TIMEOUT_SECONDS,
-                follow_redirects=True,
-                max_redirects=5,
-            ) as client:
-                response = await client.get(url, headers=headers)
+            response = await _http_client.get(url)
             elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
 
             content_bytes = len(response.content)
             if content_bytes > MAX_CONTENT_LENGTH:
                 logger.warning(
-                    "Page content exceeds 10 MB limit | url=%s | size=%s bytes",
+                    "Page content exceeds 2 MB limit | url=%s | size=%s bytes",
                     url,
                     content_bytes,
                 )
@@ -255,8 +248,6 @@ class WebsiteAnalyzerService:
         response_time_ms: float,
         content_length: int,
     ) -> Dict[str, Any]:
-        """Run every extractor and return a flat dict matching Audit columns."""
-
         title = self._extract_title(soup)
         meta_desc = self._extract_meta_description(soup)
         language = self._extract_language(soup)
@@ -269,39 +260,26 @@ class WebsiteAnalyzerService:
         contact_page, about_page = self._detect_navigation_pages(soup, url)
 
         return {
-            # General
             "website_title": title,
             "meta_description": meta_desc,
             "website_language": language,
             "https_enabled": url.lower().startswith("https://"),
             "http_status_code": status_code,
             "ssl_status": url.lower().startswith("https://"),
-
-            # Content counts
             "h1_count": len(h1s),
             "h2_count": len(h2s),
             "total_paragraphs": len(soup.find_all("p")),
             "total_images": len(soup.find_all("img")),
             "total_forms": len(soup.find_all("form")),
-
-            # Business info
             "emails": emails,
             "phone_numbers": phones,
             "contact_form_present": len(soup.find_all("form")) > 0,
-
-            # Navigation
             "contact_page_exists": contact_page,
             "about_page_exists": about_page,
-
-            # Social presence
             **socials,
-
-            # SEO flags
             "missing_title": not bool(title),
             "missing_meta_description": not bool(meta_desc),
             "missing_h1": len(h1s) == 0,
-
-            # Performance
             "html_size_kb": round(content_length / 1024, 2),
             "response_time_ms": response_time_ms,
         }
@@ -338,7 +316,6 @@ class WebsiteAnalyzerService:
     @staticmethod
     def _extract_emails(soup: BeautifulSoup) -> List[str]:
         text = soup.get_text(separator=" ", strip=True)
-        # Also check mailto links
         mailto_emails = set()
         for a_tag in soup.find_all("a", href=True):
             href = a_tag["href"]
@@ -350,18 +327,16 @@ class WebsiteAnalyzerService:
         body_emails = set(EMAIL_REGEX.findall(text))
         all_emails = mailto_emails | {e.lower() for e in body_emails}
 
-        # Filter out common false positives
         filtered = [
             e for e in sorted(all_emails)
             if not e.endswith((".png", ".jpg", ".gif", ".svg", ".css", ".js"))
             and "@" in e
         ]
-        return filtered[:20]  # cap at 20
+        return filtered[:20]
 
     @staticmethod
     def _extract_phones(soup: BeautifulSoup) -> List[str]:
         phones: set = set()
-        # tel: links first (most reliable)
         for a_tag in soup.find_all("a", href=True):
             href = a_tag["href"]
             if href.startswith("tel:"):
@@ -369,20 +344,17 @@ class WebsiteAnalyzerService:
                 if phone and len(phone) >= 7:
                     phones.add(phone)
 
-        # Regex fallback on visible text
         text = soup.get_text(separator=" ", strip=True)
         for match in PHONE_REGEX.findall(text):
             cleaned = match.strip()
-            # Only keep values that look like real phone numbers (7+ digits)
             digits_only = re.sub(r"\D", "", cleaned)
             if 7 <= len(digits_only) <= 15:
                 phones.add(cleaned)
 
-        return sorted(phones)[:10]  # cap at 10
+        return sorted(phones)[:10]
 
     @staticmethod
     def _extract_social_links(soup: BeautifulSoup) -> Dict[str, Optional[str]]:
-        """Return dict with keys social_facebook, social_instagram, etc."""
         result: Dict[str, Optional[str]] = {
             "social_facebook": None,
             "social_instagram": None,
@@ -407,7 +379,7 @@ class WebsiteAnalyzerService:
                     seen_fields.add(field_name)
 
             if len(seen_fields) == 5:
-                break  # all found
+                break
 
         return result
 
@@ -415,7 +387,6 @@ class WebsiteAnalyzerService:
     def _detect_navigation_pages(
         soup: BeautifulSoup, base_url: str
     ) -> Tuple[bool, bool]:
-        """Detect whether contact and about pages exist from anchor links."""
         contact_found = False
         about_found = False
 

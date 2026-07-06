@@ -28,7 +28,7 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         status_code = status.HTTP_503_SERVICE_UNAVAILABLE
 
     # Check configuration status of global services
-    ai_status = "configured" if settings.GEMINI_API_KEY else "unconfigured"
+    ai_status = "configured" if settings.GROQ_API_KEY else "unconfigured"
     serpapi_status = "configured" if settings.SERPAPI_KEY else "unconfigured"
     cloudinary_status = "configured" if (
         settings.CLOUDINARY_CLOUD_NAME and 

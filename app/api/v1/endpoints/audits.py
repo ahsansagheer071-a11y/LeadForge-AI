@@ -17,7 +17,7 @@ router = APIRouter()
 
 class AuditRequest(BaseModel):
     lead_id: uuid.UUID = Field(..., description="The UUID of the lead to analyze.")
-    provider: str = Field(default="gemini", description="AI provider to use (e.g., 'gemini').")
+    provider: str = Field(default="groq", description="AI provider to use (e.g., 'groq').")
 
 
 class AuditAndScoreResult(BaseModel):
@@ -41,7 +41,7 @@ class AuditAndScoreResult(BaseModel):
         401: {"description": "Missing or invalid credentials."},
         404: {"description": "Lead or website analysis record not found."},
         422: {"description": "Missing prerequisite steps (website analysis)."},
-        503: {"description": "AI Provider (Gemini) is unavailable."},
+        503: {"description": "AI Provider (Groq) is unavailable."},
     }
 )
 async def run_audit_and_scoring(
