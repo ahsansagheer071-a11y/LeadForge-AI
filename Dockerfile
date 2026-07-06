@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Python deps + Playwright + Chromium
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt "playwright==1.60.0" && \
-    playwright install chromium && \
+    playwright install --with-deps chromium && \
     rm -rf /root/.cache
 
 # Copy application code (only what's needed at runtime)
