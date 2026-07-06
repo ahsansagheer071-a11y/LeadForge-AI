@@ -55,28 +55,14 @@ app = FastAPI(
 
 
 
-origins = [
-    o.strip()
-    for o in settings.CORS_ORIGINS.split(",")
-    if o.strip()
-]
-
-
-cors_kwargs = dict(
-    allow_credentials=bool(origins),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-if origins:
-    cors_kwargs["allow_origins"] = origins
-else:
-    cors_kwargs["allow_origin_regex"] = ".*"
-
-
 app.add_middleware(
     CORSMiddleware,
-    **cors_kwargs,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=600,
 )
 
 
