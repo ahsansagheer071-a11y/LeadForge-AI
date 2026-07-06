@@ -459,8 +459,6 @@ class ScreenshotService:
         mobile_path = os.path.join(base_dir, f"{lead_id}_mobile.png")
         full_page_path = os.path.join(base_dir, f"{lead_id}_full.png")
 
-        browser = await _browser_mgr.get_browser()
-
         attempt = 0
         max_retries = 2
         last_error = None
@@ -470,6 +468,8 @@ class ScreenshotService:
             logger.info(f"Screenshot capture attempt {attempt}/{max_retries + 1} for {url}")
 
             try:
+                browser = await _browser_mgr.get_browser()
+
                 # Desktop + Mobile concurrently
                 desktop_timings, mobile_timings = await asyncio.gather(
                     _capture_single_viewport(

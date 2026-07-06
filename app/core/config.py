@@ -58,7 +58,7 @@ class Settings(BaseSettings):
 
     # Website Generation - Groq
     GROQ_DEFAULT_MODEL: str = Field(default="llama-3.3-70b-versatile")
-    GROQ_BASE_URL: str = Field(default="https://api.groq.com/openai/v1")
+    GROQ_BASE_URL: str = Field(default="https://api.groq.com")
 
 
 # Create settings instance

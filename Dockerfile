@@ -38,8 +38,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=builder /root/.local /root/.local
 
-# Install Playwright + Chromium only (smallest browser)
-RUN pip install --no-cache-dir playwright && \
+# Install Playwright + Chromium (pinned to match requirements.txt)
+RUN pip install --no-cache-dir "playwright==1.60.0" && \
     playwright install chromium && \
     rm -rf /root/.cache && \
     rm -rf /var/lib/apt/lists/*

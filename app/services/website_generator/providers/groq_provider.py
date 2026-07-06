@@ -11,7 +11,7 @@ from app.services.website_generator.schemas import PromptContext
 
 logger = logging.getLogger(__name__)
 
-GROQ_CHAT_ENDPOINT = "/chat/completions"
+GROQ_CHAT_ENDPOINT = "/openai/v1/chat/completions"
 GENERATION_TIMEOUT = 120.0
 HEALTH_CHECK_TIMEOUT = 10.0
 SUPPORTED_MODELS = [
