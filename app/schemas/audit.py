@@ -61,7 +61,7 @@ class AuditBase(BaseModel):
 
     # AI Evaluation Findings
     executive_summary: Optional[str] = None
-    weaknesses: Optional[List[WeaknessItem]] = Field(default_factory=list)
+    weaknesses: Optional[List[str]] = Field(default_factory=list)
     verdict: Optional[str] = None
 
 
@@ -108,7 +108,7 @@ class AuditUpdate(BaseModel):
 
     # AI fields
     executive_summary: Optional[str] = None
-    weaknesses: Optional[List[WeaknessItem]] = None
+    weaknesses: Optional[List[str]] = None
     verdict: Optional[str] = None
 
 
