@@ -36,8 +36,11 @@ class Settings(BaseSettings):
         if not v:
             raise ValueError("DATABASE_URL is not set.")
 
-        if v.startswith("postgresql://"):
-            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        if v.startswith("postgres://"):
+            v = v.replace("postgres://", "postgresql+asyncpg://", 1)
+
+        elif v.startswith("postgresql://"):
+            v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
 
         return v
 
