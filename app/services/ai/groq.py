@@ -33,7 +33,7 @@ class GroqProvider(AIBaseProvider):
         self.model = "llama-3.3-70b-versatile"
         self.max_retries = 1
         self.retry_delay = 2
-        self.timeout = 45
+        self.timeout = 30
 
         if not self.api_key:
             logger.warning("GROQ_API_KEY is not set in configuration.")

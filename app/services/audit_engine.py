@@ -109,12 +109,12 @@ class AuditEngineService:
         try:
             ai_result = await asyncio.wait_for(
                 ai_provider.audit_website(lead_info, website_analysis, screenshot_urls),
-                timeout=120.0,
+                timeout=300.0,
             )
         except asyncio.TimeoutError:
-            logger.error("AI audit timed out | lead_id=%s | provider=%s", lead_id, provider)
+            logger.error("AI audit timed out for lead '%s'", lead_id)
             raise ServiceUnavailableException(
-                f"AI audit timed out after 120s for lead '{lead_id}'."
+                f"AI audit timed out for lead '{lead_id}'."
             )
         t_ai_end = time.perf_counter()
         logger.info(
