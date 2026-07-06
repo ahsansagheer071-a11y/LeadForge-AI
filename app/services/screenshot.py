@@ -471,7 +471,7 @@ class ScreenshotService:
                 browser = await _browser_mgr.get_browser()
 
                 # Desktop + Mobile concurrently
-                desktop_timings, mobile_timings = await asyncio.gather(
+                results = await asyncio.gather(
                     _capture_single_viewport(
                         url, browser, desktop_path, DESKTOP_VIEWPORT,
                         full_page=False, is_mobile=False
@@ -486,7 +486,14 @@ class ScreenshotService:
                             "Mobile/15E148 Safari/604.1"
                         )
                     ),
+                    return_exceptions=True,
                 )
+
+                # Check for exceptions
+                errors = [r for r in results if isinstance(r, Exception)]
+                if errors:
+                    raise errors[0]
+                desktop_timings, mobile_timings = results
 
                 # Full page (sequential to limit memory)
                 full_timings = await _capture_single_viewport(
@@ -515,8 +522,7 @@ class ScreenshotService:
                         f"Failed to capture screenshots after {max_retries + 1} attempts: {last_error}"
                     )
 
-                # Force browser recovery
-                await _browser_mgr.close()
+                # Wait before retry (browser recovery happens automatically in get_browser)
                 await asyncio.sleep(1.5 * attempt)
 
             except Exception as e:
