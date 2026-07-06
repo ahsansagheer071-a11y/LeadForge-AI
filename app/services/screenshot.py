@@ -140,11 +140,11 @@ class BrowserManager:
         if self._state.playwright is None:
             self._state.playwright = await async_playwright().start()
 
-                try:
-                    logger.info("_launch_browser: trying chromium (v3)")
-                    browser = await self._state.playwright.chromium.launch(
-                        headless=True,
-                        args=[
+        try:
+            logger.info("_launch_browser: trying chromium")
+            browser = await self._state.playwright.chromium.launch(
+                headless=True,
+                args=[
                     "--no-sandbox",
                     "--disable-dev-shm-usage",
                     "--single-process",
@@ -166,14 +166,7 @@ class BrowserManager:
             )
         except Exception as e:
             logger.error(f"Chromium launch failed: {e}")
-            logger.info("Falling back to Firefox")
-            if self._state.playwright is not None:
-                await self._state.playwright.stop()
-            self._state.playwright = await async_playwright().start()
-            browser = await self._state.playwright.firefox.launch(
-                headless=True,
-                args=["--no-sandbox"],
-            )
+            raise ServiceUnavailableException(f"Browser launch failed: {e}") from e
 
         self._state.browser = browser
         self._state.launched_at = time.monotonic()
