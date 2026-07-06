@@ -113,7 +113,7 @@ async def generate_website(
         )
         if not profile:
             raise ServiceUnavailableException(
-                f"Failed to crawl website for lead '{payload.lead_id}'."
+                f"Website crawl returned no profile for lead '{payload.lead_id}'."
             )
         await website_intelligence_service.save_profile(
             db, lead_id=payload.lead_id, website_url=lead.website, profile=profile

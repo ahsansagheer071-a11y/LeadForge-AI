@@ -764,8 +764,8 @@ class WebsiteIntelligenceService:
 
             color_palette = await self.extract_color_palette(page)
         except Exception as exc:
-            logger.error("Playwright extraction failed | url=%s | error=%s", url, exc)
-            return None
+            logger.error("build_profile extraction failed | url=%s | error=%s | type=%s", url, exc, type(exc).__name__)
+            raise
         finally:
             try:
                 await context.close()
