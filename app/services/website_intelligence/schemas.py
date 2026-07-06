@@ -116,6 +116,7 @@ class HeroInfo(BaseModel):
     hero_description: Optional[str] = None
     primary_cta: Optional[CtaButton] = None
     secondary_cta: Optional[CtaButton] = None
+    ctas: List[CtaButton] = Field(default_factory=list)
     hero_image: Optional[str] = None
     background_image_url: Optional[str] = None
     background_color: Optional[str] = None
@@ -123,6 +124,11 @@ class HeroInfo(BaseModel):
     hero_alignment: Optional[str] = None
     hero_height: Optional[int] = None
     is_fallback_detection: bool = False
+    # Aliases for downstream compatibility
+    title: Optional[str] = None
+    subtitle: Optional[str] = None
+    description: Optional[str] = None
+    layout: Optional[str] = None
 
 
 class ServiceCard(BaseModel):

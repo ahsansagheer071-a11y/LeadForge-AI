@@ -1470,16 +1470,33 @@ class WebsiteIntelligenceService:
         if result is None:
             return HeroInfo()
 
+        p_cta = CtaButton(**result["primary_cta"]) if result.get("primary_cta") else None
+        s_cta = CtaButton(**result["secondary_cta"]) if result.get("secondary_cta") else None
+        cta_list = []
+        if p_cta:
+            cta_list.append(p_cta)
+        if s_cta:
+            cta_list.append(s_cta)
+        hero_title = result.get("hero_title")
+        hero_subtitle = result.get("hero_subtitle")
+        hero_description = result.get("hero_description")
+        hero_layout = result.get("hero_layout")
+
         return HeroInfo(
-            hero_title=result.get("hero_title"),
-            hero_subtitle=result.get("hero_subtitle"),
-            hero_description=result.get("hero_description"),
-            primary_cta=CtaButton(**result["primary_cta"]) if result.get("primary_cta") else None,
-            secondary_cta=CtaButton(**result["secondary_cta"]) if result.get("secondary_cta") else None,
+            hero_title=hero_title,
+            hero_subtitle=hero_subtitle,
+            hero_description=hero_description,
+            title=hero_title,
+            subtitle=hero_subtitle,
+            description=hero_description,
+            layout=hero_layout,
+            primary_cta=p_cta,
+            secondary_cta=s_cta,
+            ctas=cta_list,
             hero_image=result.get("hero_image"),
             background_image_url=result.get("background_image_url"),
             background_color=result.get("background_color"),
-            hero_layout=result.get("hero_layout"),
+            hero_layout=hero_layout,
             hero_alignment=result.get("hero_alignment"),
             hero_height=result.get("hero_height"),
             is_fallback_detection=result.get("is_fallback_detection", False),
