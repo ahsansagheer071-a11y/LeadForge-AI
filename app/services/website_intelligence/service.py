@@ -2117,7 +2117,7 @@ class WebsiteIntelligenceService:
                 "rgb": {"r": r, "g": g, "b": b},
                 "hsl": {"h": round(h, 2), "s": round(s, 2), "l": round(l_s, 2)},
                 "relative_brightness": brightness,
-                "frequency": None,
+                "frequency": 0,
                 "usage_role": usage_role,
             }
 
