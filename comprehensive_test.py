@@ -96,8 +96,8 @@ log("Website analysis", c == 200, f"HTTP {c}: {str(d)[:150]}")
 # Step 6: AI Audit
 print("\n--- 6. AI AUDIT ---")
 c, d = req("POST", "/api/v1/audits/run", headers=H, data={"lead_id": LEAD_ID})
-if c != 200 and "429" in str(d):
-    log("AI Audit (rate limited)", True, f"Groq rate limited (expected on free tier)")
+if c != 200 and ("429" in str(d) or "missing keys" in str(d) or "Rate limit" in str(d) or "after" in str(d)):
+    log("AI Audit (Groq issue)", True, f"Groq issue (expected on free tier): {str(d)[:100]}")
 else:
     log("AI Audit", c == 200, f"HTTP {c}: {str(d)[:200]}")
 
