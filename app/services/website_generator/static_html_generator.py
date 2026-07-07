@@ -175,7 +175,7 @@ class StaticHTMLGenerator:
         import re
         # Pattern for code fences with html tag
         fence_pattern = r"```(?:html)?\s*(<!DOCTYPE html[\s\S]*?</html>)\s*```"
-        match = re.search(fence_pattern, re.IGNORECASE)
+        match = re.search(fence_pattern, raw, re.IGNORECASE)
         if match:
             return match.group(1).strip()
         # If no fences, assume the whole string is the HTML (should start with <!DOCTYPE)
@@ -197,7 +197,7 @@ class StaticHTMLGenerator:
             r"<h1>\s*(.*?)\s*</h1>",
         ]
         for pat in patterns:
-            match = re.search(pat, re.IGNORECASE | re.DOTALL, ai_response.raw_response)
+            match = re.search(pat, ai_response.raw_response, re.IGNORECASE | re.DOTALL)
             if match:
                 name = match.group(1).strip()
                 if name:
