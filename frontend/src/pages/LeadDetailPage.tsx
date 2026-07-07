@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Globe, MapPin, Phone, Star, Building, Play, Shield, AlertTriangle, CheckCircle, Search, Camera, Send, Copy } from 'lucide-react';
+import { ArrowLeft, Globe, MapPin, Phone, Star, Building, Play, Shield, AlertTriangle, CheckCircle, Search, Camera, Send, Copy, ExternalLink, Download } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/Card';
 import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { Skeleton } from '@/components/Loading';
 import { EmptyState } from '@/components/ErrorStates';
-import { projectsService, generateWebsite, auditService, analysisService, screenshotService, outreachService } from '@/services/services';
+import { projectsService, generateWebsite, auditService, analysisService, screenshotService, outreachService, generationService } from '@/services/services';
 import { getApiErrorMessage } from '@/services/apiClient';
 import { usePreviewStore } from '@/store';
 import { formatRelative } from '@/utils';
@@ -45,6 +45,14 @@ export function LeadDetailPage() {
     enabled: !!id,
   });
 
+  const { data: existingWebsite } = useQuery({
+    queryKey: ['generated-website-latest', id],
+    queryFn: () => generationService.getLatestByLeadId(id!),
+    enabled: !!id,
+    staleTime: 30_000,
+    retry: false,
+  });
+
   useEffect(() => {
     if (lead) {
       if (lead.screenshot) {
@@ -57,6 +65,23 @@ export function LeadDetailPage() {
       }
       if (lead.outreach) {
         setOutreachResult(lead.outreach);
+      }
+      if (lead.audit && lead.score) {
+        const reconstructed: Record<string, unknown> = {};
+        if (lead.audit.executive_summary) {
+          reconstructed['Business Summary'] = lead.audit.executive_summary;
+        }
+        if (lead.audit.weaknesses && Array.isArray(lead.audit.weaknesses)) {
+          reconstructed['Top Weaknesses'] = lead.audit.weaknesses;
+        }
+        if (lead.audit.verdict) {
+          reconstructed['Overall Summary'] = lead.audit.verdict;
+        }
+        setAuditResult({
+          lead_id: lead.id,
+          audit: Object.keys(reconstructed).length > 0 ? reconstructed : { 'Overall Summary': lead.audit.verdict || 'Audit data available' },
+          score: lead.score,
+        });
       }
     }
   }, [lead]);
@@ -173,23 +198,40 @@ export function LeadDetailPage() {
                 {lead.industry && <span className="ml-2">{lead.industry}</span>}
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
               <Button
                 size="sm"
-                leftIcon={<Play className="size-3.5" />}
+                variant={existingWebsite ? 'brand' : 'outline'}
+                leftIcon={existingWebsite ? <ExternalLink className="size-3.5" /> : <Play className="size-3.5" />}
                 loading={generateMutation.isPending}
-                onClick={() => generateMutation.mutate()}
+                onClick={() => {
+                  if (existingWebsite) {
+                    navigate(`/preview/${existingWebsite.id}`);
+                  } else {
+                    generateMutation.mutate();
+                  }
+                }}
               >
-                Generate Website
+                {generateMutation.isPending ? 'Generating...' : existingWebsite ? 'View Preview' : 'Generate Website'}
               </Button>
+              {existingWebsite && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  leftIcon={<Download className="size-3.5" />}
+                  onClick={() => navigate(`/deployment/${existingWebsite.id}`)}
+                >
+                  Download
+                </Button>
+              )}
               <Button
                 size="sm"
-                variant="outline"
+                variant={lead.audit ? 'brand-soft' : 'outline'}
                 leftIcon={<Search className="size-3.5" />}
                 loading={analysisMutation.isPending}
                 onClick={() => analysisMutation.mutate()}
               >
-                {analysisMutation.isPending ? 'Analyzing...' : 'Analyze Website'}
+                {analysisMutation.isPending ? 'Analyzing...' : lead.audit ? 'Analyzed' : 'Analyze Website'}
               </Button>
               <Button
                 size="sm"
@@ -198,7 +240,7 @@ export function LeadDetailPage() {
                 loading={screenshotMutation.isPending}
                 onClick={() => screenshotMutation.mutate()}
               >
-                {screenshotMutation.isPending ? 'Capturing...' : 'Capture Screenshot'}
+                {screenshotMutation.isPending ? 'Capturing...' : screenshotResult ? 'Screenshot Captured' : 'Capture Screenshot'}
               </Button>
               <Button
                 size="sm"
@@ -207,7 +249,7 @@ export function LeadDetailPage() {
                 loading={auditMutation.isPending}
                 onClick={() => auditMutation.mutate()}
               >
-                {auditMutation.isPending ? 'Auditing...' : 'Run Audit'}
+                {auditMutation.isPending ? 'Auditing...' : auditResult ? 'Audit Complete' : 'Run Audit'}
               </Button>
               <Button
                 size="sm"
@@ -216,7 +258,7 @@ export function LeadDetailPage() {
                 loading={outreachMutation.isPending}
                 onClick={() => outreachMutation.mutate()}
               >
-                {outreachMutation.isPending ? 'Generating...' : 'Generate Outreach'}
+                {outreachMutation.isPending ? 'Generating...' : outreachResult ? 'Outreach Ready' : 'Generate Outreach'}
               </Button>
             </div>
           </div>
