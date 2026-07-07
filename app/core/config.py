@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     GROQ_BASE_URL: str = Field(default="https://api.groq.com")
 
     # Frontend URL for preview/share links in outreach (set to Vercel deployment URL in Railway env)
-    FRONTEND_URL: str = Field(default="https://leadforge-ai.vercel.app")
+    FRONTEND_URL: str = Field(default="https://lead-forge-ai-tan.vercel.app")
 
 
 # Create settings instance
