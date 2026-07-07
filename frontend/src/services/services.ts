@@ -14,11 +14,25 @@ import type {
   CaptureScreenshotResponse,
   GenerateOutreachRequest,
   OutreachResponse,
+  DashboardSummaryResponse,
+  DistributionResponse,
+  RecentLeadsResponse,
+  GenerateWebsiteResponse,
+  GeneratedWebsiteResponse,
 } from '@/types';
 
 /* ─── Auth helpers ────────────────────────────────────────── */
-function unwrap<T>(resp: { data: { success: boolean; data?: T } }): T {
-  return resp.data.data as T;
+function unwrap<T>(resp: { data: { success: boolean; data?: T | null; message?: string; error?: { message?: string; code?: string } } }): T {
+  if (!resp.data.success || resp.data.data == null) {
+    throw {
+      status: 0,
+      code: resp.data.error?.code ?? 'api_unsuccessful_response',
+      category: 'backend',
+      message: resp.data.error?.message ?? resp.data.message ?? 'The backend did not return a usable result.',
+      details: resp.data as Record<string, unknown>,
+    };
+  }
+  return resp.data.data;
 }
 
 /* ─── Auth service ──────────────────────────────────────────── */
@@ -53,7 +67,7 @@ export async function fetchMe(): Promise<User> {
 export const projectsService = {
   async list(page = 1, pageSize = 20): Promise<PaginatedResponse<LeadResponse>> {
     const resp = await apiClient.get<{ success: boolean; data: PaginatedResponse<LeadResponse> }>('/leads', {
-      params: { page, page_size: pageSize },
+      params: { page, limit: pageSize },
     });
     return unwrap(resp);
   },
@@ -71,7 +85,15 @@ export const projectsService = {
     name: string; website?: string; phone?: string;
     address?: string; city: string; country: string; industry: string;
   }): Promise<LeadResponse> {
-    const resp = await apiClient.post<{ success: boolean; data: LeadResponse }>('/leads', input);
+    const resp = await apiClient.post<{ success: boolean; data: LeadResponse }>('/leads', {
+      company_name: input.name,
+      url: input.website,
+      phone: input.phone,
+      address: input.address,
+      city: input.city,
+      country: input.country,
+      industry: input.industry,
+    });
     return unwrap(resp);
   },
   async delete(id: string): Promise<void> {
@@ -93,6 +115,7 @@ export const screenshotService = {
     const resp = await apiClient.post<{ success: boolean; data: CaptureScreenshotResponse }>(
       '/screenshots/capture',
       payload,
+      { timeout: 120_000 },
     );
     return unwrap(resp);
   },
@@ -112,7 +135,9 @@ export const analysisService = {
 /* ─── Audit service ──────────────────────────────────────────── */
 export const auditService = {
   async run(payload: AuditRequest): Promise<AuditAndScoreResult> {
-    const resp = await apiClient.post<{ success: boolean; data: AuditAndScoreResult }>('/audits/run', payload);
+    const resp = await apiClient.post<{ success: boolean; data: AuditAndScoreResult }>('/audits/run', payload, {
+      timeout: 300_000,
+    });
     return unwrap(resp);
   },
 };
@@ -123,27 +148,78 @@ export const outreachService = {
     const resp = await apiClient.post<{ success: boolean; data: OutreachResponse }>(
       '/outreach/generate',
       payload,
+      { timeout: 180_000 },
     );
     return unwrap(resp);
   },
 };
 
-/* ─── Deployment service (stub — future phase) ─────────────── */
+/* ─── Deployment service ────────────────────────────────────── */
 import type { DeploymentInfo } from '@/types';
 
 export const deploymentsService = {
   async list(): Promise<DeploymentInfo[]> {
-    return [];
+    const resp = await apiClient.get<{ success: boolean; data: DeploymentInfo[] }>('/deployments');
+    return unwrap(resp);
+  },
+};
+
+export const dashboardService = {
+  async summary(): Promise<DashboardSummaryResponse> {
+    const resp = await apiClient.get<{ success: boolean; data: DashboardSummaryResponse }>('/dashboard/summary');
+    return unwrap(resp);
+  },
+  async recentLeads(limit = 10, offset = 0): Promise<RecentLeadsResponse> {
+    const resp = await apiClient.get<{ success: boolean; data: RecentLeadsResponse }>('/dashboard/recent-leads', {
+      params: { limit, offset },
+    });
+    return unwrap(resp);
+  },
+  async statusDistribution(): Promise<DistributionResponse> {
+    const resp = await apiClient.get<{ success: boolean; data: DistributionResponse }>('/dashboard/status-distribution');
+    return unwrap(resp);
   },
 };
 
 /* ─── Generation service ────────────────────────────────────── */
-export async function generateWebsite(leadId: string): Promise<string> {
-  const resp = await apiClient.post<{ success: boolean; data: { html: string } }>(
+export async function generateWebsite(leadId: string): Promise<GenerateWebsiteResponse> {
+  const resp = await apiClient.post<{ success: boolean; data: GenerateWebsiteResponse }>(
     '/generation/generate',
     { lead_id: leadId },
+    { timeout: 300_000 },
   );
-  return unwrap(resp).html;
+  return unwrap(resp);
 }
 
-
+export const generationService = {
+  async getById(websiteId: string): Promise<GeneratedWebsiteResponse> {
+    const resp = await apiClient.get<{ success: boolean; data: GeneratedWebsiteResponse }>(
+      `/generation/websites/${websiteId}`,
+    );
+    return unwrap(resp);
+  },
+  async getLatestByLeadId(leadId: string): Promise<GeneratedWebsiteResponse> {
+    const resp = await apiClient.get<{ success: boolean; data: GeneratedWebsiteResponse }>(
+      `/generation/leads/${leadId}/latest`,
+    );
+    return unwrap(resp);
+  },
+  async downloadPackage(websiteId: string): Promise<void> {
+    const resp = await apiClient.get<Blob>(
+      `/generation/websites/${websiteId}/download`,
+      { responseType: 'blob' },
+    );
+    const contentDisposition = resp.headers?.['content-disposition'] as string | undefined;
+    const match = contentDisposition?.match(/filename="?([^"]+)"?/);
+    const filename = match?.[1] ?? `leadforge-website-${websiteId}.zip`;
+    const blob = new Blob([resp.data]);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+};

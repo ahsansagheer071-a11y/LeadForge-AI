@@ -16,11 +16,13 @@ import axios, {
 import { getErrorMessage } from '@/utils';
 import type { APIErrorShape } from '@/types';
 
-const RAW_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://leadforge-ai-production-eff1.up.railway.app';
+const RAW_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_API_URL ||
+  'https://leadforge-ai-production-eff1.up.railway.app';
 // Strip any trailing slash, then ensure exactly one trailing `/api/v1`
 const NORMALIZED_BASE = RAW_BASE_URL.replace(/\/+$/, '').replace(/\/api\/v1$/i, '');
 const BASE_URL = `${NORMALIZED_BASE}/api/v1`;
-console.log('API Base URL:', BASE_URL);
 const ACCESS_KEY = 'lf_access_token';
 const REFRESH_KEY = 'lf_refresh_token';
 
@@ -51,7 +53,15 @@ export function extractApiError(err: unknown): APIErrorShape {
       data && typeof data === 'object' && 'error' in data
         ? (data.error as Record<string, unknown>)
         : null;
+    const validationDetail =
+      errBlock && Array.isArray(errBlock.detail)
+        ? (errBlock.detail as Array<{ loc?: unknown[]; msg?: string }>)
+        : null;
+    const validationMessage = validationDetail?.[0]?.msg
+      ? `Validation failed: ${validationDetail[0].msg}`
+      : null;
     const message =
+      validationMessage ||
       (errBlock && typeof errBlock.message === 'string' && errBlock.message) ||
       (data && typeof data.message === 'string' && (data.message as string)) ||
       (data && typeof data.detail === 'string' && (data.detail as string)) ||
@@ -61,9 +71,39 @@ export function extractApiError(err: unknown): APIErrorShape {
       (errBlock && typeof errBlock.code === 'string' ? (errBlock.code as string) : null) ||
       (data && typeof data.code === 'string' ? (data.code as string) : null) ||
       (status === 401 ? 'unauthorized' : status === 403 ? 'forbidden' : status === 404 ? 'not_found' : null);
-    return { status, code, message, details: data ?? null };
+    const category =
+      ax.code === 'ECONNABORTED'
+        ? 'timeout'
+        : !ax.response
+          ? 'network'
+          : status === 422
+            ? 'validation'
+            : status === 401
+              ? 'authentication'
+              : status === 403
+                ? 'authorization'
+                : status === 503
+                  ? 'provider'
+                  : status >= 500
+                    ? 'backend'
+                    : 'unknown';
+    return { status, code, category, message, details: data ?? null };
   }
-  return { status: 0, code: 'network', message: getErrorMessage(err) };
+  const apiErr = err as APIErrorShape;
+  if (apiErr && typeof apiErr === 'object' && typeof apiErr.message === 'string') {
+    return apiErr;
+  }
+  return { status: 0, code: 'network', category: 'network', message: getErrorMessage(err) };
+}
+
+export function getApiErrorMessage(err: unknown, fallback = 'Request failed'): string {
+  const apiErr = extractApiError(err);
+  if (!apiErr.message || apiErr.message === 'Request failed') return fallback;
+  if (apiErr.category === 'authentication') return 'Your session expired. Please sign in again.';
+  if (apiErr.category === 'authorization') return 'You do not have access to this item.';
+  if (apiErr.category === 'network') return 'Could not reach the backend. Check your connection and try again.';
+  if (apiErr.category === 'timeout') return 'The request took too long. The backend may still be working; try again shortly.';
+  return apiErr.message;
 }
 
 /** Global error sink — wired up by providers; safe to call from anywhere. */

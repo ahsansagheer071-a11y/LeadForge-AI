@@ -19,6 +19,7 @@ from app.models.lead_score import LeadScore  # noqa
 from app.models.audit import Audit  # noqa
 from app.models.screenshot import Screenshot  # noqa
 from app.models.outreach import Outreach  # noqa
+from app.models.generated_website import GeneratedWebsite  # noqa
 from app.models.revoked_token import RevokedToken  # noqa
 from app.services.markdown_engine.models import MarkdownPackageMetadata  # noqa
 

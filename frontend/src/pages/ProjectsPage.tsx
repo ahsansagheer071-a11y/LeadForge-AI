@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/Loading';
 import { EmptyState } from '@/components/ErrorStates';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectsService, leadDiscoveryService } from '@/services/services';
+import { getApiErrorMessage } from '@/services/apiClient';
 import { formatRelative } from '@/utils';
 import type { LeadDiscoveryRequest } from '@/types';
 import { toast } from 'sonner';
@@ -56,7 +57,7 @@ export function ProjectsPage() {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : 'Discovery failed');
+      toast.error(getApiErrorMessage(err, 'Discovery failed'));
     },
   });
 

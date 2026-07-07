@@ -6,6 +6,7 @@ from app.repositories.audit import audit_repository
 from app.repositories.screenshot import screenshot_repository
 from app.repositories.outreach import outreach_repository
 from app.repositories.revoked_token import revoked_token_repository
+from app.repositories.generated_website import generated_website_repository
 
 __all__ = [
     "user_repository",
@@ -16,4 +17,5 @@ __all__ = [
     "screenshot_repository",
     "outreach_repository",
     "revoked_token_repository",
+    "generated_website_repository",
 ]

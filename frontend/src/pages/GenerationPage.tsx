@@ -7,7 +7,8 @@ import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { Skeleton } from '@/components/Loading';
 import { EmptyState } from '@/components/ErrorStates';
-import { projectsService, generateWebsite } from '@/services/services';
+import { projectsService, generateWebsite, generationService } from '@/services/services';
+import { getApiErrorMessage } from '@/services/apiClient';
 import { usePreviewStore } from '@/store';
 import { cn } from '@/utils';
 import { toast } from 'sonner';
@@ -27,13 +28,13 @@ export function GenerationPage() {
 
   const mutation = useMutation({
     mutationFn: () => generateWebsite(selectedId),
-    onSuccess: (html) => {
-      setHtmlContent(html);
+    onSuccess: (data) => {
+      setHtmlContent(data.html);
       toast.success('Website generated successfully');
-      navigate('/preview');
+      navigate(`/preview/${data.website_id}`);
     },
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : 'Generation failed');
+      toast.error(getApiErrorMessage(err, 'Generation failed'));
     },
   });
 
@@ -148,7 +149,10 @@ export function GenerationPage() {
                 <p className="text-[14px] font-semibold">Generation complete!</p>
                 <p className="text-[12.5px] text-[var(--color-text-muted)] mt-1">Your website is ready to preview.</p>
                 <div className="flex gap-2 mt-5">
-                  <Button variant="brand" onClick={() => navigate('/preview')}>View Preview</Button>
+                  <Button variant="brand" onClick={() => {
+                    const data = mutation.data;
+                    if (data) navigate(`/preview/${data.website_id}`);
+                  }}>View Preview</Button>
                 </div>
               </div>
             )}
@@ -163,7 +167,7 @@ export function GenerationPage() {
                 </div>
                 <p className="text-[14px] font-semibold">Generation failed</p>
                 <p className="text-[12.5px] text-[var(--color-text-muted)] mt-1">
-                  {mutation.error instanceof Error ? mutation.error.message : 'An unexpected error occurred.'}
+                  {getApiErrorMessage(mutation.error, 'An unexpected error occurred.')}
                 </p>
                 <div className="flex gap-2 mt-5">
                   <Button variant="brand" onClick={() => mutation.mutate()}>Try Again</Button>

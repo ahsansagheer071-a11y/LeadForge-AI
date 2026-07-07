@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class RgbColor(BaseModel):
@@ -524,6 +524,29 @@ class WebsiteProfile(BaseModel):
     extraction_timestamp: datetime = Field(default_factory=datetime.utcnow)
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def coerce_none_to_empty(cls, data: Any) -> Any:
+        list_fields = {
+            "navigation", "services", "products", "images", "testimonials",
+            "faqs", "team", "trust_signals", "blog_links", "social_links",
+            "call_to_actions",
+        }
+        if isinstance(data, dict):
+            for key in list_fields:
+                if data.get(key) is None:
+                    data[key] = []
+            if data.get("statistics") is None:
+                data["statistics"] = {}
+        elif hasattr(data, "__table__"):
+            for key in list_fields:
+                val = getattr(data, key, None)
+                if val is None:
+                    setattr(data, key, [])
+            if getattr(data, "statistics", None) is None:
+                setattr(data, "statistics", {})
+        return data
 
 
 class WebsiteIntelligenceResponse(BaseModel):

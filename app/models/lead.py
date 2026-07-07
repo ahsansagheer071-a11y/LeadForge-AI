@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from app.models.audit import Audit
     from app.models.screenshot import Screenshot
     from app.models.outreach import Outreach
+    from app.models.generated_website import GeneratedWebsite
 
 
 class Lead(Base):
@@ -123,5 +124,10 @@ class Lead(Base):
         "Outreach",
         back_populates="lead",
         uselist=False,
+        cascade="all, delete-orphan"
+    )
+    generated_websites: Mapped[list["GeneratedWebsite"]] = relationship(
+        "GeneratedWebsite",
+        back_populates="lead",
         cascade="all, delete-orphan"
     )

@@ -8,6 +8,7 @@ for immediate preview in an iframe.
 import logging
 import time
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 from app.services.website_intelligence.schemas import WebsiteProfile
@@ -153,7 +154,7 @@ class StaticHTMLGenerator:
             framework="static-html",
             generation_id=generation_id,
             version="1.0.0",
-            generated_at=time.time(),  # placeholder, we can use datetime later
+            generated_at=datetime.now(timezone.utc),
             files=[html_file],
             assets=[],  # no separate assets since everything is inline
             metadata={},

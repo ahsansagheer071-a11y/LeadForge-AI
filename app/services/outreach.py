@@ -1,6 +1,7 @@
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.exceptions import NotFoundException, ValidationException
 from app.core.logging import logger
 from app.models.user import User
@@ -8,6 +9,7 @@ from app.repositories.lead import lead_repository
 from app.repositories.audit import audit_repository
 from app.repositories.lead_score import lead_score_repository
 from app.repositories.outreach import outreach_repository
+from app.repositories.generated_website import generated_website_repository
 from app.schemas.outreach import OutreachCreate, OutreachResponse
 from app.services.ai.factory import ai_factory
 
@@ -23,7 +25,7 @@ class OutreachService:
         *,
         lead_id: uuid.UUID,
         user: User,
-        provider: str = "groq"  # CHANGED: Default to groq instead of gemini
+        provider: str = "groq"
     ) -> OutreachResponse:
         logger.info("Outreach generation initiated | lead_id=%s | provider=%s", lead_id, provider)
 
@@ -44,6 +46,13 @@ class OutreachService:
         score_record = await lead_score_repository.get_by_lead_id(db, lead_id=lead_id)
         if not score_record:
             raise ValidationException("Lead Score is missing. Please run the AI Audit and Scoring first.")
+
+        # 4. Load latest generated website for preview link
+        generated_website = await generated_website_repository.get_latest_by_lead_id(db, lead_id=lead_id)
+        preview_link = None
+        if generated_website and generated_website.status in ("generated", "ready"):
+            frontend_url = settings.FRONTEND_URL.rstrip("/")
+            preview_link = f"{frontend_url}/preview/{generated_website.id}"
 
         # Prepare context payload for AI
         lead_info = {
@@ -69,8 +78,7 @@ class OutreachService:
             "category": score_record.category
         }
 
-        # 4. Invoke AI Provider
-        # Safety check: If provider is gemini, force it to groq
+        # 5. Invoke AI Provider
         if provider and provider.lower() == "gemini":
             logger.warning("Gemini provider requested but not available. Falling back to Groq.")
             provider = "groq"
@@ -78,16 +86,25 @@ class OutreachService:
         ai_provider = ai_factory.get_provider(provider)
         ai_result = await ai_provider.generate_outreach(lead_info, website_analysis, audit_data, score_data)
 
-        # 5. Persist Outreach Record
+        # 6. Post-process outreach to include preview link
+        cold_email = ai_result.get("Personalized Cold Email", "")
+        followup_email = ai_result.get("Follow-up Email", "")
+        if preview_link:
+            preview_note = f"\n\n---\nView your AI-generated website preview: {preview_link}"
+            if cold_email and preview_link not in cold_email:
+                cold_email += preview_note
+            if followup_email and preview_link not in followup_email:
+                followup_email += preview_note
+
+        # 7. Persist Outreach Record
         outreach_data = {
             "email_subject": ai_result.get("Email Subject"),
-            "cold_email": ai_result.get("Personalized Cold Email"),
+            "cold_email": cold_email,
             "linkedin_message": ai_result.get("LinkedIn Message"),
-            "followup_email": ai_result.get("Follow-up Email"),
+            "followup_email": followup_email,
             "short_cta": ai_result.get("Short Call-To-Action"),
         }
         
-        # We leave whatsapp_message None for now as it's not generated
         outreach_data["whatsapp_message"] = None
 
         existing = await outreach_repository.get_by_lead_id(db, lead_id=lead_id)

@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     GROQ_DEFAULT_MODEL: str = Field(default="llama-3.3-70b-versatile")
     GROQ_BASE_URL: str = Field(default="https://api.groq.com")
 
+    # Frontend URL for preview/share links in outreach (set to Vercel deployment URL in Railway env)
+    FRONTEND_URL: str = Field(default="https://leadforge-ai.vercel.app")
+
 
 # Create settings instance
 settings = Settings()

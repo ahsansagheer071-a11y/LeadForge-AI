@@ -69,6 +69,41 @@ export interface DeploymentInfo {
   created_at: ISODate;
 }
 
+export interface DashboardSummaryResponse {
+  total_leads: number;
+  new_leads: number;
+  audited_leads: number;
+  outreach_generated: number;
+  average_lead_score: number;
+  high_priority_leads: number;
+}
+
+export interface DistributionItem {
+  label: string;
+  count: number;
+}
+
+export interface DistributionResponse {
+  total: number;
+  distribution: DistributionItem[];
+}
+
+export interface RecentLeadsResponse {
+  total: number;
+  limit: number;
+  offset: number;
+  leads: Array<{
+    id: UUID;
+    name: string;
+    industry: string;
+    city: string;
+    country: string;
+    status: string;
+    rating?: number | null;
+    created_at: ISODate;
+  }>;
+}
+
 /* ─── Notifications ────────────────────────────────────────── */
 export type NotificationKind = 'info' | 'success' | 'warning' | 'error';
 export interface AppNotification {
@@ -84,6 +119,7 @@ export interface AppNotification {
 export interface APIErrorShape {
   status: number;
   code?: string | null;
+  category?: 'validation' | 'authentication' | 'authorization' | 'network' | 'timeout' | 'backend' | 'provider' | 'unknown';
   message: string;
   details?: Record<string, unknown> | null;
 }
@@ -253,6 +289,35 @@ export interface WebsiteAnalysisResponse {
   response_time_ms?: number | null;
 }
 
+/* ─── Generated Website ───────────────────────────────────── */
+export interface GeneratedWebsiteResponse {
+  id: UUID;
+  lead_id: UUID;
+  generation_id: string;
+  project_name?: string | null;
+  framework: string;
+  status: string;
+  html: string;
+  preview_path: string;
+  package_id?: string | null;
+  package_metadata: Record<string, unknown>;
+  build_metadata: Record<string, unknown>;
+  created_at: ISODate;
+  updated_at: ISODate;
+}
+
+export interface GenerateWebsiteResponse {
+  website_id: UUID;
+  lead_id: UUID;
+  generation_id: string;
+  html: string;
+  generation_time: number;
+  project_name?: string | null;
+  preview_path: string;
+  package_id?: string | null;
+  status: string;
+}
+
 /* ─── Audit ─────────────────────────────────────────────────── */
 export interface AuditRequest {
   lead_id: UUID;
@@ -264,5 +329,4 @@ export interface AuditAndScoreResult {
   audit: Record<string, unknown>;
   score: LeadScoreResponse;
 }
-
 

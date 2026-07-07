@@ -20,9 +20,11 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/utils';
 import { useLocalStorage } from '@/hooks/hooks';
 import { Tooltip } from '@/components/Tooltip';
+import { dashboardService } from '@/services/services';
 
 interface NavItem {
   to: string;
@@ -34,10 +36,10 @@ interface NavItem {
 
 const NAV_PRIMARY: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, exact: true },
-  { to: '/projects', label: 'Projects', icon: FolderOpenDot, badge: '12' },
+  { to: '/projects', label: 'Projects', icon: FolderOpenDot },
   { to: '/generation', label: 'Generation', icon: Sparkles },
   { to: '/preview', label: 'Preview', icon: Eye },
-  { to: '/deployment', label: 'Deployment', icon: CloudUpload, badge: '3' },
+  { to: '/deployment', label: 'Deployment', icon: CloudUpload },
 ];
 
 const NAV_HISTORY: NavItem[] = [
@@ -57,6 +59,16 @@ interface SidebarProps {
 
 export function Sidebar({ className, onNavigate }: SidebarProps) {
   const [collapsed, setCollapsed] = useLocalStorage<boolean>('lf_sidebar_collapsed', false);
+  const { data: summary } = useQuery({
+    queryKey: ['dashboard', 'summary'],
+    queryFn: () => dashboardService.summary(),
+  });
+  const primaryItems = React.useMemo(
+    () => NAV_PRIMARY.map((item) => (
+      item.to === '/projects' && summary ? { ...item, badge: String(summary.total_leads) } : item
+    )),
+    [summary],
+  );
 
   return (
     <aside
@@ -98,7 +110,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
             Workspace
           </p>
         )}
-        {NAV_PRIMARY.map((item) => (
+        {primaryItems.map((item) => (
           <SidebarItem key={item.to} item={item} collapsed={collapsed} />
         ))}
 

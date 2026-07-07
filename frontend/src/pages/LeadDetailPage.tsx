@@ -8,6 +8,7 @@ import { Button } from '@/components/Button';
 import { Skeleton } from '@/components/Loading';
 import { EmptyState } from '@/components/ErrorStates';
 import { projectsService, generateWebsite, auditService, analysisService, screenshotService, outreachService } from '@/services/services';
+import { getApiErrorMessage } from '@/services/apiClient';
 import { usePreviewStore } from '@/store';
 import { formatRelative } from '@/utils';
 import { toast } from 'sonner';
@@ -62,13 +63,13 @@ export function LeadDetailPage() {
 
   const generateMutation = useMutation({
     mutationFn: () => generateWebsite(id!),
-    onSuccess: (html) => {
-      setHtmlContent(html);
+    onSuccess: (data) => {
+      setHtmlContent(data.html);
       toast.success('Website generated successfully');
-      navigate('/preview');
+      navigate(`/preview/${data.website_id}`);
     },
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : 'Generation failed');
+      toast.error(getApiErrorMessage(err, 'Generation failed'));
     },
   });
 
@@ -80,7 +81,7 @@ export function LeadDetailPage() {
       toast.success('Website analyzed successfully');
     },
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : 'Analysis failed');
+      toast.error(getApiErrorMessage(err, 'Analysis failed'));
     },
   });
 
@@ -91,7 +92,7 @@ export function LeadDetailPage() {
       toast.success(`Audit complete — Score: ${result.score.overall_score}/100 (${result.score.category})`);
     },
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : 'Audit failed');
+      toast.error(getApiErrorMessage(err, 'Audit failed'));
     },
   });
 
@@ -103,7 +104,7 @@ export function LeadDetailPage() {
       toast.success('Screenshots captured successfully');
     },
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : 'Screenshot capture failed');
+      toast.error(getApiErrorMessage(err, 'Screenshot capture failed'));
     },
   });
 
@@ -115,7 +116,7 @@ export function LeadDetailPage() {
       toast.success('AI Outreach generated successfully');
     },
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : 'Outreach generation failed');
+      toast.error(getApiErrorMessage(err, 'Outreach generation failed'));
     },
   });
 
@@ -508,24 +509,27 @@ export function LeadDetailPage() {
             <Card>
               <CardHeader><CardTitle>Top Weaknesses</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                {(auditResult.audit['Top Weaknesses'] as Array<{ title?: string; evidence?: string; impact?: string; recommendation?: string }>).map((w, i) => (
+                {(auditResult.audit['Top Weaknesses'] as Array<string | { title?: string; evidence?: string; impact?: string; recommendation?: string }>).map((w, i) => {
+                  const weakness = typeof w === 'string' ? { title: w } : w;
+                  return (
                   <div key={i} className="p-3 rounded-[10px] bg-[var(--color-surface-hover)] space-y-1.5">
                     <div className="flex items-start gap-2">
                       <AlertTriangle className="size-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
                       <div>
-                        <p className="text-[13px] font-medium">{w.title ?? `Weakness #${i + 1}`}</p>
-                        {w.evidence && <p className="text-[12px] text-[var(--color-text-muted)] mt-0.5">{w.evidence}</p>}
-                        {w.impact && <p className="text-[12px] text-[var(--color-text-muted)] mt-0.5"><span className="font-medium">Impact:</span> {w.impact}</p>}
-                        {w.recommendation && (
+                        <p className="text-[13px] font-medium">{weakness.title ?? `Weakness #${i + 1}`}</p>
+                        {weakness.evidence && <p className="text-[12px] text-[var(--color-text-muted)] mt-0.5">{weakness.evidence}</p>}
+                        {weakness.impact && <p className="text-[12px] text-[var(--color-text-muted)] mt-0.5"><span className="font-medium">Impact:</span> {weakness.impact}</p>}
+                        {weakness.recommendation && (
                           <div className="flex items-start gap-1.5 mt-1.5">
                             <CheckCircle className="size-3 text-[var(--color-brand)] mt-0.5 flex-shrink-0" />
-                            <p className="text-[12px] text-[var(--color-brand)]">{w.recommendation}</p>
+                            <p className="text-[12px] text-[var(--color-brand)]">{weakness.recommendation}</p>
                           </div>
                         )}
                       </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </CardContent>
             </Card>
           )}
