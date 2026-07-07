@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 STANDARD_SECTIONS: List[str] = [
     "navigation",

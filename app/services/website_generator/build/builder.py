@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import tempfile
 import time
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from app.services.website_generator.build.schemas import BuildResult
 from app.services.website_generator.build.validator import ProjectValidator
