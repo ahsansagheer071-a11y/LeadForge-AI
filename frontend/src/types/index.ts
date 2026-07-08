@@ -184,6 +184,7 @@ export interface AuditResponse {
   social_links?: string[];
   technologies?: string[];
   ssl_status?: boolean;
+  weaknesses?: string[] | null;
   created_at: ISODate;
   updated_at: ISODate;
 }
