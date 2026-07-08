@@ -22,15 +22,12 @@ POLLINATIONS_DEFAULT_GENERATION_MODEL = "openai"
 
 class PollinationsProvider(AIBaseProvider):
     def __init__(self):
-        key = settings.POLLINATIONS_API_KEY
-        self.api_key = key.strip("\"' \t\n\r") if key else None
+        # Pollinations legacy API is open — no auth required.
+        self.api_key = None
+        self._base_url = settings.POLLINATIONS_BASE_URL.rstrip("/")
         self._audit_model = None
         self._generation_model = None
-        self._base_url = settings.POLLINATIONS_BASE_URL.rstrip("/")
         self._models_cached = False
-
-        if not self.api_key:
-            logger.info("Pollinations: no API key configured — using open (unauthenticated) mode")
 
     async def _ensure_models_cached(self) -> None:
         if self._models_cached:
@@ -102,8 +99,7 @@ class PollinationsProvider(AIBaseProvider):
     async def _call_api(self, prompt: str, model: str, timeout: float) -> str:
         endpoint = f"{self._base_url}{CHAT_ENDPOINT}"
         headers = {"Content-Type": "application/json"}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
+        # Pollinations legacy API is open — no auth needed.
 
         payload = {
             "model": model,
@@ -337,11 +333,11 @@ Return ONLY valid JSON matching this format.
             return {
                 "status": "healthy",
                 "model": self.audit_model,
-                "api_key_configured": bool(self.api_key),
+                "api_key_configured": False,
             }
         except Exception as e:
             return {
                 "status": "unhealthy",
                 "error": str(e),
-                "api_key_configured": bool(self.api_key),
+                "api_key_configured": False,
             }
