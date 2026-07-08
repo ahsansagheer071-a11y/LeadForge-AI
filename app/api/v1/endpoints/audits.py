@@ -49,38 +49,21 @@ async def run_audit_and_scoring(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    import traceback as _tb
     # 1. Run AI Audit
-    try:
-        ai_audit_data = await audit_engine_service.generate_audit(
-            db,
-            lead_id=payload.lead_id,
-            user=current_user,
-            provider=payload.provider
-        )
-    except Exception as _e:
-        _tb_str = "".join(_tb.format_exception(type(_e), _e, _e.__traceback__))
-        from fastapi.responses import JSONResponse
-        return JSONResponse(
-            status_code=500,
-            content={"success": False, "message": f"Audit engine failed", "detail": _tb_str},
-        )
+    ai_audit_data = await audit_engine_service.generate_audit(
+        db,
+        lead_id=payload.lead_id,
+        user=current_user,
+        provider=payload.provider
+    )
 
     # 2. Run Lead Scoring
-    try:
-        score_response = await lead_scoring_service.calculate_and_persist_score(
-            db,
-            lead_id=payload.lead_id,
-            user=current_user,
-            ai_scores=ai_audit_data
-        )
-    except Exception as _e:
-        _tb_str = "".join(_tb.format_exception(type(_e), _e, _e.__traceback__))
-        from fastapi.responses import JSONResponse
-        return JSONResponse(
-            status_code=500,
-            content={"success": False, "message": f"Lead scoring failed", "detail": _tb_str},
-        )
+    score_response = await lead_scoring_service.calculate_and_persist_score(
+        db,
+        lead_id=payload.lead_id,
+        user=current_user,
+        ai_scores=ai_audit_data
+    )
 
     result = AuditAndScoreResult(
         lead_id=payload.lead_id,

@@ -21,10 +21,9 @@ token = (r.json().get("access_token") or
 H = {"Authorization": f"Bearer {token}"}
 
 r = s.post(base + "/api/v1/leads", headers=H,
-           json={"name": "Debug Biz", "website": "https://example.com",
-                 "industry": "Tech", "city": "NYC", "country": "US",
-                 "phone": "1234567890"})
-print(f"Create Lead: {r.status_code} {r.text[:300]}")
+           json={"company_name": "Debug Biz", "url": "https://example.com",
+                 "industry": "Technology"})
+print(f"Create Lead: {r.status_code} {r.text[:500]}")
 lead_data = r.json()
 lead_id = (lead_data.get("data") or {}).get("id") or lead_data.get("id", "")
 print(f"Lead ID: {lead_id}")
