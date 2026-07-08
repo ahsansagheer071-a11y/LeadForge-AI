@@ -53,12 +53,22 @@ class Settings(BaseSettings):
     CLOUDINARY_API_KEY: Optional[str] = Field(default=None)
     CLOUDINARY_API_SECRET: Optional[str] = Field(default=None)
 
-    # AI Provider
+    # AI Provider — Groq (primary)
     GROQ_API_KEY: Optional[str] = Field(default=None)
-
-    # Website Generation - Groq
     GROQ_DEFAULT_MODEL: str = Field(default="llama-3.3-70b-versatile")
     GROQ_BASE_URL: str = Field(default="https://api.groq.com")
+
+    # AI Provider — Pollinations AI (secondary fallback)
+    POLLINATIONS_API_KEY: Optional[str] = Field(default=None)
+    POLLINATIONS_AUDIT_MODEL: Optional[str] = Field(default=None)
+    POLLINATIONS_GENERATION_MODEL: Optional[str] = Field(default=None)
+    POLLINATIONS_BASE_URL: str = Field(default="https://text.pollinations.ai")
+
+    # AI Provider — NVIDIA NIM (tertiary fallback)
+    NVIDIA_API_KEY: Optional[str] = Field(default=None)
+    NVIDIA_BASE_URL: str = Field(default="https://integrate.api.nvidia.com/v1")
+    NVIDIA_AUDIT_MODEL: str = Field(default="meta/llama-3.1-8b-instruct")
+    NVIDIA_GENERATION_MODEL: str = Field(default="meta/llama-3.1-8b-instruct")
 
     # Frontend URL for preview/share links in outreach (set to Vercel deployment URL in Railway env)
     FRONTEND_URL: str = Field(default="https://lead-forge-ai-tan.vercel.app")

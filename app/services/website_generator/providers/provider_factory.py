@@ -1,28 +1,24 @@
 import logging
-from typing import Dict, Optional, Type
+from typing import Dict, Optional, Type, List
 
 from app.core.config import settings
 from app.services.website_generator.providers.base import AIProvider
 from app.services.website_generator.providers.groq_provider import GroqProvider
+from app.services.website_generator.providers.pollinations_provider import PollinationsProvider
+from app.services.website_generator.providers.nvidia_provider import NvidiaProvider
 
 logger = logging.getLogger(__name__)
 
 _PROVIDER_REGISTRY: Dict[str, Type[AIProvider]] = {
     "groq": GroqProvider,
+    "pollinations": PollinationsProvider,
+    "nvidia": NvidiaProvider,
 }
+
+FALLBACK_CHAIN: List[str] = ["groq", "pollinations", "nvidia"]
 
 
 def register_provider(name: str, provider_cls: Type[AIProvider]) -> None:
-    """Register a new AI provider for use via the factory.
-
-    Usage:
-        from app.services.website_generator.providers.my_provider import MyProvider
-        register_provider("my_provider", MyProvider)
-
-    Once registered, ProviderFactory.get_provider("my_provider") returns
-    an instance of MyProvider. No changes to ProviderFactory or
-    WebsiteGenerator are needed.
-    """
     _PROVIDER_REGISTRY[name] = provider_cls
     logger.info("Registered AI provider: %s", name)
 
@@ -32,9 +28,9 @@ class ProviderFactory:
     def get_provider(provider_name: Optional[str] = None) -> AIProvider:
         if provider_name is None:
             provider_name = "groq"
-        provider_name = provider_name.lower()
+        key = provider_name.lower()
 
-        cls = _PROVIDER_REGISTRY.get(provider_name)
+        cls = _PROVIDER_REGISTRY.get(key)
         if cls is None:
             available = ", ".join(_PROVIDER_REGISTRY.keys())
             raise ValueError(
@@ -42,6 +38,15 @@ class ProviderFactory:
                 f"Available providers: {available}"
             )
 
-        logger.info("Provider factory resolved: %s", provider_name)
-        instance = cls()
-        return instance
+        logger.info("Provider factory resolved: %s", key)
+        return cls()
+
+    @staticmethod
+    def get_fallback_chain(start_with: Optional[str] = None) -> List[str]:
+        if start_with:
+            start_key = start_with.lower()
+            if start_key in _PROVIDER_REGISTRY:
+                chain = [start_key]
+                chain.extend(p for p in FALLBACK_CHAIN if p != start_key)
+                return chain
+        return list(FALLBACK_CHAIN)

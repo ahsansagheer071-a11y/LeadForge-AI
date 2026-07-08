@@ -37,5 +37,5 @@ class OutreachResponse(OutreachBase):
 
 class GenerateOutreachRequest(BaseModel):
     lead_id: uuid.UUID = Field(..., description="The UUID of the lead to generate outreach for.")
-    provider: str = Field(default="gemini", description="AI provider to use (e.g., 'gemini').")
+    provider: str = Field(default="groq", description="AI provider to use (e.g., 'groq').")
 

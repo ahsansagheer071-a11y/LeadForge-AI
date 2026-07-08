@@ -9,7 +9,7 @@ import logging
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import List, Optional
 
 from app.services.website_intelligence.schemas import WebsiteProfile
 from app.services.markdown_engine.schemas import MarkdownPackage
@@ -70,8 +70,6 @@ class StaticHTMLGenerator:
         # Step 2 — Build PromptContext
         try:
             prompt: PromptContext = self.prompt_builder.build(context)
-            # Inject HTML directive into generation_constraints and/or rules_context
-            # We'll append to both to be safe.
             updated_constraints = f"{prompt.generation_constraints}\n\n{HTML_DIRECTIVE}"
             updated_rules = f"{prompt.rules_context}\n\n{HTML_DIRECTIVE}"
             prompt = prompt.model_copy(
@@ -89,41 +87,36 @@ class StaticHTMLGenerator:
             )
         logger.info("PromptContext built with HTML directive (%d chars)", len(str(prompt)))
 
-        # Step 3 — Load provider
-        try:
-            provider = ProviderFactory.get_provider(self.provider_name)
-        except ValueError as exc:
-            logger.error("ProviderFactory failed: %s", exc)
-            return GenerationResult(
-                success=False,
-                errors=[f"Provider resolution failed: {exc}"],
-                generation_time=time.monotonic() - start,
-            )
-        logger.info("Provider selected: %s", provider.provider_name())
+        # Step 3-4 — Fallback chain: try providers in order
+        providers_to_try = ProviderFactory.get_fallback_chain(self.provider_name)
+        all_errors: List[str] = []
+        ai_response: Optional[AIResponse] = None
 
-        # Step 4 — Call provider
-        try:
-            logger.info("Sending prompt to provider")
-            ai_response = await provider.generate(prompt)
-        except Exception as exc:
-            logger.error("Provider call failed: %s", exc)
-            return GenerationResult(
-                success=False,
-                errors=[f"Provider call failed: {type(exc).__name__}: {exc}"],
-                generation_time=time.monotonic() - start,
-            )
-        logger.info(
-            "Provider responded: success=%s, latency=%.2fs",
-            ai_response.success,
-            ai_response.latency,
-        )
+        for provider_name in providers_to_try:
+            try:
+                logger.info("Attempting generation with provider: %s", provider_name)
+                provider = ProviderFactory.get_provider(provider_name)
+                ai_response = await provider.generate(prompt)
+            except ValueError as exc:
+                logger.error("ProviderFactory failed for %s: %s", provider_name, exc)
+                all_errors.append(f"Provider {provider_name} resolution failed: {exc}")
+                continue
+            except Exception as exc:
+                logger.error("Provider %s call failed: %s", provider_name, exc)
+                all_errors.append(f"Provider {provider_name} call failed: {type(exc).__name__}: {exc}")
+                continue
 
-        if not ai_response.success:
-            logger.warning("Provider returned failure: %s", ai_response.errors)
+            if ai_response.success:
+                logger.info("Generation succeeded with provider: %s", provider_name)
+                break
+
+            logger.warning("Provider %s returned failure: %s", provider_name, ai_response.errors)
+            all_errors.extend(ai_response.errors)
+        else:
+            logger.error("All providers failed for generation")
             return GenerationResult(
                 success=False,
-                errors=ai_response.errors,
-                warnings=ai_response.warnings,
+                errors=all_errors or ["All AI providers failed"],
                 generation_time=time.monotonic() - start,
             )
 

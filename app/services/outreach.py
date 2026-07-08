@@ -2,7 +2,7 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.exceptions import NotFoundException, ValidationException
+from app.core.exceptions import NotFoundException, ValidationException, ServiceUnavailableException
 from app.core.logging import logger
 from app.models.user import User
 from app.repositories.lead import lead_repository
@@ -13,12 +13,8 @@ from app.repositories.generated_website import generated_website_repository
 from app.schemas.outreach import OutreachCreate, OutreachResponse
 from app.services.ai.factory import ai_factory
 
-class OutreachService:
-    """
-    Orchestrates AI Outreach Generation. Loads required context (Lead, Analysis, Audit, Score),
-    invokes the AI Provider, and persists the generated outreach templates.
-    """
 
+class OutreachService:
     async def generate_outreach(
         self,
         db: AsyncSession,
@@ -29,32 +25,27 @@ class OutreachService:
     ) -> OutreachResponse:
         logger.info("Outreach generation initiated | lead_id=%s | provider=%s", lead_id, provider)
 
-        # 1. Load lead
         lead = await lead_repository.get(db, id=lead_id)
         if not lead or lead.user_id != user.id:
             raise NotFoundException(f"Lead with id '{lead_id}' not found.")
 
-        # 2. Load website analysis & audit details
         audit_record = await audit_repository.get_by_lead_id(db, lead_id=lead_id)
         if not audit_record:
             raise ValidationException("Please complete Website Analysis and AI Audit first.")
-            
+
         if not audit_record.weaknesses:
             raise ValidationException("AI Audit data is missing. Please run the AI Audit first.")
 
-        # 3. Load lead score
         score_record = await lead_score_repository.get_by_lead_id(db, lead_id=lead_id)
         if not score_record:
             raise ValidationException("Lead Score is missing. Please run the AI Audit and Scoring first.")
 
-        # 4. Load latest generated website for preview link
         generated_website = await generated_website_repository.get_latest_by_lead_id(db, lead_id=lead_id)
         preview_link = None
         if generated_website and generated_website.status in ("generated", "ready"):
             frontend_url = settings.FRONTEND_URL.rstrip("/")
             preview_link = f"{frontend_url}/preview/{generated_website.id}"
 
-        # Prepare context payload for AI
         lead_info = {
             "name": lead.name,
             "industry": lead.industry,
@@ -78,15 +69,31 @@ class OutreachService:
             "category": score_record.category
         }
 
-        # 5. Invoke AI Provider
-        if provider and provider.lower() == "gemini":
-            logger.warning("Gemini provider requested but not available. Falling back to Groq.")
-            provider = "groq"
-        
-        ai_provider = ai_factory.get_provider(provider)
-        ai_result = await ai_provider.generate_outreach(lead_info, website_analysis, audit_data, score_data)
+        # Fallback chain
+        providers_to_try = ai_factory.get_fallback_chain(provider)
+        ai_result = None
+        last_error: str = ""
 
-        # 6. Post-process outreach to include preview link
+        for provider_name in providers_to_try:
+            try:
+                logger.info("Attempting outreach with provider: %s", provider_name)
+                ai_provider = ai_factory.get_provider(provider_name)
+                ai_result = await ai_provider.generate_outreach(
+                    lead_info, website_analysis, audit_data, score_data
+                )
+                logger.info("Outreach succeeded with provider: %s", provider_name)
+                break
+            except ServiceUnavailableException as e:
+                last_error = f"{provider_name}: {e}"
+                logger.warning("Provider %s failed (%s), trying next", provider_name, e)
+            except Exception as e:
+                last_error = f"{provider_name}: {e}"
+                logger.warning("Provider %s raised unexpected error (%s), trying next", provider_name, e)
+        else:
+            raise ServiceUnavailableException(
+                f"All providers failed for outreach. Last error: {last_error}"
+            )
+
         cold_email = ai_result.get("Personalized Cold Email", "")
         followup_email = ai_result.get("Follow-up Email", "")
         if preview_link:
@@ -96,7 +103,6 @@ class OutreachService:
             if followup_email and preview_link not in followup_email:
                 followup_email += preview_note
 
-        # 7. Persist Outreach Record
         outreach_data = {
             "email_subject": ai_result.get("Email Subject"),
             "cold_email": cold_email,
@@ -104,7 +110,6 @@ class OutreachService:
             "followup_email": followup_email,
             "short_cta": ai_result.get("Short Call-To-Action"),
         }
-        
         outreach_data["whatsapp_message"] = None
 
         existing = await outreach_repository.get_by_lead_id(db, lead_id=lead_id)
@@ -114,7 +119,6 @@ class OutreachService:
             create_schema = OutreachCreate(lead_id=lead_id, **outreach_data)
             updated_record = await outreach_repository.create(db, obj_in=create_schema)
 
-        # Update lead status to OUTREACH_READY if applicable
         if lead.status == "ANALYZED":
             lead.status = "OUTREACH_READY"
             db.add(lead)

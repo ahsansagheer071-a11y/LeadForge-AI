@@ -89,6 +89,10 @@ export function LeadDetailPage() {
   const generateMutation = useMutation({
     mutationFn: () => generateWebsite(id!),
     onSuccess: (data) => {
+      if (!data?.website_id) {
+        toast.error('Generation failed — no website ID returned');
+        return;
+      }
       setHtmlContent(data.html);
       toast.success('Website generated successfully');
       navigate(`/preview/${data.website_id}`);
