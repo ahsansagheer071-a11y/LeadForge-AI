@@ -27,12 +27,14 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         database_status = "unhealthy"
         status_code = status.HTTP_503_SERVICE_UNAVAILABLE
 
-    # Check configuration status of global services
-    ai_status = "configured" if settings.GROQ_API_KEY else "unconfigured"
+    # Check configuration status of all AI providers
+    groq_status = "configured" if settings.GROQ_API_KEY else "unconfigured"
+    pollinations_status = "configured" if settings.POLLINATIONS_API_KEY else "unconfigured"
+    nvidia_status = "configured" if settings.NVIDIA_API_KEY else "unconfigured"
     serpapi_status = "configured" if settings.SERPAPI_KEY else "unconfigured"
     cloudinary_status = "configured" if (
-        settings.CLOUDINARY_CLOUD_NAME and 
-        settings.CLOUDINARY_API_KEY and 
+        settings.CLOUDINARY_CLOUD_NAME and
+        settings.CLOUDINARY_API_KEY and
         settings.CLOUDINARY_API_SECRET
     ) else "unconfigured"
 
@@ -43,7 +45,9 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "database": database_status,
         "services": {
-            "gemini_ai": ai_status,
+            "groq": groq_status,
+            "pollinations": pollinations_status,
+            "nvidia": nvidia_status,
             "serpapi": serpapi_status,
             "cloudinary": cloudinary_status,
         }
