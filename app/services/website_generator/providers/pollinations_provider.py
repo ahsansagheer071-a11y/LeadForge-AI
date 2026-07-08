@@ -24,16 +24,17 @@ class PollinationsProvider(AIProvider):
         model: Optional[str] = None,
         base_url: Optional[str] = None,
     ):
-        self._api_key = api_key or settings.POLLINATIONS_API_KEY
-        self._model = model or settings.POLLINATIONS_GENERATION_MODEL
+        # Pollinations legacy API is open — no auth required.
+        self._api_key = None
         self._base_url = (base_url or settings.POLLINATIONS_BASE_URL).rstrip("/")
+        self._model = model or settings.POLLINATIONS_GENERATION_MODEL
         self._models_cached = False
 
     async def _ensure_model(self) -> str:
         if self._model:
             return self._model
         if self._models_cached:
-            return self._model or "mistral"
+            return self._model or "openai"
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
@@ -41,21 +42,22 @@ class PollinationsProvider(AIProvider):
                 if resp.status_code == 200:
                     models = resp.json()
                     if isinstance(models, list) and models:
-                        candidates = [m for m in models if isinstance(m, str) and "instruct" in m.lower()]
-                        if candidates:
-                            self._model = candidates[0]
-                        else:
-                            self._model = models[0] if isinstance(models[0], str) else "mistral"
+                        if isinstance(models[0], dict):
+                            name = models[0].get("aliases", [models[0].get("name", "")])[0]
+                            self._model = name
+                        elif isinstance(models[0], str):
+                            candidates = [m for m in models if "instruct" in m.lower()]
+                            self._model = (candidates or models)[0]
         except Exception as e:
             logger.warning("Pollinations model discovery failed: %s", e)
         self._models_cached = True
-        return self._model or "mistral"
+        return self._model or "openai"
 
     def provider_name(self) -> str:
         return "pollinations"
 
     def supported_models(self) -> List[str]:
-        return ["mistral", "open-mistral-nemo", "open-mixtral-8x22b"]
+        return ["openai", "openai-fast", "gpt-oss"]
 
     async def health_check(self) -> bool:
         endpoint = f"{self._base_url}{POLLINATIONS_CHAT_ENDPOINT}"

@@ -29,7 +29,8 @@ class GroqProvider(AIProvider):
         model: Optional[str] = None,
         base_url: Optional[str] = None,
     ):
-        self._api_key = api_key or settings.GROQ_API_KEY
+        key = api_key or settings.GROQ_API_KEY
+        self._api_key = key.strip("\"' \t\n\r") if key else None
         self._model = model or settings.GROQ_DEFAULT_MODEL
         self._base_url = (base_url or settings.GROQ_BASE_URL).rstrip("/")
         # Normalize: remove trailing /v1 or /openai/v1 since GROQ_CHAT_ENDPOINT already includes it
