@@ -60,10 +60,10 @@ async def run_audit_and_scoring(
         )
     except Exception as _e:
         _tb_str = "".join(_tb.format_exception(type(_e), _e, _e.__traceback__))
-        return StandardResponse(
-            success=False,
-            message=f"Audit engine failed: {_e}",
-            data={"traceback": _tb_str},
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "message": f"Audit engine failed", "detail": _tb_str},
         )
 
     # 2. Run Lead Scoring
@@ -76,10 +76,10 @@ async def run_audit_and_scoring(
         )
     except Exception as _e:
         _tb_str = "".join(_tb.format_exception(type(_e), _e, _e.__traceback__))
-        return StandardResponse(
-            success=False,
-            message=f"Lead scoring failed: {_e}",
-            data={"traceback": _tb_str},
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "message": f"Lead scoring failed", "detail": _tb_str},
         )
 
     result = AuditAndScoreResult(
