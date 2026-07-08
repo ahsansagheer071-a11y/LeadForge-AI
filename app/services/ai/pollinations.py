@@ -38,14 +38,21 @@ class PollinationsProvider(AIBaseProvider):
                 if resp.status_code == 200:
                     models = resp.json()
                     if isinstance(models, list) and models:
-                        fallbacks = [m for m in models if isinstance(m, str) and "instruct" in m.lower()]
-                        if fallbacks:
-                            self._audit_model = fallbacks[0]
-                            self._generation_model = fallbacks[0]
-                            logger.info("Pollinations: auto-selected model '%s' from available models", self._audit_model)
-                        else:
-                            self._audit_model = models[0] if isinstance(models[0], str) else "mistral"
-                            self._generation_model = models[0] if isinstance(models[0], str) else "mistral"
+                        if isinstance(models[0], dict):
+                            first = models[0]
+                            name = first.get("aliases", [first.get("name", "")])[0]
+                            self._audit_model = name
+                            self._generation_model = name
+                            logger.info("Pollinations: auto-selected model '%s' from available models", name)
+                        elif isinstance(models[0], str):
+                            fallbacks = [m for m in models if "instruct" in m.lower()]
+                            if fallbacks:
+                                self._audit_model = fallbacks[0]
+                                self._generation_model = fallbacks[0]
+                                logger.info("Pollinations: auto-selected model '%s' from available models", self._audit_model)
+                            else:
+                                self._audit_model = models[0]
+                                self._generation_model = models[0]
                     self._models_cached = True
                     return
         except Exception as e:
