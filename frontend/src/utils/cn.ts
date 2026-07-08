@@ -126,3 +126,39 @@ export function initialsFromName(name?: string | null, fallback = 'LF'): string 
 export function sleep(ms: number): Promise<void> {
   return new Promise((res) => setTimeout(res, ms));
 }
+
+/** Score colour — returns a hex colour given a 0-100 score. */
+export function scoreColour(score: number): string {
+  if (score >= 80) return '#22c55e';
+  if (score >= 60) return '#eab308';
+  if (score >= 40) return '#f97316';
+  return '#dc2626';
+}
+
+/** Score tier label. */
+export function scoreTier(score: number): 'hot' | 'warm' | 'cold' {
+  if (score >= 80) return 'hot';
+  if (score >= 60) return 'warm';
+  return 'cold';
+}
+
+/** Status CSS badge class map (Tailwind classes). */
+const STATUS_TONE: Record<string, string> = {
+  NEW: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/30',
+  SCRAPED: 'bg-[var(--color-brand-soft)] text-[var(--color-brand)] border border-[var(--color-brand-border)]',
+  ANALYZED: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30',
+  OUTREACH_READY: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30',
+  CONTACTED: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30',
+  CLOSED: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30',
+  draft: 'bg-[var(--color-surface-overlay)] text-[var(--color-text-secondary)] border border-[var(--color-border)]',
+  queued: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/30',
+  generating: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/30',
+  previewing: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30',
+  deployed: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30',
+  failed: 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/30',
+  archived: 'bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] border border-[var(--color-border)]',
+};
+
+export function statusBadgeClass(status: string): string {
+  return STATUS_TONE[status] ?? 'bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] border border-[var(--color-border)]';
+}

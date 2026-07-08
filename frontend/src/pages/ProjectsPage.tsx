@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Search, ExternalLink } from 'lucide-react';
+import { Plus, Search, ExternalLink, Star, Activity, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/Card';
 import { Badge } from '@/components/Badge';
@@ -7,10 +7,12 @@ import { Button } from '@/components/Button';
 import { Input, Label } from '@/components/Input';
 import { Skeleton } from '@/components/Loading';
 import { EmptyState } from '@/components/ErrorStates';
+import { PremiumCard } from '@/components/PremiumCard';
+import { AnimatedCounter } from '@/components/AnimatedCounter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { projectsService, leadDiscoveryService } from '@/services/services';
+import { projectsService, leadDiscoveryService, dashboardService } from '@/services/services';
 import { getApiErrorMessage } from '@/services/apiClient';
-import { formatRelative } from '@/utils';
+import { formatRelative, scoreTier } from '@/utils';
 import type { LeadDiscoveryRequest } from '@/types';
 import { toast } from 'sonner';
 
@@ -30,17 +32,27 @@ const statusTone: Record<string, 'brand' | 'success' | 'warning' | 'danger' | 'i
   archived: 'neutral',
 };
 
+function ScoreBadgeInner({ score }: { score: number | null | undefined }) {
+  if (score == null) return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] border border-[var(--color-border)]">&mdash;</span>;
+  const tier = scoreTier(score);
+  const cls = tier === 'hot' ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/25'
+    : tier === 'warm' ? 'bg-amber-500/15 text-amber-500 border-amber-500/25'
+    : 'bg-gray-500/15 text-gray-500 border-gray-500/25';
+  return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold border ${cls}`}>{Math.round(score)}</span>;
+}
+
 export function ProjectsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const {
-    data: paginated,
-    isLoading,
-    error,
-  } = useQuery({
+  const { data: paginated, isLoading, error } = useQuery({
     queryKey: ['projects'],
     queryFn: () => projectsService.list(),
+  });
+
+  const { data: summary } = useQuery({
+    queryKey: ['dashboard', 'summary'],
+    queryFn: () => dashboardService.summary(),
   });
 
   const projects = paginated?.items ?? [];
@@ -82,7 +94,25 @@ export function ProjectsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-[lf-fade-in_0.22s_ease]">
+      {/* ── Pipeline Overview mini-KPIs ─── */}
+      {summary && (summary.total_leads > 0 || summary.audited_leads > 0) && (
+        <div className="grid grid-cols-3 gap-4">
+          <PremiumCard innerClassName="p-4 flex flex-col gap-2">
+            <span className="text-[11.5px] font-medium text-[var(--color-text-muted)]">Total Pipeline</span>
+            <div className="text-[1.5rem] font-bold tracking-tight"><AnimatedCounter value={summary.total_leads} /></div>
+          </PremiumCard>
+          <PremiumCard innerClassName="p-4 flex flex-col gap-2">
+            <span className="text-[11.5px] font-medium text-[var(--color-text-muted)]">AI Audited</span>
+            <div className="text-[1.5rem] font-bold tracking-tight"><AnimatedCounter value={summary.audited_leads} /></div>
+          </PremiumCard>
+          <PremiumCard innerClassName="p-4 flex flex-col gap-2">
+            <span className="text-[11.5px] font-medium text-[var(--color-text-muted)]">Avg Score</span>
+            <div className="text-[1.5rem] font-bold tracking-tight">{Math.round(summary.average_lead_score)}</div>
+          </PremiumCard>
+        </div>
+      )}
+
       {/* Discovery Form */}
       <Card>
         <CardHeader>
@@ -140,7 +170,10 @@ export function ProjectsPage() {
           <h1 className="text-xl font-bold tracking-tight">Projects</h1>
           <p className="text-[13px] text-[var(--color-text-muted)] mt-1">Manage your lead generation projects</p>
         </div>
-        <Button leftIcon={<Plus className="size-4" />}>New Project</Button>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-[var(--color-text-muted)]">{projects.length} total</span>
+          <Button leftIcon={<Plus className="size-4" />}>New Project</Button>
+        </div>
       </div>
 
       <div className="relative w-full max-w-sm">
@@ -159,17 +192,32 @@ export function ProjectsPage() {
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="p-4 space-y-3">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} variant="text" width="100%" height={24} />
+            <div className="p-5 space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} variant="text" width="100%" height={28} delay={60 * i} />
               ))}
             </div>
           ) : error ? (
-            <div className="p-4">
-              <EmptyState title="Failed to load projects" message="Try refreshing the page." />
+            <div className="p-5">
+              <EmptyState
+                title="Failed to load projects"
+                message="We couldn't retrieve your projects. Check your connection and try again."
+                icon={Activity}
+                action={<Button variant="outline" onClick={() => queryClient.invalidateQueries({ queryKey: ['projects'] })}>Retry</Button>}
+              />
             </div>
           ) : filtered.length === 0 ? (
-            <EmptyState title="No projects found" message={search ? 'Try a different search term' : 'Create your first project to get started'} />
+            <div className="p-5">
+              {search ? (
+                <EmptyState title="No matching projects" message={`No projects match "${search}". Try a different search term.`} icon={Search} />
+              ) : (
+                <EmptyState
+                  title="No projects yet"
+                  message="Your project list will populate after you discover leads. Use the form above to find businesses."
+                  icon={Users}
+                />
+              )}
+            </div>
           ) : (
             <div className="divide-y divide-[var(--color-border)]">
               {filtered.map((p) => (
@@ -180,16 +228,21 @@ export function ProjectsPage() {
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-medium truncate">{p.name}</p>
-                    <p className="text-[11.5px] text-[var(--color-text-muted)]">{p.website ?? '—'}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {p.website && <p className="text-[11.5px] text-[var(--color-text-muted)] truncate">{p.website}</p>}
+                      {p.rating != null && (
+                        <span className="inline-flex items-center gap-0.5 text-[11px] text-amber-500 shrink-0">
+                          <Star className="size-3 fill-amber-500" />{p.rating.toFixed(1)}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3 shrink-0">
+                    <ScoreBadgeInner score={p.rating} />
                     <Badge tone={statusTone[p.status] ?? 'muted'}>{p.status}</Badge>
-                    {p.rating != null && (
-                      <span className="text-[12px] font-semibold text-amber-500">★ {p.rating.toFixed(1)}</span>
-                    )}
                   </div>
-                  <span className="text-[11px] text-[var(--color-text-muted)] whitespace-nowrap">{formatRelative(p.updated_at)}</span>
-                  <ExternalLink className="size-3.5 text-[var(--color-text-muted)] flex-shrink-0" />
+                  <span className="text-[11px] text-[var(--color-text-muted)] whitespace-nowrap shrink-0">{formatRelative(p.updated_at)}</span>
+                  <ExternalLink className="size-3.5 text-[var(--color-text-muted)] shrink-0" />
                 </div>
               ))}
             </div>
