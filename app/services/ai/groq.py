@@ -29,7 +29,8 @@ class GroqProvider(AIBaseProvider):
 
     def __init__(self):
         """Initialize Groq client with proper error handling."""
-        self.api_key = settings.GROQ_API_KEY
+        key = settings.GROQ_API_KEY
+        self.api_key = key.strip("\"' \t\n\r") if key else None
         self.model = "llama-3.3-70b-versatile"
         self.max_retries = 1
         self.retry_delay = 2

@@ -17,7 +17,8 @@ NVIDIA_TIMEOUT = 120.0
 
 class NvidiaProvider(AIBaseProvider):
     def __init__(self):
-        self.api_key = settings.NVIDIA_API_KEY
+        key = settings.NVIDIA_API_KEY
+        self.api_key = key.strip("\"' \t\n\r") if key else None
         self._base_url = settings.NVIDIA_BASE_URL.rstrip("/")
 
     async def audit_website(

@@ -16,13 +16,14 @@ MODEL_QUERY_URL = "https://text.pollinations.ai/models"
 CHAT_ENDPOINT = "/openai/chat/completions"
 AUDIT_TIMEOUT = 120.0
 OUTREACH_TIMEOUT = 60.0
-POLLINATIONS_DEFAULT_AUDIT_MODEL = "mistral"
-POLLINATIONS_DEFAULT_GENERATION_MODEL = "mistral"
+POLLINATIONS_DEFAULT_AUDIT_MODEL = "openai"
+POLLINATIONS_DEFAULT_GENERATION_MODEL = "openai"
 
 
 class PollinationsProvider(AIBaseProvider):
     def __init__(self):
-        self.api_key = settings.POLLINATIONS_API_KEY
+        key = settings.POLLINATIONS_API_KEY
+        self.api_key = key.strip("\"' \t\n\r") if key else None
         self._audit_model = None
         self._generation_model = None
         self._base_url = settings.POLLINATIONS_BASE_URL.rstrip("/")
