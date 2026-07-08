@@ -143,3 +143,47 @@ class TestRunChain:
         result = await run_chain(["groq", "pollinations", "nvidia"], call)
         assert result.success is False
         assert len(result.attempts) == 2  # stopped at pollinations
+
+    async def test_third_provider_succeeds_after_two_failures(self):
+        async def call(name):
+            if name == "groq":
+                raise ServiceUnavailableException("rate limit")
+            if name == "pollinations":
+                raise ServiceUnavailableException("timeout")
+            return f"result_from_{name}", f"model_{name}"
+
+        result = await run_chain(["groq", "pollinations", "nvidia"], call)
+        assert result.success is True
+        assert result.provider_used == "nvidia"
+        assert result.result == "result_from_nvidia"
+        assert len(result.attempts) == 3
+        assert result.attempts[0].success is False
+        assert result.attempts[1].success is False
+        assert result.attempts[2].success is True
+        assert result.attempts[2].model == "model_nvidia"
+
+    async def test_invalid_json_triggers_fallback(self):
+        async def call(name):
+            if name == "groq":
+                raise ServiceUnavailableException("invalid JSON from API: expected '{'")
+            return f"result_from_{name}", f"model_{name}"
+
+        result = await run_chain(["groq", "pollinations"], call)
+        assert result.success is True
+        assert result.provider_used == "pollinations"
+        assert len(result.attempts) == 2
+        assert result.attempts[0].error != ""
+
+    async def test_provider_model_metadata(self):
+        async def call(name):
+            return "some_result", "mixtral-8x7b"
+
+        result = await run_chain(["groq"], call)
+        assert result.success is True
+        assert result.provider_used == "groq"
+        assert result.model_used == "mixtral-8x7b"
+        assert len(result.attempts) == 1
+        assert result.attempts[0].provider == "groq"
+        assert result.attempts[0].model == "mixtral-8x7b"
+        assert result.attempts[0].success is True
+        assert result.attempts[0].latency > 0
