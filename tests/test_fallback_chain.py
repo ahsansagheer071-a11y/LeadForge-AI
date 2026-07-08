@@ -1,6 +1,5 @@
 """Focused tests for the shared provider chain orchestrator."""
 
-import asyncio
 import pytest
 from app.services.ai.chain import (
     run_chain, is_retryable, ChainResult, ProviderAttempt,
@@ -12,7 +11,6 @@ from app.core.exceptions import ServiceUnavailableException
 
 class TestIsRetryable:
     def test_retryable_timeout(self):
-        assert is_retryable(asyncio.TimeoutError()) is True
         assert is_retryable(TimeoutError()) is True
         assert is_retryable("request timed out") is True
 

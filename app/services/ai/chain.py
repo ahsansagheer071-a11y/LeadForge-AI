@@ -1,6 +1,5 @@
 """Shared provider chain orchestrator — generic fallback across any provider architecture."""
 
-import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
@@ -55,7 +54,7 @@ def is_retryable(error: Any) -> bool:
     for m in _RETRYABLE:
         if m in error_str:
             return True
-    if isinstance(error, (asyncio.TimeoutError, ConnectionError, TimeoutError)):
+    if isinstance(error, (ConnectionError, TimeoutError)):
         return True
     if isinstance(error, ServiceUnavailableException):
         return True
