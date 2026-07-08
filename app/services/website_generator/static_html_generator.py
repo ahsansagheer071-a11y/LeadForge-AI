@@ -9,13 +9,13 @@ import logging
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Optional
 
 from app.services.website_intelligence.schemas import WebsiteProfile
 from app.services.markdown_engine.schemas import MarkdownPackage
 from app.services.website_generator.context_builder import ContextBuilder
 from app.services.website_generator.prompt_builder import PromptBuilder
-from app.services.website_generator.orchestrator.router import AIProviderRouter
+from app.services.website_generator.providers.provider_factory import ProviderFactory
 from app.services.website_generator.schemas import (
     GenerationContext,
     GenerationResult,
@@ -23,6 +23,7 @@ from app.services.website_generator.schemas import (
     WebsiteProject,
     GeneratedFile,
 )
+from app.services.ai.chain import run_chain
 
 logger = logging.getLogger(__name__)
 
@@ -41,12 +42,10 @@ class StaticHTMLGenerator:
         context_builder: Optional[ContextBuilder] = None,
         prompt_builder: Optional[PromptBuilder] = None,
         provider_name: Optional[str] = None,
-        router: Optional[AIProviderRouter] = None,
     ):
         self.context_builder = context_builder or ContextBuilder()
         self.prompt_builder = prompt_builder or PromptBuilder()
         self.provider_name = provider_name
-        self.router = router or AIProviderRouter()
 
     async def generate(
         self,
@@ -88,38 +87,44 @@ class StaticHTMLGenerator:
             )
         logger.info("PromptContext built with HTML directive (%d chars)", len(str(prompt)))
 
-        # Step 3-4 — Route via orchestrator with circuit breaker + fallback
-        router_result = await self.router.route(
-            prompt=prompt,
-            preferred_provider=self.provider_name,
-            max_attempts_per_provider=2,
-        )
+        # Step 3-4 — Run provider chain via shared orchestrator
+        async def _call(name: str):
+            provider = ProviderFactory.get_provider(name)
+            ai_resp = await provider.generate(prompt)
+            if not ai_resp.success:
+                msg = "; ".join(ai_resp.errors) if ai_resp.errors else "Provider returned failure"
+                from app.core.exceptions import ServiceUnavailableException
+                raise ServiceUnavailableException(msg)
+            return ai_resp.raw_response, ai_resp.model
 
-        if not router_result.success:
-            logger.error("Orchestrator failed: %s", "; ".join(router_result.errors))
+        providers_to_try = ProviderFactory.get_fallback_chain(self.provider_name)
+        chain_result = await run_chain(providers_to_try, _call)
+
+        if not chain_result.success:
+            logger.error("All providers failed: %s", chain_result.last_error)
             return GenerationResult(
                 success=False,
-                errors=router_result.errors or ["All AI providers failed"],
+                errors=[chain_result.last_error or "All AI providers failed"],
                 generation_time=time.monotonic() - start,
-                warnings=router_result.warnings,
-                provider_attempts=len(router_result.attempts),
+                provider_attempts=len(chain_result.attempts),
             )
 
-        logger.info("Generation succeeded with provider: %s (latency=%.2fs)", router_result.provider_used, router_result.total_latency)
+        logger.info("Generation succeeded with provider: %s", chain_result.provider_used)
 
         # Step 5 — Parse response: extract HTML and create single file
         logger.info("Parsing provider response for HTML content")
-        html_content = self._extract_html_content(router_result.raw_response)
+        raw_response = chain_result.result
+        html_content = self._extract_html_content(raw_response)
         if not html_content:
             logger.error("Failed to extract HTML content from AI response")
             return GenerationResult(
                 success=False,
                 errors=["No valid HTML content found in AI response"],
                 generation_time=time.monotonic() - start,
-                warnings=[f"Raw AI response length: {len(router_result.raw_response)} chars"],
+                warnings=[f"Raw AI response length: {len(raw_response)} chars"],
             )
 
-        project_name = self._extract_project_name_from_raw(router_result.raw_response) or "generated_website"
+        project_name = self._extract_project_name_from_raw(raw_response) or "generated_website"
         generation_id = uuid.uuid4().hex[:12]
 
         html_file = GeneratedFile(
@@ -146,8 +151,8 @@ class StaticHTMLGenerator:
             success=True,
             website_project=website_project,
             generation_time=time.monotonic() - start,
-            provider_used=router_result.provider_used,
-            provider_attempts=len(router_result.attempts),
+            provider_used=chain_result.provider_used,
+            provider_attempts=len(chain_result.attempts),
         )
 
     def _extract_html_content(self, raw: str) -> str:

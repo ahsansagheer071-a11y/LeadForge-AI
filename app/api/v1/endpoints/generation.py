@@ -307,31 +307,3 @@ async def download_generated_website_package(
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
-
-
-@router.get(
-    "/providers/health",
-    response_model=StandardResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Get health status of all AI providers",
-    description=(
-        "Returns health check results and circuit breaker state for each "
-        "registered AI provider (Groq, Pollinations, NVIDIA). Useful for "
-        "diagnosing which providers are available."
-    ),
-)
-async def get_provider_health_status(
-    current_user: User = Depends(get_current_user),
-):
-    from app.services.website_generator.orchestrator.router import AIProviderRouter
-    router = AIProviderRouter()
-    health = await router.get_provider_health_status()
-    circuits = router.get_circuit_states()
-    return StandardResponse(
-        success=True,
-        message="Provider health status retrieved.",
-        data={
-            "health": {k: v.model_dump() for k, v in health.items()},
-            "circuit_breakers": circuits,
-        },
-    )

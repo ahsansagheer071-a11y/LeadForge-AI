@@ -1,6 +1,5 @@
 import uuid
 import time
-import asyncio
 from typing import Dict, Any, List
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +10,7 @@ from app.repositories.lead import lead_repository
 from app.repositories.audit import audit_repository
 from app.repositories.screenshot import screenshot_repository
 from app.services.ai.factory import ai_factory
+from app.services.ai.chain import run_chain
 
 
 class AuditEngineService:
@@ -93,53 +93,33 @@ class AuditEngineService:
             "response_time_ms": audit_record.response_time_ms,
         }
 
-        # Fallback chain: try each provider in order
+        async def _call(name: str):
+            ai_provider = ai_factory.get_provider(name)
+            return await ai_provider.audit_website(
+                lead_info, website_analysis, screenshot_urls
+            )
+
         providers_to_try = ai_factory.get_fallback_chain(provider)
-        last_error: str = ""
+        chain_result = await run_chain(providers_to_try, _call)
 
-        for provider_name in providers_to_try:
-            try:
-                logger.info("Attempting AI audit with provider: %s", provider_name)
-                ai_provider = ai_factory.get_provider(provider_name)
+        if not chain_result.success:
+            raise ServiceUnavailableException(
+                f"All AI providers failed for lead '{lead_id}'. Last error: {chain_result.last_error}"
+            )
 
-                t_ai_start = time.perf_counter()
-                ai_result = await asyncio.wait_for(
-                    ai_provider.audit_website(lead_info, website_analysis, screenshot_urls),
-                    timeout=300.0,
-                )
-                t_ai_end = time.perf_counter()
-                logger.info(
-                    "AI audit succeeded | provider=%s | lead_id=%s | took=%.2fs",
-                    provider_name, lead_id, t_ai_end - t_ai_start,
-                )
+        ai_result = chain_result.result
+        update_data = {
+            "executive_summary": ai_result.get("Business Summary"),
+            "weaknesses": ai_result.get("Top Weaknesses"),
+            "verdict": ai_result.get("Overall Summary"),
+        }
+        await audit_repository.update(db, db_obj=audit_record, obj_in=update_data)
 
-                update_data = {
-                    "executive_summary": ai_result.get("Business Summary"),
-                    "weaknesses": ai_result.get("Top Weaknesses"),
-                    "verdict": ai_result.get("Overall Summary"),
-                }
-                await audit_repository.update(db, db_obj=audit_record, obj_in=update_data)
-
-                t_total = time.perf_counter()
-                logger.info(
-                    "AI Audit completed | lead_id=%s | provider=%s | total=%.2fs",
-                    lead_id, provider_name, t_total - t_start,
-                )
-                return ai_result
-
-            except asyncio.TimeoutError:
-                last_error = f"{provider_name} timed out"
-                logger.warning("Provider %s timed out, trying next", provider_name)
-            except ServiceUnavailableException as e:
-                last_error = f"{provider_name}: {e}"
-                logger.warning("Provider %s failed (%s), trying next", provider_name, e)
-            except Exception as e:
-                last_error = f"{provider_name}: {e}"
-                logger.warning("Provider %s raised unexpected error (%s), trying next", provider_name, e)
-
-        raise ServiceUnavailableException(
-            f"All AI providers failed for lead '{lead_id}'. Last error: {last_error}"
+        logger.info(
+            "AI Audit completed | lead_id=%s | provider=%s | total=%.2fs",
+            lead_id, chain_result.provider_used, time.perf_counter() - t_start,
         )
+        return ai_result
 
 
 audit_engine_service = AuditEngineService()
