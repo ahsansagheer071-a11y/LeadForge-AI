@@ -99,7 +99,7 @@ c, d = req("POST", "/api/v1/audits/run", headers=H, data={"lead_id": LEAD_ID})
 if c != 200 and ("429" in str(d) or "missing keys" in str(d) or "Rate limit" in str(d) or "after" in str(d)):
     log("AI Audit (Groq issue)", True, f"Groq issue (expected on free tier): {str(d)[:100]}")
 else:
-    log("AI Audit", c == 200, f"HTTP {c}: {str(d)[:200]}")
+    log("AI Audit", c == 200, f"HTTP {c}: {str(d)[:1500]}")
 
 # Step 7: Screenshot
 print("\n--- 7. SCREENSHOT ---")
