@@ -1,23 +1,10 @@
-import { X, Activity, CheckCircle2, AlertCircle, Info, ArrowUpRight } from 'lucide-react';
+import { X, Activity, CheckCircle2, AlertCircle } from 'lucide-react';
 import { cn, formatRelative } from '@/utils';
-import { useNotificationsStore } from '@/store';
-import { Badge } from '@/components/Badge';
+import { useQuery } from '@tanstack/react-query';
+import { dashboardService } from '@/services/services';
 import { Separator } from '@/components/Separator';
-import type { AppNotification, NotificationKind } from '@/types';
 
-const kindIcon: Record<NotificationKind, typeof Activity> = {
-  success: CheckCircle2,
-  warning: AlertCircle,
-  error: AlertCircle,
-  info: Info,
-};
 
-const kindBadge: Record<NotificationKind, 'brand' | 'success' | 'warning' | 'danger' | 'info' | 'muted'> = {
-  success: 'success',
-  warning: 'warning',
-  error: 'danger',
-  info: 'info',
-};
 
 export function RightActivityPanel({
   open,
@@ -28,13 +15,17 @@ export function RightActivityPanel({
   onClose: () => void;
   className?: string;
 }) {
-  const items = useNotificationsStore((s) => s.items);
+  const { data } = useQuery({
+    queryKey: ['dashboard', 'recent-leads'],
+    queryFn: () => dashboardService.recentLeads(10, 0),
+  });
+  const items = data?.leads ?? [];
 
   return (
     <aside
       className={cn(
-        'h-[calc(100vh-3.5rem)] w-[320px] border-l border-[var(--color-border)] bg-[var(--color-surface)]',
-        'flex flex-col overflow-hidden transition-all duration-200 ease-out',
+        'h-[calc(100vh-3.5rem)] w-[320px] border-l border-[var(--color-border)] bg-[var(--color-surface)]/80 backdrop-blur-md z-20',
+        'flex flex-col overflow-hidden transition-all duration-300 ease-out',
         open ? 'opacity-100' : 'opacity-0 pointer-events-none w-0',
         'lf-thin-scroll',
         className,
@@ -74,27 +65,27 @@ export function RightActivityPanel({
   );
 }
 
-function ActivityItem({ item }: { item: AppNotification }) {
-  const Icon = kindIcon[item.kind];
+function ActivityItem({ item }: { item: any }) {
+  const Icon = item.status === 'OUTREACH_READY' ? CheckCircle2 : item.status === 'FAILED' ? AlertCircle : Activity;
+  const kind = item.status === 'OUTREACH_READY' ? 'success' : item.status === 'FAILED' ? 'error' : 'info';
   return (
     <div
       className={cn(
         'group flex items-start gap-3 px-3 py-2.5 rounded-[10px] transition-colors',
         'hover:bg-[var(--color-surface-hover)]',
-        !item.read && 'bg-[var(--color-brand-soft)]',
+        'hover:bg-[var(--color-surface-hover)]',
       )}
     >
       <div className="mt-0.5">
-        <Icon className={cn('size-4', item.kind === 'success' && 'text-[var(--color-success)]', item.kind === 'warning' && 'text-[var(--color-warning)]', item.kind === 'error' && 'text-[var(--color-danger)]', item.kind === 'info' && 'text-[var(--color-info)]')} />
+        <Icon className={cn('size-4', kind === 'success' && 'text-[var(--color-success)]', kind === 'error' && 'text-[var(--color-danger)]', kind === 'info' && 'text-[var(--color-brand)]')} />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <p className="text-[12.5px] font-medium truncate">{item.title}</p>
-          <Badge tone={kindBadge[item.kind]} className="text-[9px] px-1 py-0">{item.kind}</Badge>
+          <p className="text-[12.5px] font-medium truncate">{item.name}</p>
         </div>
-        {item.message && (
-          <p className="text-[11.5px] text-[var(--color-text-muted)] mt-0.5 line-clamp-2">{item.message}</p>
-        )}
+        <p className="text-[11.5px] text-[var(--color-text-muted)] mt-0.5 line-clamp-2">
+          {item.status === 'NEW' ? 'Lead discovered' : `Lead updated to ${item.status.replace('_', ' ')}`}
+        </p>
         <p className="text-[10.5px] text-[var(--color-text-muted)] mt-0.5">{formatRelative(item.created_at)}</p>
       </div>
     </div>

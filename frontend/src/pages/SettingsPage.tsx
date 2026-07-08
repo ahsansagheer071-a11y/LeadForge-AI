@@ -2,7 +2,6 @@ import { Save } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/Card';
 import { Input, Label } from '@/components/Input';
 import { Button } from '@/components/Button';
-import { Separator } from '@/components/Separator';
 
 export function SettingsPage() {
   return (
@@ -12,7 +11,7 @@ export function SettingsPage() {
         <p className="text-[13px] text-[var(--color-text-muted)] mt-1">Manage your workspace preferences</p>
       </div>
 
-      <Card>
+      <Card variant="glass">
         <CardHeader>
           <CardTitle>Profile</CardTitle>
         </CardHeader>
@@ -31,7 +30,7 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card variant="glass">
         <CardHeader>
           <CardTitle>API Keys</CardTitle>
         </CardHeader>

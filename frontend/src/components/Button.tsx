@@ -14,7 +14,8 @@ export type ButtonVariant =
   | 'ghost'
   | 'soft'
   | 'danger'
-  | 'subtle';
+  | 'subtle'
+  | 'glow';
 
 export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg';
 
@@ -60,6 +61,10 @@ const variantClass: Record<ButtonVariant, string> = {
     'hover:opacity-90 disabled:opacity-50',
   subtle:
     'bg-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text)]',
+  glow:
+    'bg-[var(--color-brand)] text-white shadow-[var(--shadow-glow)] ' +
+    'hover:bg-[var(--color-brand-hover)] active:bg-[var(--color-brand-active)] ' +
+    'disabled:opacity-50 disabled:cursor-not-allowed',
 };
 
 const sizeClass: Record<ButtonSize, string> = {

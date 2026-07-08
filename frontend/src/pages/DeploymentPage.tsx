@@ -1,4 +1,4 @@
-import { Download, Globe, Loader2, AlertCircle, CheckCircle2, Package, ExternalLink } from 'lucide-react';
+import { Download, Loader2, AlertCircle, CheckCircle2, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -69,7 +69,7 @@ export function DeploymentPage() {
     return (
       <div className="space-y-6">
         <Skeleton variant="text" width={200} height={24} />
-        <Card>
+        <Card variant="glass">
           <CardContent className="p-8 space-y-4">
             {Array.from({ length: 3 }).map((_, i) => (
               <Skeleton key={i} variant="text" width="100%" height={20} />
@@ -165,7 +165,7 @@ export function DeploymentPage() {
         </Card>
 
         {/* Actions */}
-        <Card>
+        <Card variant="glass">
           <CardHeader>
             <CardTitle>Actions</CardTitle>
           </CardHeader>

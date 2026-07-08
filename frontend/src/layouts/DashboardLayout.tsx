@@ -81,7 +81,7 @@ export function Workspace({
       className={cn(
         'lf-thin-scroll h-[calc(100vh-3.5rem)] overflow-y-auto',
         // generous padding for a SaaS feel
-        'px-6 py-6 lg:px-10 lg:py-8',
+        'px-4 py-6 md:px-8 md:py-8 lg:px-12 lg:py-10',
         'bg-[var(--color-bg)]',
         className,
       )}

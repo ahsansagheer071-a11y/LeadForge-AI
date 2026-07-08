@@ -1,16 +1,23 @@
 import * as React from 'react';
 import { cn } from '@/utils';
 
+export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  variant?: 'default' | 'glass' | 'premium';
+}
+
 export function Card({
   className,
+  variant = 'default',
   children,
   ...rest
-}: React.HTMLAttributes<HTMLDivElement>) {
+}: CardProps) {
   return (
     <div
       className={cn(
-        'rounded-[14px] bg-[var(--color-surface)] border border-[var(--color-border)] shadow-[var(--shadow-card)]',
-        'transition-colors duration-150',
+        'rounded-[14px] border transition-colors duration-150',
+        variant === 'default' && 'bg-[var(--color-surface)] border-[var(--color-border)] shadow-[var(--shadow-card)]',
+        variant === 'glass' && 'bg-[var(--color-glass)] backdrop-blur-[var(--blur-md)] border-[var(--color-glass-border)] shadow-[var(--shadow-card)]',
+        variant === 'premium' && 'bg-[var(--color-surface)] border-[var(--color-brand-border)] shadow-[var(--shadow-glow)]',
         className,
       )}
       {...rest}

@@ -50,8 +50,12 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[var(--color-bg)] flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden bg-[var(--color-bg)]">
+      {/* Background decorations */}
+      <div className="absolute -top-[20%] -left-[10%] w-[60%] h-[60%] rounded-full bg-[var(--color-brand)]/10 blur-[120px] pointer-events-none" />
+      <div className="absolute -bottom-[20%] -right-[10%] w-[60%] h-[60%] rounded-full bg-[var(--color-brand-600)]/10 blur-[120px] pointer-events-none" />
+
+      <div className="w-full max-w-sm relative z-10 lf-scale-up">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <div className="size-12 rounded-[14px] bg-[var(--color-brand)] flex items-center justify-center shadow-[0_4px_20px_color-mix(in_oklab,var(--color-brand)_35%,transparent)] mb-4">
@@ -63,7 +67,7 @@ export function LoginPage() {
 
         <form
           onSubmit={handleSubmit(onSubmit)}
-          className="rounded-[14px] bg-[var(--color-surface)] border border-[var(--color-border)] shadow-[var(--shadow-card)] p-6 space-y-4"
+          className="rounded-[14px] bg-[var(--color-glass)] backdrop-blur-[var(--blur-lg)] border border-[var(--color-glass-border)] shadow-[var(--shadow-pop)] p-6 space-y-4"
         >
           {serverError && (
             <div className="rounded-[10px] bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-[12.5px] p-3">
@@ -95,7 +99,7 @@ export function LoginPage() {
             <FormError>{errors.password?.message}</FormError>
           </div>
 
-          <Button type="submit" fullWidth loading={isSubmitting}>
+          <Button type="submit" fullWidth loading={isSubmitting} variant="glow">
             Sign in
           </Button>
         </form>

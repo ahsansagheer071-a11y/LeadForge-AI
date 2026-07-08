@@ -16,14 +16,16 @@ const styles: Record<Tone, string> = {
 export function Badge({
   className,
   tone = 'muted',
+  animated = false,
   children,
   ...rest
-}: React.HTMLAttributes<HTMLSpanElement> & { tone?: Tone }) {
+}: React.HTMLAttributes<HTMLSpanElement> & { tone?: Tone; animated?: boolean }) {
   return (
     <span
       className={cn(
         'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium leading-tight whitespace-nowrap',
         styles[tone],
+        animated && 'lf-pulse-glow',
         className,
       )}
       {...rest}

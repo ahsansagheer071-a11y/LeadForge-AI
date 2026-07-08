@@ -162,7 +162,7 @@ export function LeadDetailPage() {
     return (
       <div className="space-y-6">
         <Skeleton variant="rounded" width={200} height={24} />
-        <Card>
+        <Card variant="glass">
           <CardContent className="p-6 space-y-4">
             {Array.from({ length: 6 }).map((_, i) => (
               <Skeleton key={i} variant="text" width="100%" height={20} />
@@ -192,7 +192,7 @@ export function LeadDetailPage() {
         </Button>
       </div>
 
-      <Card>
+      <Card variant="glass">
         <CardHeader>
           <div className="flex items-center justify-between w-full">
             <div>
@@ -270,7 +270,7 @@ export function LeadDetailPage() {
       </Card>
 
       <div className="grid grid-cols-3 gap-4">
-        <Card>
+        <Card variant="glass">
           <CardHeader><CardTitle>Contact</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {lead.website && (
@@ -300,7 +300,7 @@ export function LeadDetailPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card variant="glass">
           <CardHeader><CardTitle>Rating & Reviews</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {lead.rating != null && (
@@ -318,7 +318,7 @@ export function LeadDetailPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card variant="glass">
           <CardHeader><CardTitle>Timeline</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <div className="text-[13px]">
@@ -336,7 +336,7 @@ export function LeadDetailPage() {
       {/* Website Analysis Results */}
       {analysisResult && (
         <>
-          <Card>
+          <Card variant="glass">
             <CardHeader>
               <div className="flex items-center justify-between w-full">
                 <CardTitle>Website Analysis</CardTitle>
@@ -417,7 +417,7 @@ export function LeadDetailPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card variant="glass">
             <CardHeader><CardTitle>Technical Details</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-5 gap-4">
@@ -460,7 +460,7 @@ export function LeadDetailPage() {
 
       {/* Screenshot Results */}
       {screenshotResult && (screenshotResult.desktop_url || screenshotResult.mobile_url || screenshotResult.full_page_url) && (
-        <Card>
+        <Card variant="glass">
           <CardHeader><CardTitle>Screenshots</CardTitle></CardHeader>
           <CardContent>
             <div className="grid grid-cols-3 gap-4">
@@ -509,7 +509,7 @@ export function LeadDetailPage() {
       {auditResult && (
         <>
           {/* Score Section */}
-          <Card>
+          <Card variant="glass">
             <CardHeader>
               <div className="flex items-center justify-between w-full">
                 <CardTitle>AI Score</CardTitle>
@@ -542,7 +542,7 @@ export function LeadDetailPage() {
 
           {/* Business Summary */}
           {auditResult.audit && typeof auditResult.audit === 'object' && 'Business Summary' in auditResult.audit && (
-            <Card>
+            <Card variant="glass">
               <CardHeader><CardTitle>Business Summary</CardTitle></CardHeader>
               <CardContent>
                 <p className="text-[13px] leading-relaxed">{String(auditResult.audit['Business Summary'])}</p>
@@ -552,7 +552,7 @@ export function LeadDetailPage() {
 
           {/* Top Weaknesses */}
           {auditResult.audit && typeof auditResult.audit === 'object' && 'Top Weaknesses' in auditResult.audit && Array.isArray(auditResult.audit['Top Weaknesses']) && (
-            <Card>
+            <Card variant="glass">
               <CardHeader><CardTitle>Top Weaknesses</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 {(auditResult.audit['Top Weaknesses'] as Array<string | { title?: string; evidence?: string; impact?: string; recommendation?: string }>).map((w, i) => {
@@ -582,7 +582,7 @@ export function LeadDetailPage() {
 
           {/* Overall Summary / Verdict */}
           {auditResult.audit && typeof auditResult.audit === 'object' && 'Overall Summary' in auditResult.audit && (
-            <Card>
+            <Card variant="glass">
               <CardHeader><CardTitle>Overall Summary</CardTitle></CardHeader>
               <CardContent>
                 <p className="text-[13px] leading-relaxed">{String(auditResult.audit['Overall Summary'])}</p>
@@ -594,7 +594,7 @@ export function LeadDetailPage() {
 
       {/* Outreach Results */}
       {outreachResult && (
-        <Card>
+        <Card variant="glass">
           <CardHeader><CardTitle>AI Outreach</CardTitle></CardHeader>
           <CardContent className="space-y-5">
             {outreachResult.email_subject && (

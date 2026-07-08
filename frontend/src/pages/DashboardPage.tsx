@@ -1,18 +1,17 @@
-import { FolderOpenDot, Send, Sparkles, TrendingUp, Search, Bot, MessageSquare, Download, ArrowRight, Zap, Target, BarChart3, MapPin, Building2, Activity, Users, Globe } from 'lucide-react';
+import { Sparkles, TrendingUp, Search, Bot, MessageSquare, Download, ArrowRight, Zap, Target, BarChart3, Activity, Users, Globe } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/Card';
+import { Card, CardContent } from '@/components/Card';
 import { Badge } from '@/components/Badge';
 import { Skeleton } from '@/components/Loading';
-import { EmptyState } from '@/components/ErrorStates';
 import { PremiumCard } from '@/components/PremiumCard';
 import { AnimatedCounter } from '@/components/AnimatedCounter';
 import { ScoreGauge } from '@/components/ScoreGauge';
 import { dashboardService, projectsService } from '@/services/services';
-import { formatCompact, formatRelative, scoreColour, statusBadgeClass } from '@/utils';
+import { formatRelative } from '@/utils';
 import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 
 const PIPELINE_COLORS: Record<string, string> = {
@@ -106,7 +105,7 @@ export function DashboardPage() {
     queryFn: () => dashboardService.statusDistribution(),
   });
 
-  const { data: priorityData, isLoading: priorityLoading } = useQuery({
+  const { data: priorityData } = useQuery({
     queryKey: ['leads', 'dashboard-priority'],
     queryFn: () => projectsService.list(1, 100),
   });

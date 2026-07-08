@@ -74,8 +74,8 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
     <aside
       className={cn(
         'h-[calc(100vh-3.5rem)] sticky top-[3.5rem]',
-        'border-r border-[var(--color-border)] bg-[var(--color-surface)]',
-        'flex flex-col transition-[width] duration-200 ease-out',
+        'border-r border-[var(--color-border)] bg-[var(--color-surface)]/80 backdrop-blur-md',
+        'flex flex-col transition-[width] duration-300 ease-out z-20',
         collapsed ? 'w-[76px]' : 'w-[244px]',
         'overflow-hidden',
         className,
@@ -163,7 +163,7 @@ function SidebarItem({ item, collapsed }: { item: NavItem; collapsed: boolean })
           'transition-colors duration-150',
           collapsed && 'justify-center',
           isActive
-            ? 'bg-[var(--color-brand-soft)] text-[var(--color-brand)]'
+            ? 'bg-[var(--color-brand-soft)] text-[var(--color-brand)] shadow-[inset_0_0_0_1px_var(--color-brand-border)]'
             : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]',
         )
       }
@@ -195,7 +195,7 @@ function SidebarItem({ item, collapsed }: { item: NavItem; collapsed: boolean })
             </>
           )}
           {isActive && (
-            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-[var(--color-brand)]" />
+            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-[image:var(--color-brand-gradient)] shadow-[0_0_8px_var(--color-brand)]" />
           )}
         </>
       )}

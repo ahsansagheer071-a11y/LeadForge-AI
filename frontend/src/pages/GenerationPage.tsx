@@ -7,7 +7,7 @@ import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { Skeleton } from '@/components/Loading';
 import { EmptyState } from '@/components/ErrorStates';
-import { projectsService, generateWebsite, generationService } from '@/services/services';
+import { projectsService, generateWebsite } from '@/services/services';
 import { getApiErrorMessage } from '@/services/apiClient';
 import { usePreviewStore } from '@/store';
 import { cn } from '@/utils';
@@ -54,7 +54,7 @@ export function GenerationPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Lead selector */}
-        <Card className="lg:col-span-1">
+        <Card variant="glass" className="lg:col-span-1">
           <CardHeader><CardTitle>Select Lead</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             {isLoading ? (
@@ -113,7 +113,7 @@ export function GenerationPage() {
         </Card>
 
         {/* Status */}
-        <Card className="lg:col-span-2">
+        <Card variant="glass" className="lg:col-span-2">
           <CardHeader><CardTitle>Status</CardTitle></CardHeader>
           <CardContent>
             {!selectedId && (

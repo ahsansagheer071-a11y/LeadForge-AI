@@ -11,8 +11,8 @@ export function FooterStatusBar({ className }: { className?: string }) {
       )}
     >
       <div className="flex items-center gap-3">
-        <span className="flex items-center gap-1.5">
-          <span className="size-1.5 rounded-full bg-[var(--color-success)] shadow-[0_0_6px_var(--color-success)]" />
+        <span className="flex items-center gap-2">
+          <span className="size-1.5 rounded-full bg-[var(--color-success)] shadow-[var(--shadow-success-glow)] animate-pulse" />
           All systems operational
         </span>
         <span className="hidden sm:inline">v0.1.0-alpha</span>

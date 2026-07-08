@@ -54,6 +54,7 @@ export function ErrorContextProvider({ children }: { children: ReactNode }) {
   return <ErrorContext.Provider value={value}>{children}</ErrorContext.Provider>;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useErrorSink(): ErrorContextValue {
   const ctx = useContext(ErrorContext);
   if (!ctx) throw new Error('useErrorSink must be used within <ErrorContextProvider>');

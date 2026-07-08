@@ -1,4 +1,4 @@
-import { ExternalLink, RefreshCw, Monitor, Smartphone, Tablet, Loader2, AlertCircle, Globe } from 'lucide-react';
+import { ExternalLink, RefreshCw, Monitor, Smartphone, Tablet, Loader2, AlertCircle } from 'lucide-react';
 import { Card, CardContent } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Skeleton } from '@/components/Loading';
@@ -7,7 +7,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/utils';
 import { EmptyState } from '@/components/ErrorStates';
-import { usePreviewStore, useAuthStore } from '@/store';
+import { usePreviewStore } from '@/store';
 import { generationService } from '@/services/services';
 
 type Viewport = 'desktop' | 'tablet' | 'mobile';
@@ -15,7 +15,7 @@ type Viewport = 'desktop' | 'tablet' | 'mobile';
 export function PreviewPage() {
   const { websiteId } = useParams<{ websiteId: string }>();
   const navigate = useNavigate();
-  const { htmlContent: storeHtml, setHtmlContent } = usePreviewStore();
+  const { htmlContent: storeHtml } = usePreviewStore();
   const [viewport, setViewport] = useState<Viewport>('desktop');
 
   const { data: website, isLoading, error } = useQuery({
@@ -56,7 +56,7 @@ export function PreviewPage() {
           <Skeleton variant="text" width={200} height={24} />
           <Skeleton variant="text" width={300} height={16} className="mt-1" />
         </div>
-        <Card>
+        <Card variant="glass">
           <CardContent className="p-8">
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <Loader2 className="size-8 text-[var(--color-brand)] lf-spin mb-4" />
@@ -75,7 +75,7 @@ export function PreviewPage() {
           <h1 className="text-xl font-bold tracking-tight">Preview</h1>
           <p className="text-[13px] text-[var(--color-text-muted)] mt-1">Preview generated websites before deployment</p>
         </div>
-        <Card>
+        <Card variant="glass">
           <CardContent className="p-8">
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <AlertCircle className="size-12 text-[var(--color-danger)] mb-4" />
@@ -135,7 +135,7 @@ export function PreviewPage() {
         </div>
       )}
 
-      <Card>
+      <Card variant="glass">
         <CardContent className="p-0">
           {hasPreview ? (
             <div className="flex justify-center p-4 bg-[var(--color-bg)] rounded-b-[14px]">

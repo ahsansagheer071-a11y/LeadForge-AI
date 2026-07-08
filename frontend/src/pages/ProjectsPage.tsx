@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Search, ExternalLink, Star, Activity, Users } from 'lucide-react';
+import { Search, ExternalLink, Star, Activity, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/Card';
 import { Badge } from '@/components/Badge';
@@ -114,7 +114,7 @@ export function ProjectsPage() {
       )}
 
       {/* Discovery Form */}
-      <Card>
+      <Card variant="glass">
         <CardHeader>
           <CardTitle>Discover New Leads</CardTitle>
         </CardHeader>
@@ -172,7 +172,6 @@ export function ProjectsPage() {
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-[var(--color-text-muted)]">{projects.length} total</span>
-          <Button leftIcon={<Plus className="size-4" />}>New Project</Button>
         </div>
       </div>
 
@@ -186,7 +185,7 @@ export function ProjectsPage() {
         />
       </div>
 
-      <Card>
+      <Card variant="glass">
         <CardHeader>
           <CardTitle>All Projects</CardTitle>
         </CardHeader>
