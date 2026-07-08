@@ -1,6 +1,7 @@
 """Shared provider chain orchestrator — generic fallback across any provider architecture."""
 
 import logging
+import traceback
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, List, Optional
@@ -88,9 +89,15 @@ async def run_chain(
         except Exception as e:
             elapsed = time.monotonic() - attempt_start
             error_msg = str(e).strip() or type(e).__name__
+            tb = "".join(traceback.format_exception(type(e), e, e.__traceback__))
+            logger.warning("Provider %s failed (%.2fs): %s\n%s", provider_name, elapsed, error_msg, tb)
             last_error = f"{provider_name}: {error_msg}"
-            if not is_retryable(e):
-                logger.warning("Non-retryable from %s: %s", provider_name, error_msg)
+            try:
+                retryable = is_retryable(e)
+            except Exception as class_err:
+                logger.error("is_retryable itself failed for %s: %s", provider_name, class_err)
+                retryable = True
+            if not retryable:
                 attempts.append(ProviderAttempt(
                     provider=provider_name, model="", success=False,
                     latency=elapsed, error=error_msg,
@@ -98,7 +105,6 @@ async def run_chain(
                 return ChainResult(
                     success=False, attempts=attempts, last_error=last_error,
                 )
-            logger.warning("Retryable from %s, next: %s", provider_name, error_msg)
             attempts.append(ProviderAttempt(
                 provider=provider_name, model="", success=False,
                 latency=elapsed, error=error_msg,
