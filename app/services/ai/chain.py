@@ -78,6 +78,9 @@ async def run_chain(
             model = ""
             if isinstance(result, tuple) and len(result) == 2:
                 result, model = result
+            if result is None:
+                logger.warning("Provider %s returned None, treating as failure", provider_name)
+                raise ServiceUnavailableException(f"{provider_name}: returned empty result")
             attempts.append(ProviderAttempt(
                 provider=provider_name, model=model, success=True, latency=elapsed,
             ))
@@ -102,6 +105,7 @@ async def run_chain(
                     provider=provider_name, model="", success=False,
                     latency=elapsed, error=error_msg,
                 ))
+                logger.info("Chain stopped on %s (non-retryable): %s", provider_name, error_msg)
                 return ChainResult(
                     success=False, attempts=attempts, last_error=last_error,
                 )

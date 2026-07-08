@@ -85,7 +85,9 @@ class OutreachService:
                 f"All providers failed for outreach. Last error: {chain_result.last_error}"
             )
 
-        ai_result = chain_result.result
+        ai_result = chain_result.result or {}
+        if not isinstance(ai_result, dict):
+            ai_result = {}
 
         cold_email = ai_result.get("Personalized Cold Email", "")
         followup_email = ai_result.get("Follow-up Email", "")
