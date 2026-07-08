@@ -531,49 +531,221 @@ FRONTEND_URL
 
 ## 26. Earlier Frontend Versions and Recoverable Features
 
-### Git History of Frontend
+### Git History of Frontend (13 commits touching `frontend/`)
 
-| Commit | Description | Impact |
+| Commit | Description | Impact on Frontend |
 |---|---|---|
-| `9d61396` | Initial commit | First frontend skeleton |
-| `428d40c` | Initial production-ready commit | Working MVP with all pages |
-| `f7f1148` | Set frontend API URL to Railway | Configuration change |
-| `8d82eac` | CORS and API URL configuration | Configuration change |
-| `21ab039` | Add /api/v1 to API base URL | Configuration change |
-| `526487a` | Normalize VITE_API_BASE_URL | Configuration change |
-| `32a48bf` | Various fixes | Multi-domain fix |
-| `9174bb2` | Update FRONTEND_URL to Vercel URL | Configuration change |
-| `177b7e4` | **Restore audit result, detect existing website** | Major feature addition |
-| `342261a` | Add vercel.json for SPA routing | Deployment config |
-| `f46dd57` | Add AI provider fallback chain | Current HEAD |
+| `9d61396` | **Initial commit** | **Fully functional 25-file frontend**. 3500+ lines, 14 pages, premium CSS (rotating RGB conic-gradient borders, SVG gauges, Recharts charts), 4 real service modules, React Query + Context auth, all real API calls, **zero mock data**. Dark-only theme. |
+| `428d40c` | **Architecture rewrite** | Swapped to new component system (Button/Card/Badge/Input/Loading), Zustand stores, new `apiClient.ts` with token refresh, new layouts (DashboardLayout/Sidebar/TopBar/RightActivityPanel/FooterStatusBar), light/dark theme. **But lost:** all Recharts charts (placeholders), premium CSS, AnimatedCounter, PremiumCard, standalone workflow pages, 2 dashboard API queries (industry+city). |
+| `f7f1148` | Set frontend API URL to Railway | Config only |
+| `8d82eac` | CORS and API URL configuration | Config only |
+| `21ab039` | Add /api/v1 to API base URL | Config only |
+| `526487a` | Normalize VITE_API_BASE_URL | Config only |
+| `32a48bf` | Various fixes | Minor frontend fixes + backend |
+| `9174bb2` | Update FRONTEND_URL to Vercel URL | Config only |
+| `177b7e4` | **Feature enrichment** | Major upgrade to LeadDetailPage (existing-website detection, audit reconstruction, workflow-status buttons), improved DeploymentPage, added `.env.production`. Dashboard and LeadDetail regained partial real API calls. |
+| `342261a` | Add vercel.json for SPA routing | Deployment config (never deployed) |
+| `f46dd57` | Add AI provider fallback chain | Minor frontend: navigation guard on LeadDetailPage (`website_id` check) |
+| `af2db2f` / `60dc109` | Fix `weaknesses` field type | 1-line type fix |
 
-### Feature Comparison
+### Three Meaningful Frontend Versions
 
-| Feature / UI Element | Earlier (428d40c) | Current (f46dd57) | Functional? | Recommendation |
+| Version | Commit(s) | Character |
+|---|---|---|
+| **v0 — Initial** | `9d61396` | Premium dark-themed SaaS with real charts, animated counters, rotating RGB borders, standalone workflow pages, all real API calls. Most visually distinctive. |
+| **v1 — Rewrite** | `428d40c` → `9174bb2` | Architectural overhaul: new component system, light/dark theme, token refresh, collapsible sidebar. **Lost charts, premium visuals, and several real API calls in favor of mock/placeholder data.** |
+| **v2 — Current** | `177b7e4` → `60dc109` | Feature enrichment on top of v1: existing-website detection, audit reconstruction, workflow buttons, generation/preview/deployment pages. Partially restored some real API calls. Current HEAD. |
+
+### Complete Feature Comparison Table
+
+| Feature / UI Element | v0 Initial (9d61396) | v1 Rewrite (428d40c) | v2 Current (60dc109) | API-Backed? | Recommendation | Restoration Risk |
+|---|---|---|---|---|---|---|
+| **Dashboard — Recharts charts (Pie, Bar, Area, SVG gauge)** | 4 real charts | "Chart placeholder" text | "Chart placeholder" text | ✅ v0 real, v1/v2 fake | Reuse visual concept only | Low — pure frontend, no backend needed |
+| **Dashboard — KPI values** | Real from 5 API queries | **Hardcoded** (24, 3, 7, 74) | Real from dashboardService (3 queries) | ✅ v0 + v2 real | Keep current | — |
+| **Dashboard — Hero greeting + AI insight card** | Present | Removed | Removed | ✅ Was real AI-driven | Consider restoring later | Low — frontend only |
+| **Dashboard — Quick action buttons** | 4 buttons (Discover, Audit, Outreach, Export) | Removed | Removed | ✅ Was real | Consider restoring later | Low |
+| **Dashboard — Industry/city distribution** | 2 charts from real endpoints | Removed (endpoints removed) | Removed (endpoints don't exist) | ❌ Backend endpoints removed | Obsolete | High — needs backend |
+| **PremiumCard (rotating RGB border)** | Present | Removed | Removed | N/A (pure UI) | Reuse visual concept only | Low |
+| **AnimatedCounter (count-up animation)** | Present | Removed | Removed | N/A (pure UI) | Reuse visual concept only | Low |
+| **Lead management table** | 8 cols, pagination, multi-select, bulk actions, 6 filters | Simple list, no pagination | Simple list + discovery form | ✅ Both real | Keep current + restore table features later | Medium |
+| **Lead detail — tabs** | 6-tab interface (Overview, Analysis, Screenshots, Audit, Outreach, Timeline) | Single scroll page | Single scroll page + enrichment | ✅ Both real | Keep current (enriched > tabs) | — |
+| **Lead detail — timeline tab** | Present with activity events | Removed | Removed (inline timeline exists) | ✅ Was real | Consider restoring later | Low |
+| **Lead detail — favicon, Google Maps link** | Present | Removed | Removed | ✅ Was real | Consider restoring later | Low |
+| **Lead detail — score breakdown bars** | Progress bars for SEO/UX/Branding/Trust/Conversion | Plain numbers | Plain numbers (6-col grid) | ✅ Both real | Reuse bar visual | Low |
+| **Lead detail — strengths/opportunities derivation** | Present (derived from audit) | Removed | Removed | ✅ Was real | Consider restoring later | Low |
+| **Lead detail — existing-website detection** | Not present | Not present | **Present** (177b7e4) | ✅ Real | Keep current | — |
+| **Lead detail — workflow-status buttons** | Not present | Not present | **Present** (177b7e4) | ✅ Real | Keep current | — |
+| **Lead detail — audit reconstruction** | Not present | Not present | **Present** (177b7e4) | ✅ Real | Keep current | — |
+| **Generation page** | Not present | **New** | Present | ✅ Real | Keep current | — |
+| **Preview page** | Not present | **New** | Present | ✅ Real | Keep current | — |
+| **Deployment page** | Not present | **New** | Present | ✅ Real (uses generationService) | Keep current | — |
+| **History page** | Not present | **New** | Mock data (5 hardcoded items) | ❌ Fake/mock | Rebuild with real API | Low |
+| **Analytics page** | Not present | **New** | Mock (4 hardcoded stats, chart placeholders) | ❌ Fake/mock | Rebuild with real API | Low |
+| **Help page** | Not present | **New** | Static content, dead links (`href="#"`) | ❌ Placeholder | Rebuild or remove | Low |
+| **Standalone Analysis page** | Present (real API) | Removed (folded into LeadDetail) | Removed (folded into LeadDetail) | ✅ Was real | Keep folded | — |
+| **Standalone Screenshots page** | Present (real API) | Removed (folded into LeadDetail) | Removed (folded into LeadDetail) | ✅ Was real | Keep folded | — |
+| **Standalone AI Audit page** | Present (real API) | Removed (folded into LeadDetail) | Removed (folded into LeadDetail) | ✅ Was real | Keep folded | — |
+| **Standalone Outreach page** | Present (real API) | Removed (folded into LeadDetail) | Removed (folded into LeadDetail) | ✅ Was real | Keep folded | — |
+| **Lead Preview Drawer** | Present (slide-out + scores) | Removed | Removed | ✅ Was real | Consider restoring later | Low |
+| **Light/dark theme** | Dark-only | Full light/dark/system | Full light/dark/system | N/A | Keep current | — |
+| **Token refresh** | Not present | Present (apiClient.ts) | Present | ✅ Real | Keep current | — |
+| **Zustand persistence** | Not present (React Context) | Present (auth store persisted) | Present | ✅ Real | Keep current | — |
+| **API error normalization** | Basic `getErrorMessage` | Full `extractApiError` | Full | ✅ Real | Keep current | — |
+| **CSS premium effects (RGB borders, SVG gauges, glow shadows)** | Present in 3 CSS files | Removed (generic Tailwind) | Removed (generic Tailwind) | N/A (pure UI) | Reuse visual concept only | Low |
+| **Lead status CSS pills (6 colors)** | Present in `leads.css` | Badge component | Badge component | N/A | Keep current | — |
+| **Projects "New Project" button** | Present (real API) | Present (dead — no action) | Present (dead — no action) | ❌ Dead button | Remove or wire up | Low |
+| **Sidebar collapsibility** | Not present (fixed 232px) | Present (localStorage persisted) | Present | N/A | Keep current | — |
+| **Activity/Notifications panel** | Not present | Present (in-memory only, never populated) | Present (in-memory only, never populated) | ❌ Dead UI — always shows empty | Wire to backend or remove | Low |
+| **DeploymentStore** | Not present | Present (never used by any component) | Present (never used) | ❌ Dead code | Remove | Low |
+| **Search bar (TopBar)** | Not present | Present (placeholder — no search logic) | Present (placeholder) | ❌ Dead UI — expands on focus, no query | Wire to backend or remove | Low |
+| **deploymentsService.list()** | Not present | Present | Present (never called from any page) | ❌ Dead code | Remove | Low |
+| **Static HTML website gen + preview** | Not present | Not present | **Present** (Generation, Preview, Deployment pages) | ✅ Real | Keep current | — |
+| **Notification bell unread count** | Not present | Present (always 0 — no backend sync) | Present (always 0) | ❌ Dead UI | Wire to backend or remove | Low |
+
+### Features That Were Better Before
+
+| Feature | v0 (9d61396) | v2 Current (60dc109) | Commit | File Path | Recommendation |
+|---|---|---|---|---|---|
+| **Dashboard — Recharts charts** | 4 live charts (Pie — pipeline, Bar — industry, Area — cities, SVG gauge — scores) | Plain "Chart placeholder" text | `9d61396` | `src/pages/DashboardPage.tsx`, `src/styles/dashboard.css` | **Reuse visual concept only** — implement with current component system |
+| **PremiumCard rotating RGB border** | Conic-gradient spinning border on all cards | Plain cards, no border effect | `9d61396` | `src/components/PremiumCard.tsx`, `src/styles/dashboard.css` (lines 15-50) | **Reuse visual concept only** — implement as optional Card variant |
+| **AnimatedCounter** | Count-up animation with cubic ease-out | Static numbers | `9d61396` | `src/components/AnimatedCounter.tsx` | **Reuse visual concept only** — small component, easy re-add |
+| **Lead management — 8-column table** | Paginated, sortable, multi-select, bulk actions, 6 filters | Simple list, single filter, no pagination | `9d61396` | `src/pages/LeadManagementPage.tsx` (~450 lines) | **Consider restoring later** — full CRM features valuable |
+| **Lead detail — 6 tabs** | Organized tabs with timeline | Single scroll page (harder to navigate) | `9d61396` | `src/pages/LeadDetailsPage.tsx` (1116 lines) | **Keep current** — tabs not necessarily better than scroll |
+| **Lead detail — score progress bars** | Animated progress bars per dimension | Plain numbers in grid | `9d61396` | `src/pages/LeadDetailsPage.tsx` | **Reuse visual concept only** |
+| **Standalone workflow pages** | Independent Analysis, Screenshots, Audit, Outreach pages | All folded into LeadDetail | `9d61396` | Various `src/pages/*Page.tsx` | **Keep folded** — better UX to keep context |
+| **Dashboard — AI Insight card** | Context-aware prompt based on pipeline state | Removed entirely | `9d61396` | `src/pages/DashboardPage.tsx` | **Consider restoring later** — unique value prop |
+| **Dashboard — Quick action buttons** | 4 CTA buttons linking to workflow pages | Removed entirely | `9d61396` | `src/pages/DashboardPage.tsx` | **Consider restoring later** |
+| **LeadPreviewDrawer** | Slide-out preview with scores | Removed entirely | `9d61396` | `src/components/LeadPreviewDrawer.tsx` | **Consider restoring later** — useful for list context |
+
+### Features That Look Better but Were Mocked
+
+| Feature | Appearance | Reality | Commit | File Path |
 |---|---|---|---|---|
-| Lead Detail — existing website detection | Not present | Present (177b7e4) | ✅ Functional | Keep current |
-| Lead Detail — audit reconstruction from lead data | Not present | Present (177b7e4) | ✅ Functional | Keep current |
-| Lead Detail — workflow-status-aware buttons | Not present | Present (177b7e4) | ✅ Functional | Keep current |
-| Lead Detail — `website_id` guard | Not present | Present (f46dd57) | ✅ Functional | Keep current |
-| Lead Detail — overall structure | Simpler | Enriched | ✅ All features additive | Keep current |
-| Projects page | Present | Present | ✅ Functional | Keep current |
-| Generation page | Present | Present | ✅ Functional | Keep current |
-| Preview page | Present | Present | ✅ Functional | Keep current |
-| Deployment page | Present | Present | ✅ Functional | Keep current |
-| Dashboard page | Present | Present | ✅ Functional | Keep current |
-| Settings page | Present | Present | ✅ Functional | Keep current |
-| Analytics page | Present | Present | ✅ Functional | Keep current |
-| History page | Present | Present | ✅ Functional | Keep current |
-| Help page | Present | Present | ✅ Functional | Keep current |
+| **Dashboard KPIs (v1)** | Shows 24 Projects, 3 Active Generations, 7 Deployments, 74 Avg Score | **All hardcoded** — no API query | `428d40c` | `src/pages/DashboardPage.tsx` |
+| **Analytics page** | Shows Total Generations 142 (+18%), leads stats, chart areas | **All hardcoded** — 4 static stats, "Chart placeholder" text | `428d40c` | `src/pages/AnalyticsPage.tsx` |
+| **History page** | Shows activity timeline with 5 items | **All hardcoded** — "Generated website — Acme Coffee Roasters — 2h ago" etc. | `428d40c` | `src/pages/HistoryPage.tsx` |
+| **Help page** | Shows Documentation, Community, Contact Support cards | **Dead links** — all `href="#"`, no router navigation | `428d40c` | `src/pages/HelpPage.tsx` |
+| **Dashboard charts (v1/v2)** | Show chart container with icon | "Chart placeholder" text, no Recharts imported | `428d40c` | `src/pages/DashboardPage.tsx` |
+| **Notification bell badge** | Shows unread count | **Always 0** — store never populated from backend | `428d40c` | `src/store/uiStores.ts`, `src/layouts/TopBar.tsx` |
+| **Activity panel** | Shows notification feed | **Always empty** — "No recent activity" | `428d40c` | `src/layouts/RightActivityPanel.tsx` |
+| **TopBar search** | Expands on focus with icon | **No search logic** — empty input, no query, no results | `428d40c` | `src/layouts/TopBar.tsx` |
+
+### Features That Should Not Return
+
+| Feature | Reason |
+|---|---|
+| **Separate CSS approach** (dashboard.css, lead-details.css, leads.css) | Current Tailwind + CSS custom properties is vastly superior for theming and maintenance |
+| **React Context for auth** | Zustand + persist middleware is strictly better (simpler API, persistence, no provider wrapping) |
+| **Old service modules** (apiServices.ts, authService.ts, leadsService.ts, settingsService.ts) | Current apiClient.ts + services.ts has token refresh, error normalization, and better organization |
+| **Dark-only theme** | Current light/dark/system support is essential for broad adoption |
+| **Fixed 232px sidebar** | Current collapsible sidebar with localStorage persistence is more user-friendly |
+| **Old `api/client.ts`** | No token refresh, no structured error handling |
+| **Industry/city distribution endpoints** | Backend endpoints no longer exist — not worth recreating for MVP |
+| **Lead status = CLOSED** | Not a useful status for the lead-to-sale workflow |
+
+### Visual Components Worth Reusing Later
+
+| Component | Source commit | Source file | What it does | Implementation effort |
+|---|---|---|---|---|
+| **PremiumCard (RGB rotating border)** | `9d61396` | `src/components/PremiumCard.tsx` + `src/styles/dashboard.css` | Conic-gradient spinning border animation around any card | Low — 18-line component + CSS keyframes |
+| **AnimatedCounter** | `9d61396` | `src/components/AnimatedCounter.tsx` | Count-up animation with cubic ease-out | Low — 35-line component |
+| **Score gauge (SVG ring)** | `9d61396` | `src/pages/DashboardPage.tsx` (inline) | Circular SVG progress ring with color coding | Low — inline SVG |
+| **Score progress bars** | `9d61396` | `src/pages/LeadDetailsPage.tsx` (inline) | Animated horizontal bars per score dimension | Low — pure CSS |
+| **Dashboard hero + greeting** | `9d61396` | `src/pages/DashboardPage.tsx` | Time-based greeting, user name, tagline | Low — pure UI |
+| **AI Insight card** | `9d61396` | `src/pages/DashboardPage.tsx` (`getAiInsight()`) | Context-aware suggestion based on data state | Low — helper function |
+| **LeadPreviewDrawer** | `9d61396` | `src/components/LeadPreviewDrawer.tsx` | Slide-out drawer with lead scores/status | Medium — 155-line component |
+
+### Functional Components Worth Restoring Later
+
+| Component | Source commit | Source file | What it does | Implementation effort |
+|---|---|---|---|---|
+| **Lead management — pagination + filters** | `9d61396` | `src/pages/LeadManagementPage.tsx` | Full CRM table with sorting, filtering, pagination | Medium — needs backend query params |
+| **Lead detail — score progress bars** | `9d61396` | `src/pages/LeadDetailsPage.tsx` | Per-dimension animated progress bars | Low — pure CSS/React |
+| **Lead detail — timeline tab** | `9d61396` | `src/pages/LeadDetailsPage.tsx` | Activity timeline with 5-step status history | Low — data already available |
+| **Lead detail — strengths/opportunities** | `9d61396` | `src/pages/LeadDetailsPage.tsx` | Derived intel from audit data | Low — already reconstructed |
+| **Dashboard — AI Insight + quick actions** | `9d61396` | `src/pages/DashboardPage.tsx` | Context prompts + workflow CTA buttons | Low — pure frontend |
+| **LeadPreviewDrawer** | `9d61396` | `src/components/LeadPreviewDrawer.tsx` | Slide-out preview for fast browsing | Medium |
+| **History page (real API)** | Not in any version | — | Activity log from backend | Medium — needs backend endpoint |
+| **Analytics page (real API)** | Not in any version | — | Usage statistics with real charts | Medium — needs backend endpoint |
+| **Dashboard — industry/city charts** | `9d61396` | `src/pages/DashboardPage.tsx` | Charts for pipeline analytics | High — needs backend endpoints restored |
+
+### Exact Commit Hashes and File Paths
+
+| Resource | Commit | File Path |
+|---|---|---|
+| PremiumCard | `9d61396` | `frontend/src/components/PremiumCard.tsx` |
+| AnimatedCounter | `9d61396` | `frontend/src/components/AnimatedCounter.tsx` |
+| LeadPreviewDrawer | `9d61396` | `frontend/src/components/LeadPreviewDrawer.tsx` |
+| Premium dashboard CSS (RGB border, KPI grid, score gauge, timeline) | `9d61396` | `frontend/src/styles/dashboard.css` |
+| Premium lead detail CSS (tabs, health rings, intel cards, timeline) | `9d61396` | `frontend/src/styles/lead-details.css` |
+| Premium leads CSS (table, pills, drawers, filters) | `9d61396` | `frontend/src/styles/leads.css` |
+| Old API services (all real) | `9d61396` | `frontend/src/services/apiServices.ts` |
+| Old auth service | `9d61396` | `frontend/src/services/authService.ts` |
+| Old leads service | `9d61396` | `frontend/src/services/leadsService.ts` |
+| Old settings service | `9d61396` | `frontend/src/services/settingsService.ts` |
+| AuthContext (React Context approach) | `9d61396` | `frontend/src/contexts/AuthContext.tsx` |
+| AppLayout (original sidebar) | `9d61396` | `frontend/src/layouts/AppLayout.tsx` |
+| DashboardPage (full Recharts) | `9d61396` | `frontend/src/pages/DashboardPage.tsx` |
+| LeadDetailsPage (1116-line 6-tab version) | `9d61396` | `frontend/src/pages/LeadDetailsPage.tsx` |
+| LeadManagementPage (full CRM) | `9d61396` | `frontend/src/pages/LeadManagementPage.tsx` |
+| LeadDiscoveryPage (standalone) | `9d61396` | `frontend/src/pages/LeadDiscoveryPage.tsx` |
+| AnalysisPage (standalone) | `9d61396` | `frontend/src/pages/AnalysisPage.tsx` |
+| ScreenshotPage (standalone) | `9d61396` | `frontend/src/pages/ScreenshotPage.tsx` |
+| AuditPage (standalone) | `9d61396` | `frontend/src/pages/AuditPage.tsx` |
+| OutreachPage (standalone) | `9d61396` | `frontend/src/pages/OutreachPage.tsx` |
+
+### Which Current Features Must Be Preserved
+
+When restoring earlier features, the following current features must NOT be broken:
+
+1. **Light/dark theme system** — `ThemeContext.tsx` with 3 modes
+2. **Token refresh interceptor** — silent 401 handling in `apiClient.ts`
+3. **Zustand auth persistence** — `authStore.ts` with `persist` middleware
+4. **API error normalization** — `extractApiError()` + `getApiErrorMessage()`
+5. **Generation/Preview/Deployment pipeline** — the core new value proposition
+6. **Existing-website detection** — `LeadDetailPage.tsx` `177b7e4` enrichment
+7. **Workflow-status-aware buttons** — same commit
+8. **Audit reconstruction from lead data** — same commit
+9. **Sidebar collapsibility** — usability feature
+10. **Design system components** (Button, Card, Badge, Input, Loading, Tooltip) — must maintain compatibility
+
+### Recommended Frontend Restoration/Redesign Order
+
+1. **Phase 1 — Fix mock pages** (1 session):
+   - Wire HistoryPage to real backend (or remove)
+   - Wire AnalyticsPage to real backend (or remove)
+   - Wire notification bell/activity panel to backend (or remove)
+   - Wire TopBar search to `projectsService.list()` with client-side filter
+   - Fix "New Project" button (wire up or remove)
+
+2. **Phase 2 — Restore visual flair** (1 session):
+   - Re-add AnimatedCounter as optional utility component
+   - Add PremiumCard variant (RGB rotating border) as an optional Card decorator
+   - Add SVG score gauge ring to Dashboard or LeadDetail
+   - Add score progress bars to LeadDetail Score grid
+
+3. **Phase 3 — Restore functional UX** (1-2 sessions):
+   - Rebuild lead management table with pagination, filters, sorting (reuse v0 patterns)
+   - Add AI Insight card to Dashboard
+   - Add Quick Action buttons to Dashboard
+   - Restore LeadPreviewDrawer for projects list
+
+4. **Phase 4 — Restore charts** (1 session):
+   - Re-add Recharts dependency
+   - Implement PieChart for pipeline status (data already exists via statusDistribution)
+   - Implement SVG gauge ring for avg score (data already exists)
+   - Skip industry/city charts (no backend endpoints)
 
 ### Key Finding
 
-**No frontend features were lost.** Between the initial production commit (428d40c) and the current HEAD (f46dd57), the frontend has only been modified with:
+**The initial commit at `9d61396` was NOT a skeleton.** It was a fully functional, 3500+ line, production-quality frontend with real API calls in every page, premium dark-themed CSS with rotating RGB conic-gradient borders, real Recharts charts, animated counters, comprehensive type definitions matching backend Pydantic models, and zero mock data anywhere.
 
-1. Configuration changes (API URLs, CORS)
-2. The `177b7e4` feature enrichment (existing website detection, audit reconstruction, workflow-status buttons)
-3. The `f46dd57` navigation guard
+**The rewrite at `428d40c` was architectural, not functional.** It introduced a modern design system (Button/Card/Badge/Input/Loading), Zustand stores with persistence, light/dark theme, token refresh interceptor, and collapsible sidebar. But it **lost** all charts (replaced with "Chart placeholder" text), all premium visual effects (RGB borders, animated counters, SVG gauges), 2 real dashboard API queries (industry/city), and standalone workflow pages. Several new pages (Analytics, History, Help, Activity Panel) were **mocked or placeholder** from the start.
 
-All 14 pages exist in both versions with incremental improvements. No UI elements, layouts, stores, or service methods were removed at any point.
+**The `177b7e4` enrichment partially reversed the regression** by adding existing-website detection, audit reconstruction, workflow-status buttons, and restoring some real API calls. But the charts, premium visuals, and full CRM table never came back.
 
-If the user recalls an earlier version with preferred UI elements, that version is `428d40c` (the initial production-ready commit). However, all features from that version are still present in the current codebase — any perceived differences would be styling/design choices that evolved naturally, not features that were lost.
+**Current mock/placeholder features (6 total):** HistoryPage, AnalyticsPage, HelpPage, notification bell/activity panel, TopBar search, "New Project" button. All have existed in their current state since `428d40c`.
+
+**Total features that were better before:** 10 (dashboard charts, PremiumCard, AnimatedCounter, lead management table, score progress bars, AI Insight card, quick actions, LeadPreviewDrawer, LeadDetailsPage timeline tab, favicon/G Maps links). All were lost in the `428d40c` rewrite. None have been restored.
+
+**No features from v0 require reverting the architecture** — all visual and functional improvements from v0 can be layered onto the current component system without breaking the benefits of the v1/v2 architecture (theming, token refresh, Zustand, collapsible sidebar, generation pipeline).
