@@ -12,6 +12,7 @@ from app.repositories.outreach import outreach_repository
 from app.repositories.generated_website import generated_website_repository
 from app.schemas.outreach import OutreachCreate, OutreachResponse
 from app.services.ai.factory import ai_factory
+from app.services.ai.chain import run_chain
 
 
 class OutreachService:
@@ -69,30 +70,22 @@ class OutreachService:
             "category": score_record.category
         }
 
-        # Fallback chain
-        providers_to_try = ai_factory.get_fallback_chain(provider)
-        ai_result = None
-        last_error: str = ""
-
-        for provider_name in providers_to_try:
-            try:
-                logger.info("Attempting outreach with provider: %s", provider_name)
-                ai_provider = ai_factory.get_provider(provider_name)
-                ai_result = await ai_provider.generate_outreach(
-                    lead_info, website_analysis, audit_data, score_data
-                )
-                logger.info("Outreach succeeded with provider: %s", provider_name)
-                break
-            except ServiceUnavailableException as e:
-                last_error = f"{provider_name}: {e}"
-                logger.warning("Provider %s failed (%s), trying next", provider_name, e)
-            except Exception as e:
-                last_error = f"{provider_name}: {e}"
-                logger.warning("Provider %s raised unexpected error (%s), trying next", provider_name, e)
-        else:
-            raise ServiceUnavailableException(
-                f"All providers failed for outreach. Last error: {last_error}"
+        # Fallback chain via shared run_chain
+        async def _call(name: str):
+            ai_provider = ai_factory.get_provider(name)
+            return await ai_provider.generate_outreach(
+                lead_info, website_analysis, audit_data, score_data
             )
+
+        providers_to_try = ai_factory.get_fallback_chain(provider)
+        chain_result = await run_chain(providers_to_try, _call)
+
+        if not chain_result.success:
+            raise ServiceUnavailableException(
+                f"All providers failed for outreach. Last error: {chain_result.last_error}"
+            )
+
+        ai_result = chain_result.result
 
         cold_email = ai_result.get("Personalized Cold Email", "")
         followup_email = ai_result.get("Follow-up Email", "")
