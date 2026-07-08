@@ -79,5 +79,7 @@ class GenerationResult(BaseModel):
     generation_time: float = 0.0
     warnings: List[str] = Field(default_factory=list)
     errors: List[str] = Field(default_factory=list)
+    provider_used: str = ""
+    provider_attempts: int = 0
 
     model_config = ConfigDict(from_attributes=True)

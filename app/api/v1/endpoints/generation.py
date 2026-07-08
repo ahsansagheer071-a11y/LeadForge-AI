@@ -137,7 +137,7 @@ async def generate_website(
     package = builder.build_package()
 
     # 3. Generate HTML
-    generator = StaticHTMLGenerator()
+    generator = StaticHTMLGenerator(provider_name=payload.provider if hasattr(payload, 'provider') else None)
     result = await generator.generate(blueprint=profile, package=package)
 
     if not result.success or not result.website_project:
@@ -160,6 +160,8 @@ async def generate_website(
             "generation_time": result.generation_time,
             "warnings": result.warnings,
             "file_count": len(result.website_project.files),
+            "provider_used": result.provider_used,
+            "provider_attempts": result.provider_attempts,
         },
     )
     db.add(preview_record)
@@ -304,4 +306,32 @@ async def download_generated_website_package(
         buffer,
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get(
+    "/providers/health",
+    response_model=StandardResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get health status of all AI providers",
+    description=(
+        "Returns health check results and circuit breaker state for each "
+        "registered AI provider (Groq, Pollinations, NVIDIA). Useful for "
+        "diagnosing which providers are available."
+    ),
+)
+async def get_provider_health_status(
+    current_user: User = Depends(get_current_user),
+):
+    from app.services.website_generator.orchestrator.router import AIProviderRouter
+    router = AIProviderRouter()
+    health = await router.get_provider_health_status()
+    circuits = router.get_circuit_states()
+    return StandardResponse(
+        success=True,
+        message="Provider health status retrieved.",
+        data={
+            "health": {k: v.model_dump() for k, v in health.items()},
+            "circuit_breakers": circuits,
+        },
     )

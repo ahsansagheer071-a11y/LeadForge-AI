@@ -15,7 +15,7 @@ from app.services.website_intelligence.schemas import WebsiteProfile
 from app.services.markdown_engine.schemas import MarkdownPackage
 from app.services.website_generator.context_builder import ContextBuilder
 from app.services.website_generator.prompt_builder import PromptBuilder
-from app.services.website_generator.providers.provider_factory import ProviderFactory
+from app.services.website_generator.orchestrator.router import AIProviderRouter
 from app.services.website_generator.schemas import (
     GenerationContext,
     GenerationResult,
@@ -23,7 +23,6 @@ from app.services.website_generator.schemas import (
     WebsiteProject,
     GeneratedFile,
 )
-from app.services.website_generator.providers.schemas import AIResponse
 
 logger = logging.getLogger(__name__)
 
@@ -42,10 +41,12 @@ class StaticHTMLGenerator:
         context_builder: Optional[ContextBuilder] = None,
         prompt_builder: Optional[PromptBuilder] = None,
         provider_name: Optional[str] = None,
+        router: Optional[AIProviderRouter] = None,
     ):
         self.context_builder = context_builder or ContextBuilder()
         self.prompt_builder = prompt_builder or PromptBuilder()
         self.provider_name = provider_name
+        self.router = router or AIProviderRouter()
 
     async def generate(
         self,
@@ -87,52 +88,38 @@ class StaticHTMLGenerator:
             )
         logger.info("PromptContext built with HTML directive (%d chars)", len(str(prompt)))
 
-        # Step 3-4 — Fallback chain: try providers in order
-        providers_to_try = ProviderFactory.get_fallback_chain(self.provider_name)
-        all_errors: List[str] = []
-        ai_response: Optional[AIResponse] = None
+        # Step 3-4 — Route via orchestrator with circuit breaker + fallback
+        router_result = await self.router.route(
+            prompt=prompt,
+            preferred_provider=self.provider_name,
+            max_attempts_per_provider=2,
+        )
 
-        for provider_name in providers_to_try:
-            try:
-                logger.info("Attempting generation with provider: %s", provider_name)
-                provider = ProviderFactory.get_provider(provider_name)
-                ai_response = await provider.generate(prompt)
-            except ValueError as exc:
-                logger.error("ProviderFactory failed for %s: %s", provider_name, exc)
-                all_errors.append(f"Provider {provider_name} resolution failed: {exc}")
-                continue
-            except Exception as exc:
-                logger.error("Provider %s call failed: %s", provider_name, exc)
-                all_errors.append(f"Provider {provider_name} call failed: {type(exc).__name__}: {exc}")
-                continue
-
-            if ai_response.success:
-                logger.info("Generation succeeded with provider: %s", provider_name)
-                break
-
-            logger.warning("Provider %s returned failure: %s", provider_name, ai_response.errors)
-            all_errors.extend(ai_response.errors)
-        else:
-            logger.error("All providers failed for generation")
+        if not router_result.success:
+            logger.error("Orchestrator failed: %s", "; ".join(router_result.errors))
             return GenerationResult(
                 success=False,
-                errors=all_errors or ["All AI providers failed"],
+                errors=router_result.errors or ["All AI providers failed"],
                 generation_time=time.monotonic() - start,
+                warnings=router_result.warnings,
+                provider_attempts=len(router_result.attempts),
             )
+
+        logger.info("Generation succeeded with provider: %s (latency=%.2fs)", router_result.provider_used, router_result.total_latency)
 
         # Step 5 — Parse response: extract HTML and create single file
         logger.info("Parsing provider response for HTML content")
-        html_content = self._extract_html_content(ai_response.raw_response)
+        html_content = self._extract_html_content(router_result.raw_response)
         if not html_content:
             logger.error("Failed to extract HTML content from AI response")
             return GenerationResult(
                 success=False,
                 errors=["No valid HTML content found in AI response"],
                 generation_time=time.monotonic() - start,
-                warnings=[f"Raw AI response length: {len(ai_response.raw_response)} chars"],
+                warnings=[f"Raw AI response length: {len(router_result.raw_response)} chars"],
             )
 
-        project_name = self._extract_project_name(ai_response) or "generated_website"
+        project_name = self._extract_project_name_from_raw(router_result.raw_response) or "generated_website"
         generation_id = uuid.uuid4().hex[:12]
 
         html_file = GeneratedFile(
@@ -159,6 +146,8 @@ class StaticHTMLGenerator:
             success=True,
             website_project=website_project,
             generation_time=time.monotonic() - start,
+            provider_used=router_result.provider_used,
+            provider_attempts=len(router_result.attempts),
         )
 
     def _extract_html_content(self, raw: str) -> str:
@@ -182,16 +171,16 @@ class StaticHTMLGenerator:
         # Fallback: return trimmed raw (may cause validation error upstream)
         return stripped
 
-    def _extract_project_name(self, ai_response: AIResponse) -> Optional[str]:
-        """Try to get a project name from the response; fallback to generic."""
+    def _extract_project_name_from_raw(self, raw: str) -> Optional[str]:
+        if not raw:
+            return None
         import re
-        # Look for a title tag or h1
         patterns = [
             r"<title>\s*(.*?)\s*</title>",
             r"<h1>\s*(.*?)\s*</h1>",
         ]
         for pat in patterns:
-            match = re.search(pat, ai_response.raw_response, re.IGNORECASE | re.DOTALL)
+            match = re.search(pat, raw, re.IGNORECASE | re.DOTALL)
             if match:
                 name = match.group(1).strip()
                 if name:
