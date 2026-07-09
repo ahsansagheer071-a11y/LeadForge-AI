@@ -71,7 +71,7 @@ class Settings(BaseSettings):
     NVIDIA_GENERATION_MODEL: str = Field(default="meta/llama-3.1-8b-instruct")
 
     # Frontend URL for preview/share links in outreach (set to Vercel deployment URL in Railway env)
-    FRONTEND_URL: str = Field(default="https://lead-forge-ai-tan.vercel.app")
+    FRONTEND_URL: str = Field(default="https://lead-forge-oyjnslyea-ahsansagheer071-8737s-projects.vercel.app")
 
 
 # Create settings instance
