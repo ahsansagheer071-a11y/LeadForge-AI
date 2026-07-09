@@ -1,13 +1,13 @@
-import { Sparkles, TrendingUp, Search, Bot, MessageSquare, Download, ArrowRight, Zap, Target, BarChart3, Activity, Users, Globe } from 'lucide-react';
+import { Sparkles, TrendingUp, Bot, MessageSquare, BarChart3, Globe, Zap } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store';
-import { Card, CardContent } from '@/components/Card';
+import { AnimatedCounter } from '@/components/AnimatedCounter';
 import { Badge } from '@/components/Badge';
 import { Skeleton } from '@/components/Loading';
 import { PremiumCard } from '@/components/PremiumCard';
-import { AnimatedCounter } from '@/components/AnimatedCounter';
 import { ScoreGauge } from '@/components/ScoreGauge';
+
 import { dashboardService, projectsService } from '@/services/services';
 import { formatRelative } from '@/utils';
 import {
@@ -78,15 +78,6 @@ function ChartTooltip({ active, payload, label }: {
   );
 }
 
-function KpiSkeleton() {
-  return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <Card key={i}><CardContent className="p-4"><Skeleton variant="rounded" width="100%" height={100} /></CardContent></Card>
-      ))}
-    </div>
-  );
-}
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -115,7 +106,7 @@ export function DashboardPage() {
   const priorityLeads = (priorityData?.items ?? []).filter((l) => l.rating != null && l.rating >= 4.0).slice(0, 8);
   const displayName = getUserDisplayName(user?.full_name, user?.email);
   const insight = getAiInsight(summaryK);
-  const avgScore = summaryK.average_lead_score;
+  
 
   const statusChart = (statusDistribution?.distribution ?? []).map((d) => ({
     name: d.label.replace('_', ' '),
@@ -126,314 +117,195 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-8 animate-[lf-fade-in_0.22s_ease]">
-      {/* ── Hero ─────────────────────────── */}
-      <div className="flex flex-wrap items-end justify-between gap-6 pb-7 border-b border-[var(--color-border)]">
-        <div>
-          <p className="text-[11px] font-medium text-[var(--color-text-muted)] uppercase tracking-[0.08em] mb-2">{getGreeting()}</p>
-          <h1 className="text-[clamp(1.75rem,4vw,2.25rem)] font-bold tracking-tight leading-tight mb-1.5">{displayName}</h1>
-          <p className="text-[12.5px] text-[var(--color-text-muted)]">Discover &bull; Analyze &bull; Convert</p>
-        </div>
-      </div>
+      {/* ── Top Section: Hero Command Panel ─────────────────────────── */}
+      <div className="relative rounded-[24px] overflow-hidden bg-gradient-to-br from-[#0f172a] to-[#020617] border border-[var(--color-border)] shadow-2xl p-8 lg:p-12 group">
+        <div className="absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_top_right,rgba(14,165,233,0.15),transparent_50%)] transition-opacity duration-700 group-hover:opacity-70" />
+        <div className="absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(139,92,246,0.15),transparent_50%)] transition-opacity duration-700 group-hover:opacity-70" />
+        
+        {/* Animated grid background */}
+        <div className="absolute inset-0 z-0 opacity-[0.03] bg-[url('data:image/svg+xml;utf8,<svg width=%2240%22 height=%2240%22 xmlns=%22http://www.w3.org/2000/svg%22><g fill=%22%23fff%22 fill-rule=%22evenodd%22><path d=%22M0 0h40v40H0zM19 19h2v2h-2z%22/></g></svg>')] animate-[lf-slide-in-right_20s_linear_infinite]" />
 
-      {/* ── Executive summary ──────────── */}
-      {sumLoading ? (
-        <div className="rounded-[16px] border border-[var(--color-border)] p-7 bg-gradient-to-br from-[var(--color-surface)] to-[var(--color-surface-hover)]">
-          <Skeleton variant="text" width={120} height={36} />
-          <Skeleton variant="text" width="60%" height={16} className="mt-3" />
-        </div>
-      ) : (
-        <div className="rounded-[16px] border border-[var(--color-border)] p-7 bg-gradient-to-br from-[var(--color-surface)] to-[var(--color-surface-hover)] flex flex-wrap items-center justify-between gap-6 shadow-sm">
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
           <div>
-            <p className="text-[14px] font-semibold mb-2">Welcome back.</p>
-            <div className="text-[clamp(2rem,5vw,2.75rem)] font-extrabold tracking-tight bg-gradient-to-r from-[var(--color-brand)] to-[var(--color-brand-400)] bg-clip-text text-transparent leading-none">
-              <AnimatedCounter value={summaryK.high_priority_leads} />
-            </div>
-            <p className="text-[13px] text-[var(--color-text-secondary)] mt-1.5">High Priority Leads</p>
-            <p className="text-[11.5px] text-[var(--color-text-muted)] mt-0.5">
-              Score 80+ &middot; {summaryK.total_leads} total in pipeline
-              {avgScore > 0 && ` · Avg score ${avgScore.toFixed(1)}`}
+            <p className="text-[#0ea5e9] font-mono text-[12px] uppercase tracking-[0.2em] mb-3">{getGreeting()}, {displayName}</p>
+            <h1 className="text-[clamp(2.5rem,5vw,3.5rem)] font-extrabold tracking-tight leading-none mb-4 text-white drop-shadow-md">
+              Command <span className="bg-gradient-to-r from-[#0ea5e9] to-[#8b5cf6] bg-clip-text text-transparent">Center</span>
+            </h1>
+            <p className="text-[15px] text-slate-400 max-w-xl font-mono">
+              SYSTEM ACTIVE. ANALYZING {summaryK.total_leads} TARGETS. {summaryK.new_leads} AWAITING DISCOVERY.
             </p>
+            <div className="mt-8 flex gap-4">
+              <button onClick={() => navigate('/projects')} className="bg-gradient-to-r from-[#0ea5e9] to-[#2563eb] text-white px-6 py-3 rounded-[12px] font-bold shadow-[0_0_20px_rgba(14,165,233,0.4)] hover:shadow-[0_0_30px_rgba(14,165,233,0.6)] transition-all flex items-center gap-2">
+                <Sparkles size={18} /> Initialize Discovery
+              </button>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-[12px] text-slate-400 font-mono uppercase tracking-widest mb-2">Priority Targets</p>
+            <div className="text-[clamp(4rem,8vw,6rem)] font-bold text-white leading-none drop-shadow-[0_0_40px_rgba(14,165,233,0.6)]">
+              {sumLoading ? <Skeleton variant="text" width={100} height={80} /> : <AnimatedCounter value={summaryK.high_priority_leads} />}
+            </div>
           </div>
         </div>
-      )}
-
-      {/* ── KPI Cards ──────────────────── */}
-      {sumLoading ? (
-        <KpiSkeleton />
-      ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <PremiumCard innerClassName="p-4 flex flex-col gap-3.5 min-h-[120px]">
-            <div className="flex items-start justify-between gap-2">
-              <span className="text-[12.5px] font-medium text-[var(--color-text-secondary)]">Total Leads</span>
-              <div className="size-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: 'rgba(37,99,235,0.12)', border: '1px solid rgba(37,99,235,0.2)' }}>
-                <Users size={17} color="#2563eb" />
-              </div>
-            </div>
-            <div className="text-[2rem] font-bold tracking-tight leading-none text-[var(--color-text)]">
-              <AnimatedCounter value={summaryK.total_leads} />
-            </div>
-            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--color-text-muted)]">
-              <TrendingUp size={11} /> Pipeline total
-            </span>
-          </PremiumCard>
-
-          <PremiumCard innerClassName="p-4 flex flex-col gap-3.5 min-h-[120px]">
-            <div className="flex items-start justify-between gap-2">
-              <span className="text-[12.5px] font-medium text-[var(--color-text-secondary)]">High Priority</span>
-              <div className="size-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.2)' }}>
-                <Target size={17} color="#22c55e" />
-              </div>
-            </div>
-            <div className="text-[2rem] font-bold tracking-tight leading-none text-[var(--color-text)]">
-              <AnimatedCounter value={summaryK.high_priority_leads} />
-            </div>
-            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--color-success)]">
-              <TrendingUp size={11} /> Score &ge; 80
-            </span>
-          </PremiumCard>
-
-          <PremiumCard innerClassName="p-4 flex flex-col gap-3.5 min-h-[120px]">
-            <div className="flex items-start justify-between gap-2">
-              <span className="text-[12.5px] font-medium text-[var(--color-text-secondary)]">AI Audited</span>
-              <div className="size-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)' }}>
-                <Bot size={17} color="#7c3aed" />
-              </div>
-            </div>
-            <div className="text-[2rem] font-bold tracking-tight leading-none text-[var(--color-text)]">
-              <AnimatedCounter value={summaryK.audited_leads} />
-            </div>
-            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--color-text-muted)]">
-              {summaryK.new_leads} awaiting review
-            </span>
-          </PremiumCard>
-
-          <PremiumCard innerClassName="p-4 flex flex-col gap-3.5 min-h-[120px]">
-            <div className="flex items-start justify-between gap-2">
-              <span className="text-[12.5px] font-medium text-[var(--color-text-secondary)]">Outreach Ready</span>
-              <div className="size-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.2)' }}>
-                <MessageSquare size={17} color="#6366f1" />
-              </div>
-            </div>
-            <div className="text-[2rem] font-bold tracking-tight leading-none text-[var(--color-text)]">
-              <AnimatedCounter value={summaryK.outreach_generated} />
-            </div>
-            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--color-text-muted)]">
-              AI-generated templates
-            </span>
-          </PremiumCard>
-        </div>
-      )}
-
-      {/* ── Quick actions ──────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-        {[
-          { label: 'Discover Leads', icon: Search, path: '/projects' },
-          { label: 'Run AI Audit', icon: Bot, path: '/projects' },
-          { label: 'Generate Outreach', icon: MessageSquare, path: '/projects' },
-          { label: 'Export CSV', icon: Download, path: '/projects' },
-        ].map((action) => (
-          <button
-            key={action.label}
-            type="button"
-            onClick={() => navigate(action.path)}
-            className="flex items-center justify-center gap-2.5 py-4 px-4.5 rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] text-[13px] font-semibold cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:-translate-y-0.5 hover:border-[var(--color-brand-border)] hover:shadow-md active:scale-[0.99] shadow-sm"
-          >
-            <action.icon size={18} className="text-[var(--color-brand)] shrink-0" />
-            {action.label}
-          </button>
-        ))}
       </div>
 
-      {/* ── Pipeline Analytics ─────────── */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
+      {/* ── KPI Section: Asymmetrical Grid ─────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <PremiumCard featured className="md:col-span-2 md:row-span-2" innerClassName="p-8 flex flex-col justify-between min-h-[240px]">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-[14px] font-mono uppercase tracking-wider text-[var(--color-text-secondary)]">Total Intelligence</span>
+            <div className="size-12 rounded-[14px] flex items-center justify-center shrink-0" style={{ background: 'rgba(14,165,233,0.15)', border: '1px solid rgba(14,165,233,0.3)' }}>
+              <Globe size={24} className="text-[#0ea5e9]" />
+            </div>
+          </div>
           <div>
-            <h2 className="text-[15px] font-semibold tracking-tight">Pipeline Analytics</h2>
-            <p className="text-[11.5px] text-[var(--color-text-muted)] mt-0.5">Where your leads are and how they score</p>
+            <div className="text-[clamp(3rem,5vw,4.5rem)] font-bold tracking-tight leading-none text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
+              {sumLoading ? <Skeleton variant="text" width={80} height={60} /> : <AnimatedCounter value={summaryK.total_leads} />}
+            </div>
+            <span className="inline-flex items-center gap-2 text-[13px] font-mono text-[#0ea5e9] mt-3">
+              <TrendingUp size={14} /> Total captured websites
+            </span>
           </div>
-        </div>
-        {chartsLoading ? (
-          <div className="text-[13px] text-[var(--color-text-muted)] text-center py-6">Loading analytics&hellip;</div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Lead Pipeline Pie */}
-            <div className="rounded-[14px] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
-              <h3 className="text-[14px] font-semibold mb-4">Lead Pipeline</h3>
-              {statusChart.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-10 text-center gap-3">
-                  <div className="size-12 rounded-[12px] border border-[var(--color-border)] flex items-center justify-center bg-[var(--color-surface-hover)]">
-                    <BarChart3 size={22} className="text-[var(--color-text-muted)]" />
-                  </div>
-                  <p className="text-[13px] font-semibold text-[var(--color-text)]">No pipeline data yet</p>
-                  <p className="text-[12px] text-[var(--color-text-muted)] max-w-[260px]">Discover leads to see how they move through your funnel.</p>
-                  <button type="button" onClick={() => navigate('/projects')} className="text-[12px] text-[var(--color-brand)] font-medium hover:underline">Discover leads</button>
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={240}>
-                  <PieChart>
-                    <Pie data={statusChart} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={56} outerRadius={84} paddingAngle={2} stroke="none">
-                      {statusChart.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-                    </Pie>
-                    <Tooltip content={<ChartTooltip />} />
-                    <Legend iconSize={8} iconType="circle" wrapperStyle={{ fontSize: 11, color: 'var(--color-text-muted)', paddingTop: 8 }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              )}
-            </div>
+        </PremiumCard>
 
-            {/* Lead Score Gauge */}
-            <div className="rounded-[14px] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
-              <h3 className="text-[14px] font-semibold mb-4">Lead Score</h3>
-              <p className="text-[11.5px] text-[var(--color-text-muted)] mb-4">Average AI quality across scored leads</p>
-              {avgScore <= 0 ? (
-                <div className="flex flex-col items-center justify-center py-10 text-center gap-3">
-                  <div className="size-12 rounded-[12px] border border-[var(--color-border)] flex items-center justify-center bg-[var(--color-surface-hover)]">
-                    <Target size={22} className="text-[var(--color-text-muted)]" />
-                  </div>
-                  <p className="text-[13px] font-semibold text-[var(--color-text)]">No scores yet</p>
-                  <p className="text-[12px] text-[var(--color-text-muted)] max-w-[260px]">Run AI audits on your leads to generate quality scores.</p>
-                  <button type="button" onClick={() => navigate('/projects')} className="text-[12px] text-[var(--color-brand)] font-medium hover:underline">Run AI audit</button>
-                </div>
-              ) : (
-                <>
-                  <ScoreGauge score={avgScore} />
-                  <p className="text-[11.5px] text-[var(--color-text-muted)] text-center">{summaryK.high_priority_leads} leads scored 80+</p>
-                </>
-              )}
-            </div>
-
-            {/* Status Distribution (bar) */}
-            {statusDistribution && statusDistribution.distribution.length > 0 && (
-              <div className="rounded-[14px] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
-                <h3 className="text-[14px] font-semibold mb-4">Status Distribution</h3>
-                <div className="space-y-3">
-                  {statusDistribution.distribution.map((item) => {
-                    const width = statusDistribution.total > 0 ? Math.round((item.count / statusDistribution.total) * 100) : 0;
-                    return (
-                      <div key={item.label} className="space-y-1">
-                        <div className="flex items-center justify-between text-[12px]">
-                          <span>{item.label.replace(/_/g, ' ')}</span>
-                          <span className="text-[var(--color-text-muted)]">{item.count}</span>
-                        </div>
-                        <div className="h-2 rounded-full bg-[var(--color-surface-hover)] overflow-hidden">
-                          <div className="h-full rounded-full transition-[width] duration-300" style={{ width: `${width}%`, background: PIPELINE_COLORS[item.label] ?? 'var(--color-brand)' }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Recent Activity */}
-            <div className="rounded-[14px] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
-              <h3 className="text-[14px] font-semibold mb-4">Recent Activity</h3>
-              {recentLoading ? (
-                <div className="space-y-3">
-                  {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} variant="text" width="100%" height={20} />)}
-                </div>
-              ) : recentLeads.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-10 text-center gap-3">
-                  <div className="size-12 rounded-[12px] border border-[var(--color-border)] flex items-center justify-center bg-[var(--color-surface-hover)]">
-                    <Activity size={22} className="text-[var(--color-text-muted)]" />
-                  </div>
-                  <p className="text-[13px] font-semibold text-[var(--color-text)]">No activity yet</p>
-                  <p className="text-[12px] text-[var(--color-text-muted)] max-w-[260px]">Your timeline fills as you discover and process leads.</p>
-                  <button type="button" onClick={() => navigate('/projects')} className="text-[12px] text-[var(--color-brand)] font-medium hover:underline">Discover Leads</button>
-                </div>
-              ) : (
-                <div className="divide-y divide-[var(--color-border)]">
-                  {recentLeads.slice(0, 6).map((lead) => (
-                    <div
-                      key={lead.id}
-                      onClick={() => navigate(`/project/${lead.id}`)}
-                      onKeyDown={(e) => e.key === 'Enter' && navigate(`/project/${lead.id}`)}
-                      role="button"
-                      tabIndex={0}
-                      className="flex items-center gap-3.5 py-3 cursor-pointer hover:opacity-80 transition-opacity"
-                    >
-                      <div className="size-9 rounded-[10px] flex items-center justify-center shrink-0 bg-[var(--color-surface-hover)] border border-[var(--color-border)]">
-                        <Globe size={15} className="text-[var(--color-brand)]" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-semibold text-[var(--color-text)] truncate">{lead.name}</p>
-                        <p className="text-[11.5px] text-[var(--color-text-muted)]">{lead.industry} &middot; {lead.city}</p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <Badge tone={lead.status === 'OUTREACH_READY' ? 'success' : lead.status === 'ANALYZED' ? 'warning' : 'neutral'}>{lead.status.replace('_', ' ')}</Badge>
-                        <p className="text-[11px] text-[var(--color-text-muted)] mt-1">{formatRelative(lead.created_at)}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+        <PremiumCard innerClassName="p-6 flex flex-col justify-between min-h-[140px] md:col-span-2">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-[12px] font-mono uppercase tracking-wider text-[var(--color-text-secondary)]">AI Audited</span>
+            <Bot size={18} className="text-[#8b5cf6]" />
           </div>
-        )}
+          <div className="text-[2rem] font-bold tracking-tight leading-none text-white mt-2">
+            {sumLoading ? <Skeleton variant="text" width={40} height={30} /> : <AnimatedCounter value={summaryK.audited_leads} />}
+          </div>
+        </PremiumCard>
+
+        <PremiumCard innerClassName="p-6 flex flex-col justify-between min-h-[140px] md:col-span-2">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-[12px] font-mono uppercase tracking-wider text-[var(--color-text-secondary)]">Outreach Ready</span>
+            <MessageSquare size={18} className="text-[#10b981]" />
+          </div>
+          <div className="text-[2rem] font-bold tracking-tight leading-none text-white mt-2">
+            {sumLoading ? <Skeleton variant="text" width={40} height={30} /> : <AnimatedCounter value={summaryK.outreach_generated} />}
+          </div>
+        </PremiumCard>
       </div>
 
-      {/* ── High Priority Leads ────────── */}
-      {priorityLeads.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-[15px] font-semibold tracking-tight">High Priority Leads</h2>
-              <p className="text-[11.5px] text-[var(--color-text-muted)] mt-0.5">Top-scored opportunities</p>
+      {/* ── Middle Section: Pipeline, AI Insight, Score ──────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Pipeline Chart */}
+        <PremiumCard className="lg:col-span-1" innerClassName="p-6">
+          <h3 className="text-[14px] font-mono uppercase tracking-widest mb-6 text-white border-b border-[var(--color-border)] pb-3">Pipeline Flow</h3>
+          {chartsLoading ? (
+             <div className="h-[240px] flex items-center justify-center"><Skeleton variant="rounded" width="100%" height="100%" /></div>
+          ) : statusChart.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-[240px] text-center">
+               <BarChart3 size={32} className="text-slate-600 mb-3" />
+               <p className="text-[13px] font-mono text-slate-400">NO DATA ACQUIRED</p>
             </div>
-            <button type="button" onClick={() => navigate('/projects')} className="text-[11.5px] text-[var(--color-brand)] font-medium hover:underline">View all</button>
-          </div>
-          <div className="rounded-[14px] border border-[var(--color-border)] overflow-hidden bg-[var(--color-surface)]">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-[0.06em] bg-[var(--color-surface-hover)]">
-                  <th className="text-left px-4.5 py-3">Business</th>
-                  <th className="text-left px-4.5 py-3">Industry</th>
-                  <th className="text-left px-4.5 py-3">Location</th>
-                  <th className="text-left px-4.5 py-3">Status</th>
-                  <th className="text-left px-4.5 py-3">Rating</th>
-                </tr>
-              </thead>
-              <tbody>
-                {priorityLeads.map((lead) => (
-                  <tr
-                    key={lead.id}
-                    onClick={() => navigate(`/project/${lead.id}`)}
-                    className="cursor-pointer transition-colors hover:bg-[var(--color-surface-hover)]"
-                  >
-                    <td className="px-4.5 py-3.5 text-[13px] font-semibold text-[var(--color-text)] border-b border-[var(--color-border)]">{lead.name}</td>
-                    <td className="px-4.5 py-3.5 text-[13px] text-[var(--color-text-secondary)] border-b border-[var(--color-border)]">{lead.industry}</td>
-                    <td className="px-4.5 py-3.5 text-[13px] text-[var(--color-text-secondary)] border-b border-[var(--color-border)]">{lead.city}, {lead.country}</td>
-                    <td className="px-4.5 py-3.5 border-b border-[var(--color-border)]"><Badge tone={lead.status === 'OUTREACH_READY' ? 'success' : lead.status === 'ANALYZED' ? 'warning' : 'neutral'}>{lead.status.replace('_', ' ')}</Badge></td>
-                    <td className="px-4.5 py-3.5 border-b border-[var(--color-border)]">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-500 border border-emerald-500/25">HOT</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+          ) : (
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart>
+                <Pie data={statusChart} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={3} stroke="none">
+                  {statusChart.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                </Pie>
+                <Tooltip content={<ChartTooltip />} />
+                <Legend iconSize={8} wrapperStyle={{ fontSize: 11, fontFamily: 'monospace' }} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </PremiumCard>
 
-      {/* ── AI Insights ════════════════ */}
-      <PremiumCard innerClassName="p-5">
-        <div className="flex flex-wrap items-start gap-5">
-          <div className="size-11 rounded-[12px] flex items-center justify-center shrink-0 bg-gradient-to-br from-[var(--color-brand-soft)] to-[var(--color-brand-subtle)] border border-[var(--color-brand-border)]">
-            <Sparkles size={22} color="#818cf8" />
-          </div>
-          <div className="flex-1 min-w-[200px]">
-            <div className="text-[14px] font-semibold text-[var(--color-text)] mb-2">
-              <Zap size={14} className="inline mr-1.5 align-[-2px]" />
-              AI Insights
+        {/* Status Distribution */}
+        <PremiumCard className="lg:col-span-1" innerClassName="p-6">
+          <h3 className="text-[14px] font-mono uppercase tracking-widest mb-6 text-white border-b border-[var(--color-border)] pb-3">Status Distribution</h3>
+          {chartsLoading ? (
+            <div className="space-y-4">{Array.from({ length: 4 }).map((_,i) => <Skeleton key={i} variant="text" width="100%" height={16} />)}</div>
+          ) : (
+            <div className="space-y-4">
+              {statusDistribution?.distribution.map((item) => {
+                const width = statusDistribution.total > 0 ? Math.round((item.count / statusDistribution.total) * 100) : 0;
+                return (
+                  <div key={item.label} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] font-mono uppercase">
+                      <span>{item.label.replace(/_/g, ' ')}</span>
+                      <span className="text-[#0ea5e9]">{item.count}</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-[var(--color-surface-hover)] overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-[#0ea5e9] to-[#8b5cf6]" style={{ width: `${width}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-            <p className="text-[13px] font-semibold text-[var(--color-text)] mb-1.5">{insight.title}</p>
-            <p className="text-[12.5px] text-[var(--color-text-secondary)] leading-relaxed mb-4">{insight.body}</p>
-            <button type="button" onClick={() => navigate(insight.path)} className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--color-brand)] hover:underline">
-              {insight.cta} <ArrowRight size={13} />
-            </button>
+          )}
+        </PremiumCard>
+
+        {/* AI Insight */}
+        <PremiumCard featured className="lg:col-span-1" innerClassName="p-6 bg-gradient-to-b from-[#0a0f1a] to-[#040810]">
+          <h3 className="text-[14px] font-mono uppercase tracking-widest mb-6 text-[#0ea5e9] border-b border-[#0ea5e9]/20 pb-3 flex items-center gap-2">
+            <Zap size={16} /> AI Directive
+          </h3>
+          <p className="text-[18px] font-bold text-white mb-3 leading-tight">{insight.title}</p>
+          <p className="text-[14px] text-slate-400 mb-8 leading-relaxed">{insight.body}</p>
+          <button onClick={() => navigate(insight.path)} className="w-full bg-[#1e293b] hover:bg-[#334155] border border-slate-700 text-white py-3 rounded-[10px] font-mono text-[12px] uppercase tracking-wider transition-colors">
+            {insight.cta}
+          </button>
+        </PremiumCard>
+      </div>
+
+      {/* ── ScoreGauge ───────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <PremiumCard className="lg:col-span-1 flex items-center justify-center" innerClassName="p-6 flex flex-col items-center justify-center">
+          <ScoreGauge score={summaryK.average_lead_score ?? 0} />
+        </PremiumCard>
+
+      {/* ── Bottom Section: Recent Leads & High Priority ──────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:col-span-2">
+        <PremiumCard innerClassName="p-6">
+          <div className="flex items-center justify-between mb-6 border-b border-[var(--color-border)] pb-3">
+            <h3 className="text-[14px] font-mono uppercase tracking-widest text-white">Priority Matrix</h3>
           </div>
-        </div>
-      </PremiumCard>
+          {priorityLeads.length === 0 ? (
+            <p className="text-[13px] text-slate-500 font-mono">No hot targets identified.</p>
+          ) : (
+            <div className="space-y-3">
+              {priorityLeads.map(lead => (
+                <div key={lead.id} onClick={() => navigate(`/project/${lead.id}`)} className="flex items-center justify-between p-3 rounded-[10px] bg-[var(--color-surface-hover)] hover:bg-[#1e293b] cursor-pointer transition-colors border border-transparent hover:border-slate-700">
+                  <div>
+                    <p className="text-[14px] font-bold text-white">{lead.name}</p>
+                    <p className="text-[11px] font-mono text-slate-400">{lead.industry}</p>
+                  </div>
+                  <Badge tone="success" className="shadow-[0_0_10px_rgba(34,197,94,0.3)]">HOT</Badge>
+                </div>
+              ))}
+            </div>
+          )}
+        </PremiumCard>
+
+        <PremiumCard innerClassName="p-6">
+          <div className="flex items-center justify-between mb-6 border-b border-[var(--color-border)] pb-3">
+            <h3 className="text-[14px] font-mono uppercase tracking-widest text-white">Recent Intel</h3>
+          </div>
+          {recentLoading ? (
+            <Skeleton variant="text" width="100%" height={100} />
+          ) : recentLeads.length === 0 ? (
+             <p className="text-[13px] text-slate-500 font-mono">No recent activity.</p>
+          ) : (
+            <div className="space-y-3">
+              {recentLeads.slice(0, 5).map(lead => (
+                <div key={lead.id} onClick={() => navigate(`/project/${lead.id}`)} className="flex items-center justify-between p-3 rounded-[10px] bg-[var(--color-surface-hover)] hover:bg-[#1e293b] cursor-pointer transition-colors border border-transparent hover:border-slate-700">
+                  <div>
+                    <p className="text-[14px] font-bold text-white">{lead.name}</p>
+                    <p className="text-[11px] font-mono text-[#0ea5e9]">{lead.status.replace('_', ' ')}</p>
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-500">{formatRelative(lead.created_at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </PremiumCard>
+      </div>
+    </div>
+
     </div>
   );
 }

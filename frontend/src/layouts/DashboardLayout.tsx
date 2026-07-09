@@ -28,44 +28,42 @@ export function DashboardLayout({
   activityOpen = false,
 }: DashboardLayoutProps) {
   return (
-    <div
-      className={cn(
-        'min-h-screen w-full grid bg-[var(--color-bg)] text-[var(--color-text)]',
-        // rows: topbar | body | footer
-        // body: 3 columns — sidebar | workspace | activity (auto-hidden when not open)
-        'grid-rows-[auto_1fr_auto]',
-        'grid-cols-[auto_1fr_auto]',
-        transitionClass,
-        className,
-      )}
-      style={{
-        gridTemplateAreas: activityOpen
-          ? `"top top top" "side main activity" "foot foot foot"`
-          : `"top top top" "side main main" "foot foot foot"`,
-      }}
-    >
-      <div style={{ gridArea: 'top' }} className="z-30">
-        {topBar}
-      </div>
-      <div style={{ gridArea: 'side' }} className="z-20">
+    <div className={cn('flex h-screen w-full overflow-hidden text-[var(--color-text)]', className)}>
+      {/* Floating Sidebar */}
+      <div className="flex-shrink-0 z-40 p-4 pb-0 h-full flex flex-col">
         {sidebar}
       </div>
-      <div style={{ gridArea: 'main' }} className="min-w-0">
-        {children}
-      </div>
-      {activityOpen && activityPanel ? (
-        <div style={{ gridArea: 'activity' }} className="z-10 lf-fade-in">
-          {activityPanel}
+
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+        {/* Floating TopBar */}
+        <div className="flex-shrink-0 z-30 pt-4 px-4 pb-0">
+          {topBar}
         </div>
-      ) : null}
-      <div style={{ gridArea: 'foot' }}>{footer}</div>
+
+        {/* Main Content Workspace */}
+        <div className="flex-1 min-h-0 flex relative pt-2 px-4 pb-0">
+          <div className="flex-1 min-w-0 overflow-hidden rounded-t-[20px] bg-black/20 border border-[var(--color-border)] border-b-0 backdrop-blur-md shadow-2xl relative">
+            {children}
+          </div>
+
+          {/* Activity Panel Overlay */}
+          {activityOpen && activityPanel && (
+            <div className="w-[320px] ml-4 flex-shrink-0 z-20 lf-slide-in-right h-full rounded-t-[20px] bg-[var(--color-surface)] bg-opacity-80 backdrop-blur-xl border border-[var(--color-border)] border-b-0 shadow-2xl overflow-hidden">
+              {activityPanel}
+            </div>
+          )}
+        </div>
+        
+        {/* Footer */}
+        <div className="z-30">
+          {footer}
+        </div>
+      </div>
     </div>
   );
 }
 
 /* Standard transition class for grid changes. */
-const transitionClass =
-  '[transition:grid-template-columns_220ms_ease,grid-template-rows_220ms_ease]';
 
 /* ─── Workspace container ────────────────────────────────── */
 
@@ -77,16 +75,8 @@ export function Workspace({
   className?: string;
 }) {
   return (
-    <main
-      className={cn(
-        'lf-thin-scroll h-[calc(100vh-3.5rem)] overflow-y-auto',
-        // generous padding for a SaaS feel
-        'px-4 py-6 md:px-8 md:py-8 lg:px-12 lg:py-10',
-        'bg-[var(--color-bg)]',
-        className,
-      )}
-    >
-      <div className="max-w-[1440px] mx-auto">{children}</div>
+    <main className={cn('lf-thin-scroll h-full w-full overflow-y-auto px-6 py-8 md:px-10 md:py-10 lg:px-14 lg:py-12', className)}>
+      <div className="max-w-[1500px] mx-auto h-full">{children}</div>
     </main>
   );
 }

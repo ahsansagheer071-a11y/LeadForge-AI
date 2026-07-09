@@ -28,16 +28,19 @@ export function TopBar({ className }: { className?: string }) {
   return (
     <header
       className={cn(
-        'h-14 w-full border-b border-[var(--color-border)] bg-[var(--color-surface)]/80 backdrop-blur-md',
-        'flex items-center justify-between gap-3 px-4 lg:px-6 sticky top-0 z-30',
+        'h-16 w-full rounded-[16px] border border-[var(--color-border)] bg-[var(--color-surface)]/60 backdrop-blur-xl shadow-2xl',
+        'flex items-center justify-between gap-3 px-6 z-30',
         className,
       )}
     >
-      {/* Search */}
-
+      {/* Title */}
+      <div className="flex flex-col">
+        <h1 className="text-[16px] font-bold tracking-tight bg-gradient-to-r from-[var(--color-brand)] to-[#0ea5e9] bg-clip-text text-transparent">LeadForge AI</h1>
+        <span className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-widest font-mono">Operations Command</span>
+      </div>
 
       {/* Right */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-2">
         {/* Theme toggle */}
         <button
           onClick={cycle}
@@ -48,16 +51,13 @@ export function TopBar({ className }: { className?: string }) {
           <ThemeIcon className="size-4" />
         </button>
 
-        {/* Notifications */}
-
-
         {/* Avatar / User menu */}
         <div className="relative" ref={menuRef}>
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="flex items-center gap-2 ml-2 pl-2 pr-1.5 py-1 rounded-[8px] hover:bg-[var(--color-surface-hover)] transition-colors"
+            className="flex items-center gap-2.5 ml-2 pl-2 pr-1.5 py-1 rounded-[12px] hover:bg-[var(--color-surface-hover)] transition-all group"
           >
-            <div className="size-7 rounded-full bg-[var(--color-brand)] flex items-center justify-center text-[11px] font-bold text-white">
+            <div className="size-8 rounded-full bg-gradient-to-br from-[#0ea5e9] to-[#8b5cf6] flex items-center justify-center text-[11px] font-bold text-white shadow-[0_0_15px_rgba(14,165,233,0.4)] group-hover:shadow-[0_0_20px_rgba(139,92,246,0.6)] transition-shadow">
               {user?.full_name?.[0]?.toUpperCase() ?? 'U'}
             </div>
             <span className="text-[12.5px] font-medium text-[var(--color-text)] hidden sm:block">

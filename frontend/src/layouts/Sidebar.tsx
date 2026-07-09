@@ -73,11 +73,10 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'h-[calc(100vh-3.5rem)] sticky top-[3.5rem]',
-        'border-r border-[var(--color-border)] bg-[var(--color-surface)]/80 backdrop-blur-md',
-        'flex flex-col transition-[width] duration-300 ease-out z-20',
-        collapsed ? 'w-[76px]' : 'w-[244px]',
-        'overflow-hidden',
+        'h-[calc(100vh-2rem)] flex flex-col z-20 overflow-hidden',
+        'bg-[var(--color-surface)]/60 backdrop-blur-xl border border-[var(--color-border)] rounded-[20px] shadow-2xl',
+        'transition-[width] duration-300 ease-out',
+        collapsed ? 'w-[76px]' : 'w-[260px]',
         className,
       )}
     >
@@ -158,12 +157,12 @@ function SidebarItem({ item, collapsed }: { item: NavItem; collapsed: boolean })
       end={item.exact}
       className={({ isActive }) =>
         cn(
-          'group relative flex items-center gap-2.5 px-3 py-2 rounded-[9px]',
+          'group relative flex items-center gap-3 px-3 py-2.5 rounded-[12px]',
           'text-[13px] font-medium',
-          'transition-colors duration-150',
+          'transition-all duration-200',
           collapsed && 'justify-center',
           isActive
-            ? 'bg-[var(--color-brand-soft)] text-[var(--color-brand)] shadow-[inset_0_0_0_1px_var(--color-brand-border)]'
+            ? 'bg-gradient-to-r from-[var(--color-brand-soft)] to-transparent text-[#0ea5e9]'
             : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]',
         )
       }
@@ -172,8 +171,8 @@ function SidebarItem({ item, collapsed }: { item: NavItem; collapsed: boolean })
         <>
           <item.icon
             className={cn(
-              'size-[15px] flex-shrink-0',
-              isActive ? 'text-[var(--color-brand)]' : 'text-[var(--color-text-muted)] group-hover:text-[var(--color-text)]',
+              'size-[16px] flex-shrink-0 transition-colors',
+              isActive ? 'text-[#0ea5e9] drop-shadow-[0_0_8px_rgba(14,165,233,0.8)]' : 'text-[var(--color-text-muted)] group-hover:text-[var(--color-text)]',
             )}
             strokeWidth={2}
           />
@@ -195,7 +194,7 @@ function SidebarItem({ item, collapsed }: { item: NavItem; collapsed: boolean })
             </>
           )}
           {isActive && (
-            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-[image:var(--color-brand-gradient)] shadow-[0_0_8px_var(--color-brand)]" />
+            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[60%] rounded-r-full bg-[#0ea5e9] shadow-[0_0_12px_#0ea5e9]" />
           )}
         </>
       )}

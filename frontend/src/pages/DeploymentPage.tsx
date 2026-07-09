@@ -1,14 +1,15 @@
-import { Download, Loader2, AlertCircle, CheckCircle2, ExternalLink } from 'lucide-react';
+import { Download, Loader2, AlertCircle, CheckCircle2, Archive, Play } from 'lucide-react';
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/Card';
+import { cn } from '@/utils';
 import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { Skeleton } from '@/components/Loading';
 import { EmptyState } from '@/components/ErrorStates';
 import { formatRelative } from '@/utils';
 import { generationService } from '@/services/services';
+import { PremiumCard } from '@/components/PremiumCard';
 import { toast } from 'sonner';
 
 const statusTone: Record<string, 'brand' | 'success' | 'warning' | 'danger' | 'info' | 'muted' | 'neutral'> = {
@@ -40,7 +41,7 @@ export function DeploymentPage() {
     setDownloadLoading(true);
     try {
       await generationService.downloadPackage(websiteId);
-      toast.success('Download started');
+      toast.success('Download sequence initiated');
     } catch (err) {
       const msg = (err as { message?: string })?.message || 'Download failed';
       toast.error(msg);
@@ -51,14 +52,14 @@ export function DeploymentPage() {
 
   if (!websiteId) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-8">
         <div>
-          <h1 className="text-xl font-bold tracking-tight">Deployment</h1>
-          <p className="text-[13px] text-[var(--color-text-muted)] mt-1">Download deployment packages for generated websites.</p>
+          <h1 className="text-[28px] font-extrabold tracking-tight text-white mb-1">Deployment Center</h1>
+          <p className="text-[13px] font-mono text-slate-400 uppercase tracking-widest">Extract and distribute synthesized assets</p>
         </div>
         <EmptyState
-          title="No website selected"
-          message="Generate a website first, then return here to download the deployment package."
+          title="No target selected"
+          message="Initialize generation protocols first to create deployment artifacts."
           action={<Button variant="brand" onClick={() => navigate('/generation')}>Go to Generation</Button>}
         />
       </div>
@@ -67,144 +68,153 @@ export function DeploymentPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <Skeleton variant="text" width={200} height={24} />
-        <Card variant="glass">
-          <CardContent className="p-8 space-y-4">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} variant="text" width="100%" height={20} />
-            ))}
-          </CardContent>
-        </Card>
+      <div className="space-y-8">
+        <div>
+          <Skeleton variant="text" width={240} height={32} className="bg-slate-800" />
+          <Skeleton variant="text" width={340} height={16} className="mt-2 bg-slate-800" />
+        </div>
+        <PremiumCard innerClassName="p-8 space-y-6">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} variant="rounded" width="100%" height={80} className="bg-slate-800/50" />
+          ))}
+        </PremiumCard>
       </div>
     );
   }
 
   if (error || !website) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-8">
         <div>
-          <h1 className="text-xl font-bold tracking-tight">Deployment</h1>
-          <p className="text-[13px] text-[var(--color-text-muted)] mt-1">Download deployment packages for generated websites.</p>
+          <h1 className="text-[28px] font-extrabold tracking-tight text-white mb-1">Deployment Center</h1>
+          <p className="text-[13px] font-mono text-slate-400 uppercase tracking-widest">Extract and distribute synthesized assets</p>
         </div>
         <EmptyState
-          title="Website not found"
-          message="This generated website does not exist or you do not have access to it."
-          action={<Button variant="outline" onClick={() => navigate('/generation')}>Back to Generation</Button>}
+          title="Asset not located"
+          message="The requested deployment package does not exist or access is restricted."
+          action={<Button variant="outline" onClick={() => navigate('/generation')}>Return to Generation</Button>}
         />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 animate-[lf-fade-in_0.22s_ease]">
       <div>
-        <h1 className="text-xl font-bold tracking-tight">Deployment</h1>
-        <p className="text-[13px] text-[var(--color-text-muted)] mt-1">Download deployment packages for generated websites.</p>
+        <h1 className="text-[28px] font-extrabold tracking-tight text-white mb-1">Deployment Center</h1>
+        <p className="text-[13px] font-mono text-slate-400 uppercase tracking-widest">Extract and distribute synthesized assets</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Package status */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>{website.project_name || 'Generated Website'}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Badge tone={statusTone[website.status] ?? 'muted'}>{website.status}</Badge>
-                <span className="text-[12px] text-[var(--color-text-muted)]">
-                  Generated {formatRelative(website.created_at)}
-                </span>
-              </div>
+        <PremiumCard featured={hasArtifacts} className="lg:col-span-2" innerClassName="p-8 flex flex-col justify-between min-h-[400px]">
+          <div>
+            <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-800">
+               <div>
+                 <h2 className="text-[20px] font-bold text-white mb-1">{website.project_name || 'Generated Website'}</h2>
+                 <p className="text-[12px] font-mono text-slate-500 uppercase tracking-wider">Asset ID: {website.package_id || website.id}</p>
+               </div>
+               <Badge tone={statusTone[website.status] ?? 'muted'} className="font-mono px-3 py-1 text-[13px] shadow-lg">{website.status}</Badge>
             </div>
 
             {website.status === 'generated' || website.status === 'ready' ? (
-              <div className="flex items-center gap-3 p-3 rounded-[10px] bg-[var(--color-success)]/5 border border-[var(--color-success)]/20">
-                <CheckCircle2 className="size-5 text-[var(--color-success)] flex-shrink-0" />
+              <div className="flex items-center gap-6 p-6 rounded-[16px] bg-[#10b981]/5 border border-[#10b981]/20">
+                <div className="size-16 rounded-full bg-[#10b981]/20 border border-[#10b981]/50 flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(16,185,129,0.3)]">
+                  <CheckCircle2 className="size-8 text-[#10b981]" />
+                </div>
                 <div>
-                  <p className="text-[13px] font-medium">Package ready</p>
-                  <p className="text-[11.5px] text-[var(--color-text-muted)]">
-                    The deployment package is ready for download.
+                  <p className="text-[18px] font-bold text-white mb-1">Artifacts Ready</p>
+                  <p className="text-[13px] font-mono text-slate-400">
+                    Deployment package compiled and ready for secure extraction.
                   </p>
                 </div>
               </div>
             ) : website.status === 'failed' || website.status === 'error' ? (
-              <div className="flex items-center gap-3 p-3 rounded-[10px] bg-[var(--color-danger)]/5 border border-[var(--color-danger)]/20">
-                <AlertCircle className="size-5 text-[var(--color-danger)] flex-shrink-0" />
+              <div className="flex items-center gap-6 p-6 rounded-[16px] bg-red-500/5 border border-red-500/20">
+                <div className="size-16 rounded-full bg-red-500/20 border border-red-500/50 flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(239,68,68,0.3)]">
+                  <AlertCircle className="size-8 text-red-500" />
+                </div>
                 <div>
-                  <p className="text-[13px] font-medium">Generation failed</p>
-                  <p className="text-[11.5px] text-[var(--color-text-muted)]">
-                    The website generation did not complete successfully.
+                  <p className="text-[18px] font-bold text-white mb-1">Compilation Failed</p>
+                  <p className="text-[13px] font-mono text-slate-400">
+                    An anomaly occurred during asset synthesis. Check system logs.
                   </p>
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-3 p-3 rounded-[10px] bg-[var(--color-brand-soft)] border border-[var(--color-brand-border)]">
-                <Loader2 className="size-5 text-[var(--color-brand)] lf-spin flex-shrink-0" />
+              <div className="flex items-center gap-6 p-6 rounded-[16px] bg-[#0ea5e9]/5 border border-[#0ea5e9]/20 relative overflow-hidden">
+                <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent,rgba(14,165,233,0.1),transparent)] -translate-x-full animate-[lf-shimmer_2s_infinite]" />
+                <div className="size-16 rounded-full bg-[#0ea5e9]/20 border border-[#0ea5e9]/50 flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(14,165,233,0.3)]">
+                  <Loader2 className="size-8 text-[#0ea5e9] animate-spin" />
+                </div>
                 <div>
-                  <p className="text-[13px] font-medium">Processing</p>
-                  <p className="text-[11.5px] text-[var(--color-text-muted)]">
-                    The website generation is in progress.
+                  <p className="text-[18px] font-bold text-white mb-1">Processing Package</p>
+                  <p className="text-[13px] font-mono text-slate-400">
+                    Compilation and minification in progress. Please hold.
                   </p>
                 </div>
               </div>
             )}
+          </div>
 
-            <div className="grid grid-cols-2 gap-4 pt-3 border-t border-[var(--color-border)]">
-              <div>
-                <p className="text-[11px] text-[var(--color-text-muted)] uppercase tracking-wider font-medium">Framework</p>
-                <p className="text-[13px] mt-0.5">{website.framework}</p>
-              </div>
-              <div>
-                <p className="text-[11px] text-[var(--color-text-muted)] uppercase tracking-wider font-medium">Package ID</p>
-                <p className="text-[13px] mt-0.5 font-mono">{website.package_id || '—'}</p>
-              </div>
+          <div className="grid grid-cols-2 gap-6 pt-6 border-t border-slate-800 mt-8">
+            <div className="bg-slate-900/50 rounded-[12px] p-4 border border-slate-800">
+              <p className="text-[11px] font-mono text-slate-500 uppercase tracking-widest mb-1">Architecture</p>
+              <p className="text-[16px] font-bold text-[#0ea5e9]">{website.framework}</p>
             </div>
-          </CardContent>
-        </Card>
+            <div className="bg-slate-900/50 rounded-[12px] p-4 border border-slate-800">
+              <p className="text-[11px] font-mono text-slate-500 uppercase tracking-widest mb-1">Generated</p>
+              <p className="text-[14px] font-medium text-white">{formatRelative(website.created_at)}</p>
+            </div>
+          </div>
+        </PremiumCard>
 
         {/* Actions */}
-        <Card variant="glass">
-          <CardHeader>
-            <CardTitle>Actions</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Button
-              fullWidth
-              variant="brand"
-              leftIcon={<Download className="size-4" />}
-              disabled={!hasArtifacts || downloadLoading}
-              loading={downloadLoading}
-              onClick={handleDownload}
-            >
-              {downloadLoading ? 'Starting...' : 'Download Package'}
-            </Button>
+        <PremiumCard innerClassName="p-8 flex flex-col justify-between">
+           <div>
+              <h3 className="text-[14px] font-mono uppercase tracking-widest text-[#8b5cf6] mb-6 pb-2 border-b border-slate-800 flex items-center gap-2">
+                 <Archive size={16} /> Operations
+              </h3>
 
-            {!hasArtifacts && website.status !== 'failed' && website.status !== 'error' && (
-              <p className="text-[11.5px] text-[var(--color-text-muted)] text-center">
-                Package will be available once generation completes.
-              </p>
-            )}
+              <div className="space-y-4">
+                <button
+                  disabled={!hasArtifacts || downloadLoading}
+                  onClick={handleDownload}
+                  className={cn(
+                    "w-full flex items-center justify-center gap-3 py-4 rounded-[12px] text-[13px] font-mono uppercase tracking-widest font-bold transition-all duration-300",
+                    !hasArtifacts 
+                      ? "bg-slate-800/50 text-slate-500 border border-slate-700 cursor-not-allowed"
+                      : downloadLoading 
+                        ? "bg-[#0ea5e9]/20 text-[#0ea5e9] border border-[#0ea5e9]/50 cursor-wait"
+                        : "bg-gradient-to-r from-[#0ea5e9] to-[#3b82f6] text-white shadow-[0_0_20px_rgba(14,165,233,0.4)] hover:shadow-[0_0_30px_rgba(14,165,233,0.6)] hover:-translate-y-1"
+                  )}
+                >
+                  {downloadLoading ? <Loader2 size={16} className="animate-spin"/> : <Download size={16} />}
+                  {downloadLoading ? 'Extracting...' : 'Download Package'}
+                </button>
+                
+                <button
+                   onClick={() => navigate(`/preview/${websiteId}`)}
+                   className="w-full flex items-center justify-center gap-3 py-3 rounded-[12px] bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 transition-all text-white font-mono uppercase tracking-widest text-[12px]"
+                >
+                  <Play size={14} /> Enter Preview
+                </button>
+              </div>
+           </div>
 
-            {website.status === 'failed' && (
-              <p className="text-[11.5px] text-[var(--color-text-danger)] text-center">
-                The generation failed. Please regenerate the website.
-              </p>
-            )}
-
-            <div className="pt-3 border-t border-[var(--color-border)]">
-              <Button
-                fullWidth
-                variant="outline"
-                leftIcon={<ExternalLink className="size-4" />}
-                onClick={() => navigate(`/preview/${websiteId}`)}
-              >
-                View Preview
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+           <div className="mt-8 pt-6 border-t border-slate-800 text-center">
+             {!hasArtifacts && website.status !== 'failed' && website.status !== 'error' && (
+               <p className="text-[11px] font-mono text-slate-500 uppercase tracking-widest">
+                 Extraction protocols unlock upon completion.
+               </p>
+             )}
+             {website.status === 'failed' && (
+               <p className="text-[11px] font-mono text-red-500 uppercase tracking-widest">
+                 Critical error. Abort operation.
+               </p>
+             )}
+           </div>
+        </PremiumCard>
       </div>
     </div>
   );

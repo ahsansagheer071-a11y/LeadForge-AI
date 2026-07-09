@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Globe, MapPin, Phone, Star, Building, Play, Shield, AlertTriangle, CheckCircle, Search, Camera, Send, Copy, ExternalLink, Download } from 'lucide-react';
+import { ArrowLeft, Globe, MapPin, Phone, Star, Building, Play, Shield, AlertTriangle, CheckCircle, Search, Camera, Send, Copy, ExternalLink } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/Card';
 import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { Skeleton } from '@/components/Loading';
 import { EmptyState } from '@/components/ErrorStates';
+import { PremiumCard } from '@/components/PremiumCard';
 import { projectsService, generateWebsite, auditService, analysisService, screenshotService, outreachService, generationService } from '@/services/services';
 import { getApiErrorMessage } from '@/services/apiClient';
 import { usePreviewStore } from '@/store';
@@ -162,13 +162,13 @@ export function LeadDetailPage() {
     return (
       <div className="space-y-6">
         <Skeleton variant="rounded" width={200} height={24} />
-        <Card variant="glass">
-          <CardContent className="p-6 space-y-4">
+        <PremiumCard variant="glass">
+          <div className="p-6 space-y-4">
             {Array.from({ length: 6 }).map((_, i) => (
               <Skeleton key={i} variant="text" width="100%" height={20} />
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </PremiumCard>
       </div>
     );
   }
@@ -184,496 +184,274 @@ export function LeadDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 animate-[lf-fade-in_0.22s_ease]">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/projects')}>
-          <ArrowLeft className="size-4 mr-1" />
-          Back
+        <Button variant="ghost" size="sm" onClick={() => navigate('/projects')} className="text-slate-400 hover:text-white">
+          <ArrowLeft className="size-4 mr-1" /> Back to Pipeline
         </Button>
       </div>
 
-      <Card variant="glass">
-        <CardHeader>
-          <div className="flex items-center justify-between w-full">
-            <div>
-              <CardTitle className="text-lg">{lead.name}</CardTitle>
-              <CardDescription>
-                <Badge tone={statusTone[lead.status] ?? 'muted'}>{lead.status}</Badge>
-                {lead.industry && <span className="ml-2">{lead.industry}</span>}
-              </CardDescription>
+      <PremiumCard featured innerClassName="p-8 bg-gradient-to-br from-[#0a0f1a] to-[#040810]">
+        <div className="flex flex-col lg:flex-row justify-between gap-8">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <Badge tone={statusTone[lead.status] ?? 'muted'} className="font-mono">{lead.status.replace('_', ' ')}</Badge>
+              <span className="text-[12px] font-mono text-[#0ea5e9] tracking-wider uppercase">{lead.industry}</span>
             </div>
-            <div className="flex items-center gap-2 flex-wrap justify-end">
-              <Button
-                size="sm"
-                variant={existingWebsite ? 'brand' : 'outline'}
-                leftIcon={existingWebsite ? <ExternalLink className="size-3.5" /> : <Play className="size-3.5" />}
-                loading={generateMutation.isPending}
-                onClick={() => {
-                  if (existingWebsite) {
-                    navigate(`/preview/${existingWebsite.id}`);
-                  } else {
-                    generateMutation.mutate();
-                  }
-                }}
-              >
-                {generateMutation.isPending ? 'Generating...' : existingWebsite ? 'View Preview' : 'Generate Website'}
-              </Button>
-              {existingWebsite && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  leftIcon={<Download className="size-3.5" />}
-                  onClick={() => navigate(`/deployment/${existingWebsite.id}`)}
-                >
-                  Download
-                </Button>
-              )}
-              <Button
-                size="sm"
-                variant={lead.audit ? 'brand-soft' : 'outline'}
-                leftIcon={<Search className="size-3.5" />}
-                loading={analysisMutation.isPending}
-                onClick={() => analysisMutation.mutate()}
-              >
-                {analysisMutation.isPending ? 'Analyzing...' : lead.audit ? 'Analyzed' : 'Analyze Website'}
-              </Button>
-              <Button
-                size="sm"
-                variant={screenshotResult ? 'brand-soft' : 'outline'}
-                leftIcon={<Camera className="size-3.5" />}
-                loading={screenshotMutation.isPending}
-                onClick={() => screenshotMutation.mutate()}
-              >
-                {screenshotMutation.isPending ? 'Capturing...' : screenshotResult ? 'Screenshot Captured' : 'Capture Screenshot'}
-              </Button>
-              <Button
-                size="sm"
-                variant={auditResult ? 'brand-soft' : 'outline'}
-                leftIcon={<Shield className="size-3.5" />}
-                loading={auditMutation.isPending}
-                onClick={() => auditMutation.mutate()}
-              >
-                {auditMutation.isPending ? 'Auditing...' : auditResult ? 'Audit Complete' : 'Run Audit'}
-              </Button>
-              <Button
-                size="sm"
-                variant={outreachResult ? 'brand-soft' : 'outline'}
-                leftIcon={<Send className="size-3.5" />}
-                loading={outreachMutation.isPending}
-                onClick={() => outreachMutation.mutate()}
-              >
-                {outreachMutation.isPending ? 'Generating...' : outreachResult ? 'Outreach Ready' : 'Generate Outreach'}
-              </Button>
+            <h1 className="text-[clamp(2rem,3vw,2.5rem)] font-extrabold tracking-tight text-white mb-2">{lead.name}</h1>
+            <div className="flex items-center gap-4 text-[13px] text-slate-400 font-mono">
+              {lead.city && lead.country && <span><MapPin className="inline size-3.5 mr-1 text-[#0ea5e9]" />{lead.city}, {lead.country}</span>}
+              {lead.website && <span><Globe className="inline size-3.5 mr-1 text-[#0ea5e9]" />{lead.website}</span>}
             </div>
           </div>
-        </CardHeader>
-      </Card>
+          
+          <div className="flex flex-wrap gap-3 items-start justify-start lg:justify-end">
+             {/* Workflow Buttons */}
+             <button
+               onClick={() => screenshotMutation.mutate()}
+               disabled={screenshotMutation.isPending}
+               className={`flex items-center gap-2 px-4 py-2 rounded-[10px] text-[12px] font-mono uppercase tracking-widest transition-all border ${screenshotResult ? 'bg-[#10b981]/10 text-[#10b981] border-[#10b981]/30' : 'bg-slate-800/50 text-slate-300 border-slate-700 hover:border-[#0ea5e9] hover:text-[#0ea5e9]'}`}
+             >
+               <Camera size={14} /> {screenshotMutation.isPending ? 'Working...' : 'Screenshot'}
+             </button>
+             
+             <button
+               onClick={() => analysisMutation.mutate()}
+               disabled={analysisMutation.isPending}
+               className={`flex items-center gap-2 px-4 py-2 rounded-[10px] text-[12px] font-mono uppercase tracking-widest transition-all border ${analysisResult ? 'bg-[#10b981]/10 text-[#10b981] border-[#10b981]/30' : 'bg-slate-800/50 text-slate-300 border-slate-700 hover:border-[#0ea5e9] hover:text-[#0ea5e9]'}`}
+             >
+               <Search size={14} /> {analysisMutation.isPending ? 'Working...' : 'Analyze'}
+             </button>
 
-      <div className="grid grid-cols-3 gap-4">
-        <Card variant="glass">
-          <CardHeader><CardTitle>Contact</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            {lead.website && (
-              <div className="flex items-center gap-2 text-[13px]">
-                <Globe className="size-3.5 text-[var(--color-text-muted)]" />
-                <a href={lead.website} target="_blank" rel="noopener noreferrer" className="text-[var(--color-brand)] hover:underline truncate">
-                  {lead.website}
-                </a>
-              </div>
-            )}
-            {lead.phone && (
-              <div className="flex items-center gap-2 text-[13px]">
-                <Phone className="size-3.5 text-[var(--color-text-muted)]" />
-                <span>{lead.phone}</span>
-              </div>
-            )}
-            {lead.address && (
-              <div className="flex items-center gap-2 text-[13px]">
-                <MapPin className="size-3.5 text-[var(--color-text-muted)]" />
-                <span>{lead.address}</span>
-              </div>
-            )}
-            <div className="flex items-center gap-2 text-[13px]">
-              <Building className="size-3.5 text-[var(--color-text-muted)]" />
-              <span>{lead.city}, {lead.country}</span>
-            </div>
-          </CardContent>
-        </Card>
+             <button
+               onClick={() => auditMutation.mutate()}
+               disabled={auditMutation.isPending}
+               className={`flex items-center gap-2 px-4 py-2 rounded-[10px] text-[12px] font-mono uppercase tracking-widest transition-all border ${auditResult ? 'bg-[#10b981]/10 text-[#10b981] border-[#10b981]/30' : 'bg-slate-800/50 text-slate-300 border-slate-700 hover:border-[#0ea5e9] hover:text-[#0ea5e9]'}`}
+             >
+               <Shield size={14} /> {auditMutation.isPending ? 'Working...' : 'Audit'}
+             </button>
 
-        <Card variant="glass">
-          <CardHeader><CardTitle>Rating & Reviews</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            {lead.rating != null && (
-              <div className="flex items-center gap-2">
-                <Star className="size-4 text-amber-500 fill-amber-500" />
-                <span className="text-[16px] font-bold">{lead.rating.toFixed(1)}</span>
-                <span className="text-[12px] text-[var(--color-text-muted)]">/ 5</span>
-              </div>
-            )}
-            {lead.reviews_count != null && (
-              <p className="text-[13px] text-[var(--color-text-muted)]">
-                {lead.reviews_count} review{lead.reviews_count !== 1 ? 's' : ''}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+             <button
+               onClick={() => {
+                 if (existingWebsite) { navigate(`/preview/${existingWebsite.id}`); } 
+                 else { generateMutation.mutate(); }
+               }}
+               disabled={generateMutation.isPending}
+               className={`flex items-center gap-2 px-6 py-2 rounded-[10px] text-[12px] font-mono uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(14,165,233,0.3)] ${existingWebsite ? 'bg-gradient-to-r from-[#8b5cf6] to-[#d946ef] text-white border-transparent' : 'bg-gradient-to-r from-[#0ea5e9] to-[#2563eb] text-white border-transparent'}`}
+             >
+               {existingWebsite ? <ExternalLink size={14} /> : <Play size={14} />}
+               {generateMutation.isPending ? 'Generating...' : existingWebsite ? 'View Website' : 'Generate Website'}
+             </button>
 
-        <Card variant="glass">
-          <CardHeader><CardTitle>Timeline</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            <div className="text-[13px]">
-              <span className="text-[var(--color-text-muted)]">Created: </span>
-              <span>{formatRelative(lead.created_at)}</span>
+             <button
+               onClick={() => outreachMutation.mutate()}
+               disabled={outreachMutation.isPending}
+               className={`flex items-center gap-2 px-4 py-2 rounded-[10px] text-[12px] font-mono uppercase tracking-widest transition-all border ${outreachResult ? 'bg-[#10b981]/10 text-[#10b981] border-[#10b981]/30' : 'bg-slate-800/50 text-slate-300 border-slate-700 hover:border-[#0ea5e9] hover:text-[#0ea5e9]'}`}
+             >
+               <Send size={14} /> {outreachMutation.isPending ? 'Working...' : 'Outreach'}
+             </button>
+          </div>
+        </div>
+      </PremiumCard>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <PremiumCard innerClassName="p-6">
+          <h3 className="text-[12px] font-mono uppercase tracking-widest text-slate-400 mb-4 border-b border-slate-800 pb-2">Target Profile</h3>
+          <div className="space-y-3 font-mono text-[13px]">
+            {lead.website && <div className="flex gap-2"><Globe className="text-[#0ea5e9] size-4" /><span className="text-white truncate">{lead.website}</span></div>}
+            {lead.phone && <div className="flex gap-2"><Phone className="text-[#0ea5e9] size-4" /><span className="text-white">{lead.phone}</span></div>}
+            {lead.address && <div className="flex gap-2"><MapPin className="text-[#0ea5e9] size-4" /><span className="text-white">{lead.address}</span></div>}
+            <div className="flex gap-2"><Building className="text-[#0ea5e9] size-4" /><span className="text-white">{lead.city}, {lead.country}</span></div>
+          </div>
+        </PremiumCard>
+
+        <PremiumCard innerClassName="p-6">
+          <h3 className="text-[12px] font-mono uppercase tracking-widest text-slate-400 mb-4 border-b border-slate-800 pb-2">Reputation Index</h3>
+          <div className="flex items-center gap-3">
+             <div className="size-16 rounded-[12px] border border-amber-500/30 bg-amber-500/10 flex items-center justify-center">
+               <Star className="size-8 text-amber-500 fill-amber-500" />
+             </div>
+             <div>
+               <div className="text-[28px] font-bold text-white leading-none">{lead.rating?.toFixed(1) ?? '--'}</div>
+               <div className="text-[12px] font-mono text-slate-400 mt-1">{lead.reviews_count ?? 0} confirmed reviews</div>
+             </div>
+          </div>
+        </PremiumCard>
+
+        <PremiumCard innerClassName="p-6">
+          <h3 className="text-[12px] font-mono uppercase tracking-widest text-slate-400 mb-4 border-b border-slate-800 pb-2">Timeline</h3>
+          <div className="space-y-3 font-mono text-[12px]">
+            <div className="flex justify-between border-b border-slate-800/50 pb-2">
+              <span className="text-slate-500">First Discovered</span>
+              <span className="text-white">{formatRelative(lead.created_at)}</span>
             </div>
-            <div className="text-[13px]">
-              <span className="text-[var(--color-text-muted)]">Updated: </span>
-              <span>{formatRelative(lead.updated_at)}</span>
+            <div className="flex justify-between pb-2">
+              <span className="text-slate-500">Last Intel Update</span>
+              <span className="text-[#0ea5e9]">{formatRelative(lead.updated_at)}</span>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </PremiumCard>
       </div>
-
-      {/* Website Analysis Results */}
-      {analysisResult && (
-        <>
-          <Card variant="glass">
-            <CardHeader>
-              <div className="flex items-center justify-between w-full">
-                <CardTitle>Website Analysis</CardTitle>
-                <Badge tone={analysisResult.https_enabled ? 'success' : 'danger'}>
-                  {analysisResult.https_enabled ? 'HTTPS' : 'No HTTPS'}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-x-8 gap-y-3">
-              <div className="space-y-2">
-                {analysisResult.page_title && (
-                  <div className="text-[13px]">
-                    <span className="text-[var(--color-text-muted)]">Title: </span>
-                    <span>{analysisResult.page_title}</span>
-                  </div>
-                )}
-                {analysisResult.meta_description && (
-                  <div className="text-[13px]">
-                    <span className="text-[var(--color-text-muted)]">Meta: </span>
-                    <span className="text-[var(--color-text-muted)]">{analysisResult.meta_description}</span>
-                  </div>
-                )}
-                {analysisResult.website_language && (
-                  <div className="text-[13px]">
-                    <span className="text-[var(--color-text-muted)]">Language: </span>
-                    <span>{analysisResult.website_language}</span>
-                  </div>
-                )}
-                {analysisResult.http_status_code != null && (
-                  <div className="text-[13px]">
-                    <span className="text-[var(--color-text-muted)]">HTTP Status: </span>
-                    <span>{analysisResult.http_status_code}</span>
-                  </div>
-                )}
-              </div>
-              <div className="space-y-2">
-                {analysisResult.emails.length > 0 && (
-                  <div className="text-[13px]">
-                    <span className="text-[var(--color-text-muted)]">Emails: </span>
-                    <span>{analysisResult.emails.join(', ')}</span>
-                  </div>
-                )}
-                {analysisResult.phone_numbers.length > 0 && (
-                  <div className="text-[13px]">
-                    <span className="text-[var(--color-text-muted)]">Phones: </span>
-                    <span>{analysisResult.phone_numbers.join(', ')}</span>
-                  </div>
-                )}
-                <div className="flex items-center gap-3 text-[13px]">
-                  <span className={analysisResult.contact_page_exists ? 'text-[var(--color-success)]' : 'text-[var(--color-text-muted)]'}>
-                    {analysisResult.contact_page_exists ? 'Contact page' : 'No contact page'}
-                  </span>
-                  <span className={analysisResult.about_page_exists ? 'text-[var(--color-success)]' : 'text-[var(--color-text-muted)]'}>
-                    {analysisResult.about_page_exists ? 'About page' : 'No about page'}
-                  </span>
-                </div>
-                {(
-                  analysisResult.social_facebook ||
-                  analysisResult.social_instagram ||
-                  analysisResult.social_linkedin ||
-                  analysisResult.social_twitter ||
-                  analysisResult.social_youtube
-                ) && (
-                  <div className="text-[13px]">
-                    <span className="text-[var(--color-text-muted)]">Social: </span>
-                    <span>
-                      {[
-                        analysisResult.social_facebook,
-                        analysisResult.social_instagram,
-                        analysisResult.social_linkedin,
-                        analysisResult.social_twitter,
-                        analysisResult.social_youtube,
-                      ].filter(Boolean).join(', ')}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card variant="glass">
-            <CardHeader><CardTitle>Technical Details</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-5 gap-4">
-                <div className="text-center">
-                  <div className="text-[20px] font-bold">{analysisResult.h1_count}</div>
-                  <div className="text-[11px] text-[var(--color-text-muted)]">H1 Tags</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-[20px] font-bold">{analysisResult.h2_count}</div>
-                  <div className="text-[11px] text-[var(--color-text-muted)]">H2 Tags</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-[20px] font-bold">{analysisResult.total_paragraphs}</div>
-                  <div className="text-[11px] text-[var(--color-text-muted)]">Paragraphs</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-[20px] font-bold">{analysisResult.total_images}</div>
-                  <div className="text-[11px] text-[var(--color-text-muted)]">Images</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-[20px] font-bold">{analysisResult.total_forms}</div>
-                  <div className="text-[11px] text-[var(--color-text-muted)]">Forms</div>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-x-6 gap-y-1 text-[13px]">
-                {analysisResult.missing_title && <span className="text-[var(--color-warning)]">Missing title tag</span>}
-                {analysisResult.missing_meta_description && <span className="text-[var(--color-warning)]">Missing meta description</span>}
-                {analysisResult.missing_h1 && <span className="text-[var(--color-warning)]">Missing H1 tag</span>}
-                {analysisResult.html_size_kb != null && (
-                  <span><span className="text-[var(--color-text-muted)]">HTML size: </span>{analysisResult.html_size_kb.toFixed(1)} KB</span>
-                )}
-                {analysisResult.response_time_ms != null && (
-                  <span><span className="text-[var(--color-text-muted)]">Response time: </span>{analysisResult.response_time_ms.toFixed(0)} ms</span>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </>
-      )}
-
-      {/* Screenshot Results */}
-      {screenshotResult && (screenshotResult.desktop_url || screenshotResult.mobile_url || screenshotResult.full_page_url) && (
-        <Card variant="glass">
-          <CardHeader><CardTitle>Screenshots</CardTitle></CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-3 gap-4">
-              {screenshotResult.desktop_url && (
-                <div>
-                  <p className="text-[11px] text-[var(--color-text-muted)] mb-1.5">Desktop</p>
-                  <a href={screenshotResult.desktop_url} target="_blank" rel="noopener noreferrer">
-                    <img
-                      src={screenshotResult.desktop_url}
-                      alt="Desktop screenshot"
-                      className="w-full rounded-[8px] border border-[var(--color-border)] hover:opacity-90 transition-opacity"
-                    />
-                  </a>
-                </div>
-              )}
-              {screenshotResult.mobile_url && (
-                <div>
-                  <p className="text-[11px] text-[var(--color-text-muted)] mb-1.5">Mobile</p>
-                  <a href={screenshotResult.mobile_url} target="_blank" rel="noopener noreferrer">
-                    <img
-                      src={screenshotResult.mobile_url}
-                      alt="Mobile screenshot"
-                      className="w-full rounded-[8px] border border-[var(--color-border)] hover:opacity-90 transition-opacity"
-                    />
-                  </a>
-                </div>
-              )}
-              {screenshotResult.full_page_url && (
-                <div>
-                  <p className="text-[11px] text-[var(--color-text-muted)] mb-1.5">Full Page</p>
-                  <a href={screenshotResult.full_page_url} target="_blank" rel="noopener noreferrer">
-                    <img
-                      src={screenshotResult.full_page_url}
-                      alt="Full page screenshot"
-                      className="w-full rounded-[8px] border border-[var(--color-border)] hover:opacity-90 transition-opacity"
-                    />
-                  </a>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Audit Results */}
       {auditResult && (
-        <>
-          {/* Score Section */}
-          <Card variant="glass">
-            <CardHeader>
-              <div className="flex items-center justify-between w-full">
-                <CardTitle>AI Score</CardTitle>
-                <Badge tone={scoreTone(auditResult.score.category)}>
-                  {auditResult.score.category}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-6 gap-4">
-                {[
-                  { label: 'Overall', value: auditResult.score.overall_score },
-                  { label: 'SEO', value: auditResult.score.seo_score },
-                  { label: 'UX', value: auditResult.score.ux_score },
-                  { label: 'Branding', value: auditResult.score.branding_score },
-                  { label: 'Trust', value: auditResult.score.trust_score },
-                  { label: 'Conversion', value: auditResult.score.conversion_score },
-                ].map((s) => (
-                  <div key={s.label} className="text-center">
-                    <div className="text-[24px] font-bold text-[var(--color-brand)]">{s.value}</div>
-                    <div className="text-[11px] text-[var(--color-text-muted)]">{s.label}</div>
-                  </div>
-                ))}
-              </div>
-              {auditResult.score.explanation && (
-                <p className="text-[12.5px] text-[var(--color-text-muted)] mt-3">{auditResult.score.explanation}</p>
+        <PremiumCard featured innerClassName="p-8">
+           <div className="flex items-center justify-between mb-8 border-b border-slate-800 pb-4">
+             <h3 className="text-[16px] font-mono uppercase tracking-widest text-white flex items-center gap-3">
+               <Shield className="text-[#8b5cf6]" /> AI Intelligence Audit
+             </h3>
+             <Badge tone={scoreTone(auditResult.score.category)} className="font-mono text-[14px] px-3 py-1">
+               {auditResult.score.category}
+             </Badge>
+           </div>
+           
+           <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
+              {[
+                { label: 'Overall', value: auditResult.score.overall_score },
+                { label: 'SEO', value: auditResult.score.seo_score },
+                { label: 'UX', value: auditResult.score.ux_score },
+                { label: 'Brand', value: auditResult.score.branding_score },
+                { label: 'Trust', value: auditResult.score.trust_score },
+                { label: 'Conv.', value: auditResult.score.conversion_score },
+              ].map((s, i) => (
+                <div key={s.label} className="text-center p-4 rounded-[12px] bg-slate-800/50 border border-slate-700">
+                  <div className={`text-[28px] font-bold ${i === 0 ? 'text-[#8b5cf6] drop-shadow-[0_0_10px_rgba(139,92,246,0.5)]' : 'text-white'}`}>{s.value}</div>
+                  <div className="text-[11px] font-mono uppercase tracking-wider text-slate-400 mt-1">{s.label}</div>
+                </div>
+              ))}
+           </div>
+
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {auditResult.audit && typeof auditResult.audit === 'object' && 'Business Summary' in auditResult.audit && (
+                <div>
+                  <h4 className="text-[12px] font-mono uppercase tracking-widest text-[#0ea5e9] mb-3">Business Profile</h4>
+                  <p className="text-[14px] text-slate-300 leading-relaxed font-sans">{String(auditResult.audit['Business Summary'])}</p>
+                </div>
               )}
-            </CardContent>
-          </Card>
+              {auditResult.audit && typeof auditResult.audit === 'object' && 'Overall Summary' in auditResult.audit && (
+                <div>
+                  <h4 className="text-[12px] font-mono uppercase tracking-widest text-[#0ea5e9] mb-3">Audit Verdict</h4>
+                  <p className="text-[14px] text-slate-300 leading-relaxed font-sans">{String(auditResult.audit['Overall Summary'])}</p>
+                </div>
+              )}
+           </div>
 
-          {/* Business Summary */}
-          {auditResult.audit && typeof auditResult.audit === 'object' && 'Business Summary' in auditResult.audit && (
-            <Card variant="glass">
-              <CardHeader><CardTitle>Business Summary</CardTitle></CardHeader>
-              <CardContent>
-                <p className="text-[13px] leading-relaxed">{String(auditResult.audit['Business Summary'])}</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Top Weaknesses */}
-          {auditResult.audit && typeof auditResult.audit === 'object' && 'Top Weaknesses' in auditResult.audit && Array.isArray(auditResult.audit['Top Weaknesses']) && (
-            <Card variant="glass">
-              <CardHeader><CardTitle>Top Weaknesses</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                {(auditResult.audit['Top Weaknesses'] as Array<string | { title?: string; evidence?: string; impact?: string; recommendation?: string }>).map((w, i) => {
-                  const weakness = typeof w === 'string' ? { title: w } : w;
-                  return (
-                  <div key={i} className="p-3 rounded-[10px] bg-[var(--color-surface-hover)] space-y-1.5">
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle className="size-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="text-[13px] font-medium">{weakness.title ?? `Weakness #${i + 1}`}</p>
-                        {weakness.evidence && <p className="text-[12px] text-[var(--color-text-muted)] mt-0.5">{weakness.evidence}</p>}
-                        {weakness.impact && <p className="text-[12px] text-[var(--color-text-muted)] mt-0.5"><span className="font-medium">Impact:</span> {weakness.impact}</p>}
-                        {weakness.recommendation && (
-                          <div className="flex items-start gap-1.5 mt-1.5">
-                            <CheckCircle className="size-3 text-[var(--color-brand)] mt-0.5 flex-shrink-0" />
-                            <p className="text-[12px] text-[var(--color-brand)]">{weakness.recommendation}</p>
-                          </div>
-                        )}
+           {auditResult.audit && typeof auditResult.audit === 'object' && 'Top Weaknesses' in auditResult.audit && Array.isArray(auditResult.audit['Top Weaknesses']) && (
+             <div className="mt-8 pt-6 border-t border-slate-800">
+               <h4 className="text-[12px] font-mono uppercase tracking-widest text-[#ef4444] mb-4">Identified Vulnerabilities</h4>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 {(auditResult.audit['Top Weaknesses'] as Array<string | { title?: string; evidence?: string; impact?: string; recommendation?: string }>).map((w, i) => {
+                    const weakness = typeof w === 'string' ? { title: w } : w;
+                    return (
+                      <div key={i} className="p-4 rounded-[12px] bg-red-500/5 border border-red-500/20">
+                        <p className="text-[14px] font-bold text-white mb-2 flex items-center gap-2"><AlertTriangle size={14} className="text-red-500"/> {weakness.title}</p>
+                        {weakness.impact && <p className="text-[12px] text-slate-400 mb-2">{weakness.impact}</p>}
+                        {weakness.recommendation && <p className="text-[12px] text-[#10b981] font-mono flex items-start gap-2"><CheckCircle size={14} className="shrink-0 mt-0.5"/> {weakness.recommendation}</p>}
                       </div>
-                    </div>
-                  </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
-          )}
+                    )
+                 })}
+               </div>
+             </div>
+           )}
+        </PremiumCard>
+      )}
 
-          {/* Overall Summary / Verdict */}
-          {auditResult.audit && typeof auditResult.audit === 'object' && 'Overall Summary' in auditResult.audit && (
-            <Card variant="glass">
-              <CardHeader><CardTitle>Overall Summary</CardTitle></CardHeader>
-              <CardContent>
-                <p className="text-[13px] leading-relaxed">{String(auditResult.audit['Overall Summary'])}</p>
-              </CardContent>
-            </Card>
-          )}
-        </>
+      {/* Website Analysis Results */}
+      {analysisResult && (
+        <PremiumCard innerClassName="p-8">
+           <div className="flex items-center justify-between mb-6 border-b border-slate-800 pb-4">
+             <h3 className="text-[16px] font-mono uppercase tracking-widest text-white flex items-center gap-3">
+               <Search className="text-[#0ea5e9]" /> Technical Analysis
+             </h3>
+           </div>
+           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 font-mono text-[12px]">
+             <div>
+               <span className="block text-slate-500 mb-1">HTTP Status</span>
+               <span className="text-white text-[18px]">{analysisResult.http_status_code}</span>
+             </div>
+             <div>
+               <span className="block text-slate-500 mb-1">Response Time</span>
+               <span className="text-[#0ea5e9] text-[18px]">{analysisResult.response_time_ms}ms</span>
+             </div>
+             <div>
+               <span className="block text-slate-500 mb-1">Page Weight</span>
+               <span className="text-white text-[18px]">{analysisResult.html_size_kb?.toFixed(1)} KB</span>
+             </div>
+             <div>
+               <span className="block text-slate-500 mb-1">Security</span>
+               <span className={analysisResult.https_enabled ? "text-[#10b981] text-[18px]" : "text-red-500 text-[18px]"}>{analysisResult.https_enabled ? 'HTTPS' : 'INSECURE'}</span>
+             </div>
+             
+             {/* Tech breakdown */}
+             <div className="col-span-2 md:col-span-4 grid grid-cols-5 gap-4 mt-4 pt-4 border-t border-slate-800">
+                <div className="text-center"><div className="text-[24px] text-white">{analysisResult.h1_count}</div><div className="text-slate-500">H1 Tags</div></div>
+                <div className="text-center"><div className="text-[24px] text-white">{analysisResult.h2_count}</div><div className="text-slate-500">H2 Tags</div></div>
+                <div className="text-center"><div className="text-[24px] text-white">{analysisResult.total_paragraphs}</div><div className="text-slate-500">Paragraphs</div></div>
+                <div className="text-center"><div className="text-[24px] text-white">{analysisResult.total_images}</div><div className="text-slate-500">Images</div></div>
+                <div className="text-center"><div className="text-[24px] text-white">{analysisResult.total_forms}</div><div className="text-slate-500">Forms</div></div>
+             </div>
+           </div>
+        </PremiumCard>
+      )}
+
+      {/* Screenshot Results */}
+      {screenshotResult && (screenshotResult.desktop_url || screenshotResult.mobile_url) && (
+        <PremiumCard innerClassName="p-8">
+           <div className="flex items-center justify-between mb-6 border-b border-slate-800 pb-4">
+             <h3 className="text-[16px] font-mono uppercase tracking-widest text-white flex items-center gap-3">
+               <Camera className="text-[#0ea5e9]" /> Visual Capture
+             </h3>
+           </div>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+             {screenshotResult.desktop_url && (
+                <div>
+                  <p className="text-[12px] font-mono uppercase tracking-widest text-slate-400 mb-2">Desktop Viewport</p>
+                  <img src={screenshotResult.desktop_url} alt="Desktop" className="w-full rounded-[12px] border border-slate-700 shadow-xl" />
+                </div>
+             )}
+             {screenshotResult.mobile_url && (
+                <div>
+                  <p className="text-[12px] font-mono uppercase tracking-widest text-slate-400 mb-2">Mobile Viewport</p>
+                  <img src={screenshotResult.mobile_url} alt="Mobile" className="w-full max-w-[300px] mx-auto rounded-[12px] border border-slate-700 shadow-xl" />
+                </div>
+             )}
+           </div>
+        </PremiumCard>
       )}
 
       {/* Outreach Results */}
       {outreachResult && (
-        <Card variant="glass">
-          <CardHeader><CardTitle>AI Outreach</CardTitle></CardHeader>
-          <CardContent className="space-y-5">
-            {outreachResult.email_subject && (
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-[12px] font-medium text-[var(--color-text-muted)] uppercase tracking-wider">Email Subject</p>
-                  <button
-                    onClick={() => copyToClipboard(outreachResult.email_subject!, 'Subject')}
-                    className="text-[var(--color-text-muted)] hover:text-[var(--color-brand)] transition-colors"
-                  >
-                    <Copy className="size-3.5" />
-                  </button>
-                </div>
-                <p className="text-[13px]">{outreachResult.email_subject}</p>
-              </div>
-            )}
-
-            {outreachResult.cold_email && (
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-[12px] font-medium text-[var(--color-text-muted)] uppercase tracking-wider">Cold Email</p>
-                  <button
-                    onClick={() => copyToClipboard(outreachResult.cold_email!, 'Cold email')}
-                    className="text-[var(--color-text-muted)] hover:text-[var(--color-brand)] transition-colors"
-                  >
-                    <Copy className="size-3.5" />
-                  </button>
-                </div>
-                <p className="text-[13px] whitespace-pre-wrap leading-relaxed">{outreachResult.cold_email}</p>
-              </div>
-            )}
-
-            {outreachResult.followup_email && (
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-[12px] font-medium text-[var(--color-text-muted)] uppercase tracking-wider">Follow-up Email</p>
-                  <button
-                    onClick={() => copyToClipboard(outreachResult.followup_email!, 'Follow-up email')}
-                    className="text-[var(--color-text-muted)] hover:text-[var(--color-brand)] transition-colors"
-                  >
-                    <Copy className="size-3.5" />
-                  </button>
-                </div>
-                <p className="text-[13px] whitespace-pre-wrap leading-relaxed">{outreachResult.followup_email}</p>
-              </div>
-            )}
-
-            {outreachResult.linkedin_message && (
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-[12px] font-medium text-[var(--color-text-muted)] uppercase tracking-wider">LinkedIn Message</p>
-                  <button
-                    onClick={() => copyToClipboard(outreachResult.linkedin_message!, 'LinkedIn message')}
-                    className="text-[var(--color-text-muted)] hover:text-[var(--color-brand)] transition-colors"
-                  >
-                    <Copy className="size-3.5" />
-                  </button>
-                </div>
-                <p className="text-[13px] whitespace-pre-wrap leading-relaxed">{outreachResult.linkedin_message}</p>
-              </div>
-            )}
-
-            {outreachResult.short_cta && (
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-[12px] font-medium text-[var(--color-text-muted)] uppercase tracking-wider">Short CTA</p>
-                  <button
-                    onClick={() => copyToClipboard(outreachResult.short_cta!, 'CTA')}
-                    className="text-[var(--color-text-muted)] hover:text-[var(--color-brand)] transition-colors"
-                  >
-                    <Copy className="size-3.5" />
-                  </button>
-                </div>
-                <p className="text-[13px]">{outreachResult.short_cta}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <PremiumCard featured innerClassName="p-8">
+           <div className="flex items-center justify-between mb-6 border-b border-slate-800 pb-4">
+             <h3 className="text-[16px] font-mono uppercase tracking-widest text-white flex items-center gap-3">
+               <Send className="text-[#10b981]" /> AI Generated Outreach
+             </h3>
+           </div>
+           
+           <div className="space-y-6">
+             {outreachResult.cold_email && (
+               <div className="bg-slate-800/50 rounded-[12px] border border-slate-700 p-5">
+                 <div className="flex justify-between items-center mb-3">
+                   <span className="text-[12px] font-mono uppercase text-[#10b981]">Cold Email Draft</span>
+                   <button onClick={() => copyToClipboard(outreachResult.cold_email!, 'Cold email')} className="text-slate-400 hover:text-white"><Copy size={14}/></button>
+                 </div>
+                 <p className="text-[14px] text-slate-300 whitespace-pre-wrap font-sans leading-relaxed">{outreachResult.cold_email}</p>
+               </div>
+             )}
+             
+             {outreachResult.linkedin_message && (
+               <div className="bg-slate-800/50 rounded-[12px] border border-slate-700 p-5">
+                 <div className="flex justify-between items-center mb-3">
+                   <span className="text-[12px] font-mono uppercase text-[#0ea5e9]">LinkedIn Strategy</span>
+                   <button onClick={() => copyToClipboard(outreachResult.linkedin_message!, 'LinkedIn')} className="text-slate-400 hover:text-white"><Copy size={14}/></button>
+                 </div>
+                 <p className="text-[14px] text-slate-300 whitespace-pre-wrap font-sans leading-relaxed">{outreachResult.linkedin_message}</p>
+               </div>
+             )}
+           </div>
+        </PremiumCard>
       )}
+
     </div>
   );
 }
