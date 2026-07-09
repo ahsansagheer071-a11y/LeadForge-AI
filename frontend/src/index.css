@@ -327,6 +327,10 @@ input, textarea, select { font-family: inherit; color: inherit; }
   animation: lf-shimmer 2s infinite linear;
 }
 
+@keyframes lf-scan-line {
+  0%, 100% { transform: translateY(0); opacity: 0.5; }
+  50% { transform: translateY(100%); opacity: 1; }
+}
 @keyframes lf-pulse-glow {
   0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-brand) 20%, transparent); }
   70% { box-shadow: 0 0 0 8px transparent; }
