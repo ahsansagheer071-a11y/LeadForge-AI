@@ -44,7 +44,6 @@ const STAGES: StageDef[] = [
 
 function getStageState(
   id: StageId,
-  _lead: { status: string } | null | undefined,
   screenshot: CaptureScreenshotResponse | null,
   analysis: WebsiteAnalysisResponse | null,
   audit: AuditAndScoreResult | null,
@@ -89,7 +88,7 @@ function getStageState(
 
   /* active = first non-completed, non-failed, non-pending in order */
   for (const s of STAGES) {
-    const st = getStageState(s.id, lead, screenshot, analysis, audit, website, outreach, mutations);
+    const st = getStageState(s.id, screenshot, analysis, audit, website, outreach, mutations);
     if (st === 'active') return id === s.id ? 'active' : 'blocked';
     if (st === 'pending' || st === 'blocked') continue;
     if (st === 'completed' && s.id === id) return 'completed';
@@ -99,7 +98,6 @@ function getStageState(
 }
 
 function getActiveStage(
-  lead: { status: string } | null | undefined,
   screenshot: CaptureScreenshotResponse | null,
   analysis: WebsiteAnalysisResponse | null,
   audit: AuditAndScoreResult | null,
@@ -108,7 +106,7 @@ function getActiveStage(
   mutations: Record<string, { isPending: boolean; error: unknown }>,
 ): StageDef | null {
   for (const s of STAGES) {
-    const st = getStageState(s.id, lead, screenshot, analysis, audit, website, outreach, mutations);
+    const st = getStageState(s.id, screenshot, analysis, audit, website, outreach, mutations);
     if (st === 'active' || st === 'pending') return s;
   }
   return null;
@@ -228,7 +226,7 @@ export function LeadDetailPage() {
     screenshot: screenshotMutation, analysis: analysisMutation, audit: auditMutation,
     generation: generationMutation, outreach: outreachMutation,
   };
-  const activeStage = getActiveStage(lead, screenshotResult, analysisResult, auditResult, existingWebsite, outreachResult, mutations);
+  const activeStage = getActiveStage(screenshotResult, analysisResult, auditResult, existingWebsite, outreachResult, mutations);
 
   /* ── Loading ──────────────────────────────────────────────── */
   if (isLoading) {
@@ -366,7 +364,7 @@ export function LeadDetailPage() {
       <PremiumCard innerClassName="p-4 lg:p-5 overflow-hidden">
         <div className="hidden lg:flex items-center justify-between gap-0">
           {STAGES.map((stage, i) => {
-            const state = getStageState(stage.id, lead, screenshotResult, analysisResult, auditResult, existingWebsite, outreachResult, mutations);
+            const state = getStageState(stage.id, screenshotResult, analysisResult, auditResult, existingWebsite, outreachResult, mutations);
             const isActive = state === 'active';
             const isCompleted = state === 'completed';
             const isFailed = state === 'failed';
@@ -407,9 +405,9 @@ export function LeadDetailPage() {
                 {i < STAGES.length - 1 && (
                   <div className={cn(
                     'flex-1 h-0.5 mx-2 rounded-full transition-all duration-300',
-                    getStageState(STAGES[i + 1].id, lead, screenshotResult, analysisResult, auditResult, existingWebsite, outreachResult, mutations) === 'completed' || (getStageState(STAGES[i + 1].id, lead, screenshotResult, analysisResult, auditResult, existingWebsite, outreachResult, mutations) === 'active' && isCompleted)
+                    getStageState(STAGES[i + 1].id, screenshotResult, analysisResult, auditResult, existingWebsite, outreachResult, mutations) === 'completed' || (getStageState(STAGES[i + 1].id, screenshotResult, analysisResult, auditResult, existingWebsite, outreachResult, mutations) === 'active' && isCompleted)
                       ? 'bg-emerald-500/50'
-                      : getStageState(STAGES[i + 1].id, lead, screenshotResult, analysisResult, auditResult, existingWebsite, outreachResult, mutations) === 'failed'
+                      : getStageState(STAGES[i + 1].id, screenshotResult, analysisResult, auditResult, existingWebsite, outreachResult, mutations) === 'failed'
                         ? 'bg-red-500/50'
                         : 'bg-[var(--color-border)]',
                   )} />
@@ -422,7 +420,7 @@ export function LeadDetailPage() {
         {/* Mobile vertical rail */}
         <div className="flex lg:hidden flex-col gap-0">
           {STAGES.map((stage, i) => {
-            const state = getStageState(stage.id, lead, screenshotResult, analysisResult, auditResult, existingWebsite, outreachResult, mutations);
+            const state = getStageState(stage.id, screenshotResult, analysisResult, auditResult, existingWebsite, outreachResult, mutations);
             const isActive = state === 'active';
             const isCompleted = state === 'completed';
             const isFailed = state === 'failed';
@@ -443,7 +441,7 @@ export function LeadDetailPage() {
                   {i < STAGES.length - 1 && (
                     <div className={cn(
                       'w-0.5 flex-1 min-h-[16px] my-1',
-                      getStageState(STAGES[i + 1].id, lead, screenshotResult, analysisResult, auditResult, existingWebsite, outreachResult, mutations) === 'completed' ? 'bg-emerald-500/50' : 'bg-[var(--color-border)]',
+                      getStageState(STAGES[i + 1].id, screenshotResult, analysisResult, auditResult, existingWebsite, outreachResult, mutations) === 'completed' ? 'bg-emerald-500/50' : 'bg-[var(--color-border)]',
                     )} />
                   )}
                 </div>
