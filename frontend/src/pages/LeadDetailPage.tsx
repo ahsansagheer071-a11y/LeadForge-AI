@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Globe, MapPin, Phone, Star, Building, Shield, AlertTriangle, CheckCircle, Search, Camera, Send, Copy, ExternalLink, ChevronRight, ChevronDown, Zap, Eye, Download, X, Maximize2, Loader2 } from 'lucide-react';
+import { ArrowLeft, Globe, MapPin, Phone, Star, Building, Shield, AlertTriangle, CheckCircle, Search, Camera, Send, Copy, ExternalLink, ChevronRight, ChevronDown, Zap, Eye, Download, X, Maximize2, Loader2, Rocket } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
@@ -660,6 +660,7 @@ export function LeadDetailPage() {
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {(auditResult.audit['Top Weaknesses'] as Array<string | { title?: string; evidence?: string; impact?: string; recommendation?: string }>).map((w, i) => {
+                        if (!w) return null;
                         const weakness = typeof w === 'string' ? { title: w } : w;
                         return (
                           <div key={i} className="p-4 rounded-[var(--radius-md)] bg-red-500/5 border border-red-500/15">
@@ -690,6 +691,36 @@ export function LeadDetailPage() {
               </div>
             )}
           </PremiumCard>
+
+          {/* Generated Website Panel */}
+          {existingWebsite && (
+            <PremiumCard innerClassName="p-6 relative overflow-hidden">
+              <div className="absolute -top-24 -right-24 w-48 h-48 rounded-full bg-[#10b981] opacity-5 blur-[60px] pointer-events-none" />
+              <div className="flex items-center justify-between mb-5 border-b border-[var(--color-border)] pb-3 relative z-10">
+                <h3 className="text-[11px] font-mono uppercase tracking-[0.2em] text-white flex items-center gap-2">
+                  <Rocket size={13} className="text-[#10b981]" /> Generated Website
+                </h3>
+                <Badge tone="success" className="text-[9px]">Ready</Badge>
+              </div>
+              <div className="relative z-10 space-y-4">
+                <div>
+                  <h4 className="text-[15px] font-bold text-white">{existingWebsite.project_name || 'Website Generated'}</h4>
+                  <p className="text-[11px] font-mono text-[var(--color-text-muted)] mt-1">ID: {existingWebsite.id}</p>
+                </div>
+                <div className="flex items-center gap-4 text-[12px] text-[var(--color-text-secondary)]">
+                  <span className="flex items-center gap-1.5"><CheckCircle size={14} className="text-emerald-400" /> {existingWebsite.status}</span>
+                  <span className="flex items-center gap-1.5"><Eye size={14} /> {formatRelative(existingWebsite.created_at)}</span>
+                </div>
+                <div className="flex items-center gap-3 pt-4 border-t border-[var(--color-border)]">
+                  <Button variant="brand" onClick={() => navigate(`/preview/${existingWebsite.id}`)}><Eye size={15} className="mr-2" /> Open Preview</Button>
+                  {existingWebsite.package_id && (
+                    <Button variant="outline" onClick={() => navigate(`/deployment/${existingWebsite.id}`)}><Download size={15} className="mr-2" /> Open Package</Button>
+                  )}
+                  <Button variant="ghost" onClick={() => copyToClipboard(`${window.location.origin}/preview/${existingWebsite.id}`, 'Preview link')} className="ml-auto"><Copy size={15} /></Button>
+                </div>
+              </div>
+            </PremiumCard>
+          )}
         </div>
 
         {/* ─── ACTION COLUMN (sticky) ─────────────────────────── */}

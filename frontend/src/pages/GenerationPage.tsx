@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, Globe, Loader2, CheckCircle2, AlertCircle, Camera, Search, Shield, Zap } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/Badge';
 import { Skeleton } from '@/components/Loading';
 import { EmptyState } from '@/components/ErrorStates';
@@ -55,6 +55,7 @@ const POLL_INTERVAL_MS = 3000;
 
 export function GenerationPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const setHtmlContent = usePreviewStore((s) => s.setHtmlContent);
   const [selectedId, setSelectedId] = useState('');
 
@@ -98,7 +99,8 @@ export function GenerationPage() {
           if (result.html) setHtmlContent(result.html);
           if (result.website_id) {
             toast.success('Website generated successfully!');
-            navigate(`/preview/${result.website_id}`);
+            queryClient.invalidateQueries({ queryKey: ['lead', selectedId] });
+            queryClient.invalidateQueries({ queryKey: ['generated-website-latest', selectedId] });
           }
         } else if (result.status === 'failed') {
           stopPolling();
@@ -374,6 +376,14 @@ export function GenerationPage() {
                   >
                     <CheckCircle2 size={15} /> Enter Preview Studio
                   </button>
+                  {jobResult?.package_id && (
+                    <button
+                      onClick={() => { if (jobResult?.website_id) navigate(`/deployment/${jobResult.website_id}`); }}
+                      className="bg-[#0ea5e9]/10 text-[#0ea5e9] border border-[#0ea5e9]/30 px-8 py-3 rounded-[var(--radius-md)] font-mono uppercase tracking-widest text-[13px] font-bold hover:bg-[#0ea5e9]/20 hover:shadow-[0_0_20px_rgba(14,165,233,0.3)] transition-all flex items-center gap-2"
+                    >
+                      Open Package
+                    </button>
+                  )}
                   <button
                     onClick={() => navigate('/projects')}
                     className="bg-[var(--color-glass)] backdrop-blur-md text-[var(--color-text)] border border-[var(--color-glass-border)] px-6 py-3 rounded-[var(--radius-md)] font-medium hover:bg-[var(--color-glass-strong)] transition-all font-mono text-[12px]"
