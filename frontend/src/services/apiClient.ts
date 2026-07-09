@@ -19,7 +19,7 @@ import type { APIErrorShape } from '@/types';
 const RAW_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_URL ||
-  'https://leadforge-ai-production.up.railway.app';
+  'https://leadforge-ai-production-eff1.up.railway.app';
 // Strip any trailing slash, then ensure exactly one trailing `/api/v1`
 const NORMALIZED_BASE = RAW_BASE_URL.replace(/\/+$/, '').replace(/\/api\/v1$/i, '');
 const BASE_URL = `${NORMALIZED_BASE}/api/v1`;
