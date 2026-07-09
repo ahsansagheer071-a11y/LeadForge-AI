@@ -1,10 +1,3 @@
-/**
- * DashboardLayout — top nav + left sidebar + main workspace
- * + collapsible right activity panel + footer status bar.
- *
- * Uses CSS Grid for the outer composition.
- */
-
 import * as React from 'react';
 import { cn } from '@/utils';
 
@@ -42,18 +35,23 @@ export function DashboardLayout({
 
         {/* Main Content Workspace */}
         <div className="flex-1 min-h-0 flex relative pt-2 px-4 pb-0">
-          <div className="flex-1 min-w-0 overflow-hidden rounded-t-[20px] bg-black/20 border border-[var(--color-border)] border-b-0 backdrop-blur-md shadow-2xl relative">
+          <div className={cn(
+            'flex-1 min-w-0 overflow-hidden rounded-t-[var(--radius-xl)]',
+            'bg-[var(--color-glass-strong)] backdrop-blur-md',
+            'border border-[var(--color-glass-border)] border-b-0 shadow-2xl',
+            'relative',
+          )}>
             {children}
           </div>
 
           {/* Activity Panel Overlay */}
           {activityOpen && activityPanel && (
-            <div className="w-[320px] ml-4 flex-shrink-0 z-20 lf-slide-in-right h-full rounded-t-[20px] bg-[var(--color-surface)] bg-opacity-80 backdrop-blur-xl border border-[var(--color-border)] border-b-0 shadow-2xl overflow-hidden">
+            <div className="w-[320px] ml-4 flex-shrink-0 z-20 lf-slide-in-right h-full rounded-t-[var(--radius-xl)] bg-[var(--color-glass-strong)] backdrop-blur-xl border border-[var(--color-glass-border)] border-b-0 shadow-2xl overflow-hidden">
               {activityPanel}
             </div>
           )}
         </div>
-        
+
         {/* Footer */}
         <div className="z-30">
           {footer}
@@ -63,10 +61,6 @@ export function DashboardLayout({
   );
 }
 
-/* Standard transition class for grid changes. */
-
-/* ─── Workspace container ────────────────────────────────── */
-
 export function Workspace({
   children,
   className,
@@ -75,7 +69,12 @@ export function Workspace({
   className?: string;
 }) {
   return (
-    <main className={cn('lf-thin-scroll h-full w-full overflow-y-auto px-6 py-8 md:px-10 md:py-10 lg:px-14 lg:py-12', className)}>
+    <main className={cn(
+      'lf-thin-scroll h-full w-full overflow-y-auto',
+      'px-6 py-8 md:px-10 md:py-10 lg:px-14 lg:py-12',
+      'lf-fade-in',
+      className,
+    )}>
       <div className="max-w-[1500px] mx-auto h-full">{children}</div>
     </main>
   );

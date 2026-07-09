@@ -1,8 +1,3 @@
-/**
- * Sidebar (left navigation).
- * Collapsible on lg / md / sm breakpoints, animated active pill, lucide icons.
- */
-
 import * as React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
@@ -17,13 +12,13 @@ import {
   HelpCircle,
   ChevronsLeft,
   ChevronsRight,
-  Zap,
   type LucideIcon,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/utils';
 import { useLocalStorage } from '@/hooks/hooks';
 import { Tooltip } from '@/components/Tooltip';
+import { LeadForgeLogo } from '@/components/LeadForgeLogo';
 import { dashboardService } from '@/services/services';
 
 interface NavItem {
@@ -73,9 +68,9 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'h-[calc(100vh-2rem)] flex flex-col z-20 overflow-hidden',
-        'bg-[var(--color-surface)]/60 backdrop-blur-xl border border-[var(--color-border)] rounded-[20px] shadow-2xl',
-        'transition-[width] duration-300 ease-out',
+        'flex flex-col z-20 overflow-hidden',
+        'bg-[var(--color-glass)] backdrop-blur-xl border border-[var(--color-glass-border)] rounded-[var(--radius-xl)] shadow-2xl',
+        'transition-all duration-300 ease-out',
         collapsed ? 'w-[76px]' : 'w-[260px]',
         className,
       )}
@@ -83,29 +78,26 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
       {/* Logo */}
       <div
         className={cn(
-          'flex items-center gap-2.5 px-4 pt-5 pb-3',
+          'flex items-center px-4 pt-5 pb-4 border-b border-[var(--color-divider)]',
           collapsed && 'justify-center px-2',
         )}
       >
-        <div className="size-8 rounded-[9px] bg-[var(--color-brand)] flex items-center justify-center shadow-[0_2px_10px_color-mix(in_oklab,var(--color-brand)_45%,transparent)]">
-          <Zap className="size-4 text-white" strokeWidth={2.5} />
-        </div>
-        {!collapsed && (
-          <div className="overflow-hidden">
-            <p className="text-[13.5px] font-semibold leading-tight tracking-tight">
-              LeadForge
-            </p>
-            <p className="text-[10.5px] text-[var(--color-text-muted)] leading-tight">
-              Premium
-            </p>
-          </div>
-        )}
+        <LeadForgeLogo variant={collapsed ? 'compact' : 'full'} size={collapsed ? 28 : 30} />
       </div>
 
+      {/* Tagline */}
+      {!collapsed && (
+        <div className="px-4 pt-3 pb-2">
+          <p className="text-[9.5px] uppercase tracking-[0.22em] text-[var(--color-text-muted)] font-mono leading-relaxed">
+            Discover. Audit. Build. Convert.
+          </p>
+        </div>
+      )}
+
       {/* Primary */}
-      <nav className="px-2 mt-2 space-y-0.5" onClick={onNavigate}>
+      <nav className="px-2 mt-3 space-y-0.5 flex-1 overflow-y-auto lf-thin-scroll" onClick={onNavigate}>
         {!collapsed && (
-          <p className="px-3 pt-2 pb-1 text-[10.5px] uppercase tracking-wider text-[var(--color-text-muted)] font-semibold">
+          <p className="px-3 pt-1 pb-1.5 text-[9.5px] uppercase tracking-[0.2em] text-[var(--color-text-muted)] font-semibold font-mono">
             Workspace
           </p>
         )}
@@ -114,7 +106,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
         ))}
 
         {!collapsed && (
-          <p className="px-3 pt-4 pb-1 text-[10.5px] uppercase tracking-wider text-[var(--color-text-muted)] font-semibold">
+          <p className="px-3 pt-5 pb-1.5 text-[9.5px] uppercase tracking-[0.2em] text-[var(--color-text-muted)] font-semibold font-mono">
             Insights
           </p>
         )}
@@ -123,10 +115,8 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
         ))}
       </nav>
 
-      <div className="flex-1" />
-
       {/* Bottom section */}
-      <nav className="px-2 pb-3 space-y-0.5" onClick={onNavigate}>
+      <nav className="px-2 pb-3 space-y-0.5 border-t border-[var(--color-divider)] pt-3" onClick={onNavigate}>
         {NAV_BOTTOM.map((item) => (
           <SidebarItem key={item.to} item={item} collapsed={collapsed} />
         ))}
@@ -134,10 +124,10 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
         <button
           onClick={() => setCollapsed(!collapsed)}
           className={cn(
-            'w-full mt-3 flex items-center gap-2',
-            'px-3 py-2 rounded-[8px] text-[12.5px] font-medium',
-            'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]',
-            'hover:text-[var(--color-text)] transition-colors',
+            'w-full mt-2 flex items-center gap-2',
+            'px-3 py-2 rounded-[var(--radius-md)] text-[12px] font-medium',
+            'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]',
+            'hover:text-[var(--color-text-secondary)] transition-colors',
             collapsed && 'justify-center',
           )}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -157,12 +147,12 @@ function SidebarItem({ item, collapsed }: { item: NavItem; collapsed: boolean })
       end={item.exact}
       className={({ isActive }) =>
         cn(
-          'group relative flex items-center gap-3 px-3 py-2.5 rounded-[12px]',
+          'group relative flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-md)]',
           'text-[13px] font-medium',
-          'transition-all duration-200',
+          'transition-all duration-[var(--anim-fast)]',
           collapsed && 'justify-center',
           isActive
-            ? 'bg-gradient-to-r from-[var(--color-brand-soft)] to-transparent text-[#0ea5e9]'
+            ? 'bg-gradient-to-r from-[var(--color-brand-soft)] to-transparent text-[#0ea5e9] shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--color-brand)_10%,transparent)]'
             : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]',
         )
       }
@@ -171,10 +161,12 @@ function SidebarItem({ item, collapsed }: { item: NavItem; collapsed: boolean })
         <>
           <item.icon
             className={cn(
-              'size-[16px] flex-shrink-0 transition-colors',
-              isActive ? 'text-[#0ea5e9] drop-shadow-[0_0_8px_rgba(14,165,233,0.8)]' : 'text-[var(--color-text-muted)] group-hover:text-[var(--color-text)]',
+              'size-[16px] flex-shrink-0 transition-all',
+              isActive
+                ? 'text-[#0ea5e9] drop-shadow-[0_0_8px_rgba(14,165,233,0.8)]'
+                : 'text-[var(--color-text-muted)] group-hover:text-[var(--color-text)]',
             )}
-            strokeWidth={2}
+            strokeWidth={isActive ? 2.5 : 2}
           />
           {!collapsed && (
             <>
@@ -182,9 +174,9 @@ function SidebarItem({ item, collapsed }: { item: NavItem; collapsed: boolean })
               {item.badge && (
                 <span
                   className={cn(
-                    'text-[10px] rounded-full px-1.5 py-0.5 font-semibold',
+                    'text-[10px] rounded-full px-1.5 py-0.5 font-semibold font-mono',
                     isActive
-                      ? 'bg-[var(--color-brand)] text-white'
+                      ? 'bg-[var(--color-brand)] text-white shadow-[0_0_8px_color-mix(in_oklab,var(--color-brand)_40%,transparent)]'
                       : 'bg-[var(--color-surface-overlay)] text-[var(--color-text-muted)]',
                   )}
                 >
