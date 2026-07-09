@@ -55,10 +55,16 @@ class SerpAPIService:
                 detail={"query": query},
             ) from exc
         except httpx.HTTPStatusError as exc:
+            resp_body = ""
+            try:
+                resp_body = exc.response.text[:500]
+            except Exception:
+                pass
             logger.error(
-                "SerpAPI HTTP error | status=%s | query=%s",
+                "SerpAPI HTTP error | status=%s | query=%s | body=%s",
                 exc.response.status_code,
                 query,
+                resp_body,
             )
             raise ServiceUnavailableException(
                 "SerpAPI returned an error response.",

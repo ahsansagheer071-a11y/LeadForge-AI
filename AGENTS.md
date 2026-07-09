@@ -1,12 +1,13 @@
 # LeadForge AI — Session Summary
 
 ## Goal
-Fix all failing features (screenshot, AI audit, website generation, lead creation, lead detail) in the Railway production deployment and make the entire app 100% functional.
+Complete the Premium Anti-Gravity Theme redesign (all 7 phases) and fix all failing endpoints for Railway production deployment to make the entire app 100% functional.
 
 ## Constraints & Preferences
 - Backend: `https://leadforge-ai-production-eff1.up.railway.app`
+- Frontend: `https://leadforge-ai.vercel.app`
 - Database: Supabase PostgreSQL (`qptloaobjyzvgyyiebvg`)
-- All code pushed to GitHub `main` auto-deploys to Railway
+- All code pushed to GitHub `main` auto-deploys to Railway (backend) and Vercel (frontend)
 - No direct Railway/Vercel console access; debugging via HTTP response analysis
 - Windows local dev environment with Python 3.14 and PowerShell
 
@@ -31,8 +32,27 @@ Fix all failing features (screenshot, AI audit, website generation, lead creatio
 15. CSV Export ───────────────────────── 200
 ```
 
-### What Was Fixed
+### Frontend Redesign — All 7 Phases Complete
+```
+Phase 1: Index (tailwind → global CSS variables, design system tokens) ✅
+Phase 2: Login, Register (PremiumCard, glass panels, cyber-glow inputs) ✅
+Phase 3: Dashboard, Sidebar (StatsGrid, RGB border sidebar, GaugeCard) ✅
+Phase 4: Projects, LeadDetail (PremiumTable, glass timeline, skill-chip tags) ✅
+Phase 5: Generation, Preview, Deployment (stepped forms, holographic tabs) ✅
+Phase 6: History, Analytics, Settings (glass timeline, PieChart rework) ✅
+Phase 7: Help, NotFound, FooterStatusBar (PremiumCard, polish) ✅
+```
 
+### Vercel Deployment Configuration
+- `vercel.json` at `frontend/vercel.json` — SPA rewrite rule
+- Favicon replaced with LeadForge logo mark (gradient L/F with AI node)
+- Theme locked to dark-only — light theme removed, toggle removed from TopBar
+- Validation: `tsc --noEmit` (0 errors), `npm run lint` (0 warnings), `npm run build` (passes)
+- Latest commit `f4798c2` on `main`
+
+## What Was Fixed (Backend & Frontend)
+
+### Backend
 | Issue | Root Cause | Fix |
 |---|---|---|
 | **Screenshot 503** | `--single-process` crash, missing libs, concurrent retry race | Removed flag, added deps, sequential capture |
@@ -45,11 +65,35 @@ Fix all failing features (screenshot, AI audit, website generation, lead creatio
 | **Groq 429/timeout** | Multiple strategies × retries exhausted free tier limits | Reduced to 1 strategy, 2 attempts, 65s rate limit backoff |
 | **Groq `e` scoping** | `str(e)` in `else` block where `e` undefined on TimeoutError | `last_error` pattern |
 
+### Frontend
+| Issue | Fix |
+|---|---|
+| Tailwind → global CSS variables | Full design system token migration |
+| No hero/brand identity | LeadForgeLogo component with circuit-node animation |
+| Flat cards → glass PremiumCards | Replaced all `<Card>` with `<PremiumCard>` + `<Badge>` |
+| Missing hover/depth effects | Added RGB hover border, glass reflections, backdrop blur |
+| Light theme incomplete | Locked to dark-only, removed toggle and unused tokens |
+| Favicon old lightning bolt | Replaced with LeadForge logo mark gradient SVG |
+| Missing vercel.json SPA rewrite | Already existed; validated |
+| Vite build config | Already correct; validated |
+
 ## Known Issues
 1. **Groq free tier**: AI Audit/Outreach may fail under load (30 RPM / 30k TPM limit). Upgrade to paid plan for reliability.
 2. **No Gemini fallback**: Configured but untested.
+3. **Vercel CI/CD**: Auto-deploys from `main`; no manual preview workflow visible.
 
 ## Relevant Files
+- `frontend/vercel.json` — SPA rewrite for Vercel
+- `frontend/public/favicon.svg` — LeadForge logo favicon
+- `frontend/index.html` — dark-only inline script
+- `frontend/src/index.css` — dark-only CSS variables
+- `frontend/src/contexts/ThemeContext.tsx` — dark-only context
+- `frontend/src/layouts/TopBar.tsx` — no theme toggle
+- `frontend/src/components/PremiumCard.tsx` — glass card component
+- `frontend/src/components/LeadForgeLogo.tsx` — brand logo with animation
+- `frontend/src/components/Badge.tsx` — status/skill badges
+- `frontend/src/components/ScoreGauge.tsx` — score display
+- `frontend/src/pages/*.tsx` — all pages redesigned
 - `app/services/screenshot.py` — BrowserManager singleton
 - `app/schemas/audit.py` — `weaknesses: List[str]`
 - `app/services/website_intelligence/service.py` — `build_profile()`, schema fixes

@@ -42,6 +42,31 @@ const STAGES: StageDef[] = [
   { id: 'outreach', label: 'Outreach', icon: Send, color: '#22d3ee' },
 ];
 
+function stageDirect(
+  sid: StageId,
+  screenshot: CaptureScreenshotResponse | null,
+  analysis: WebsiteAnalysisResponse | null,
+  audit: AuditAndScoreResult | null,
+  website: unknown | null,
+  outreach: OutreachResponse | null,
+  mutations: Record<string, { isPending: boolean; error: unknown }>,
+): StageState {
+  if (sid === 'lead') return 'completed';
+  const err = mutations[sid]?.error;
+  if (err) return 'failed';
+  if (mutations[sid]?.isPending) return 'active';
+  switch (sid) {
+    case 'screenshot': return (screenshot?.desktop_url || screenshot?.mobile_url) ? 'completed' : 'pending';
+    case 'analysis': return analysis ? 'completed' : 'pending';
+    case 'audit': return audit ? 'completed' : 'pending';
+    case 'generation': return website ? 'completed' : 'pending';
+    case 'preview': return website ? 'completed' : 'pending';
+    case 'package': return (website && typeof website === 'object' && 'package_id' in website) ? 'completed' : 'pending';
+    case 'outreach': return outreach ? 'completed' : 'pending';
+    default: return 'pending';
+  }
+}
+
 function getStageState(
   id: StageId,
   screenshot: CaptureScreenshotResponse | null,
@@ -52,49 +77,18 @@ function getStageState(
   mutations: Record<string, { isPending: boolean; error: unknown }>,
 ): StageState {
   if (id === 'lead') return 'completed';
-  const err = mutations[id]?.error;
+  const targetIdx = STAGES.findIndex(s => s.id === id);
 
-  if (id === 'screenshot') {
-    if (err) return 'failed';
-    if (mutations['screenshot']?.isPending) return 'active';
-    if (screenshot?.desktop_url || screenshot?.mobile_url) return 'completed';
-  }
-  if (id === 'analysis') {
-    if (err) return 'failed';
-    if (mutations['analysis']?.isPending) return 'active';
-    if (analysis) return 'completed';
-  }
-  if (id === 'audit') {
-    if (err) return 'failed';
-    if (mutations['audit']?.isPending) return 'active';
-    if (audit) return 'completed';
-  }
-  if (id === 'generation') {
-    if (err) return 'failed';
-    if (mutations['generation']?.isPending) return 'active';
-    if (website) return 'completed';
-  }
-  if (id === 'preview') {
-    if (website) return 'completed';
-  }
-  if (id === 'package') {
-    if (website && (website as { package_id?: string })?.package_id) return 'completed';
-  }
-  if (id === 'outreach') {
-    if (err) return 'failed';
-    if (mutations['outreach']?.isPending) return 'active';
-    if (outreach) return 'completed';
+  const states = STAGES.map(s => stageDirect(s.id, screenshot, analysis, audit, website, outreach, mutations));
+
+  for (let i = 0; i < states.length; i++) {
+    if (states[i] === 'completed') continue;
+    if (i === targetIdx) return states[i];
+    if (i < targetIdx) return 'blocked';
+    return 'completed';
   }
 
-  /* active = first non-completed, non-failed, non-pending in order */
-  for (const s of STAGES) {
-    const st = getStageState(s.id, screenshot, analysis, audit, website, outreach, mutations);
-    if (st === 'active') return id === s.id ? 'active' : 'blocked';
-    if (st === 'pending' || st === 'blocked') continue;
-    if (st === 'completed' && s.id === id) return 'completed';
-  }
-
-  return 'pending';
+  return 'completed';
 }
 
 function getActiveStage(
@@ -105,9 +99,11 @@ function getActiveStage(
   outreach: OutreachResponse | null,
   mutations: Record<string, { isPending: boolean; error: unknown }>,
 ): StageDef | null {
-  for (const s of STAGES) {
-    const st = getStageState(s.id, screenshot, analysis, audit, website, outreach, mutations);
-    if (st === 'active' || st === 'pending') return s;
+  const states = STAGES.map(s => stageDirect(s.id, screenshot, analysis, audit, website, outreach, mutations));
+  for (let i = 0; i < STAGES.length; i++) {
+    if (states[i] === 'completed') continue;
+    if (states[i] === 'active' || states[i] === 'pending') return STAGES[i];
+    break;
   }
   return null;
 }

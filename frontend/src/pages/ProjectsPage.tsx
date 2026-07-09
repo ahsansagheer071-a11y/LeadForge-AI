@@ -171,7 +171,12 @@ export function ProjectsPage() {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
     onError: (err) => {
-      toast.error(getApiErrorMessage(err, 'Discovery failed'));
+      const apiErr = err as { category?: string; message?: string };
+      if (apiErr?.category === 'provider' || (apiErr?.message && apiErr.message.includes('SerpAPI'))) {
+        toast.error('Lead discovery is temporarily unavailable. Check the discovery provider configuration and try again.');
+      } else {
+        toast.error(getApiErrorMessage(err, 'Discovery failed'));
+      }
     },
   });
 
