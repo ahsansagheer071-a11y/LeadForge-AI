@@ -1,29 +1,234 @@
+"""Async Generation Jobs endpoint.
+
+Production Railway deployments have a ~30-second proxy timeout on synchronous
+requests.  Website generation (crawl + AI call) routinely takes 60-180 seconds
+for complex business sites, so a synchronous /generate call will always be
+killed by the proxy before it completes.
+
+This module implements a simple in-memory async job pattern:
+  POST /api/v1/generation/jobs        → { job_id, status: "pending" }
+  GET  /api/v1/generation/jobs/{id}   → { status, result, error, progress }
+
+The background task runs the full pipeline and writes the result into the
+in-memory job store.  The frontend polls GET every 3 seconds.
+
+NOTE: In-memory store means jobs are lost on dyno restart.  That is acceptable
+since the completed website is persisted in the DB via GeneratedWebsite.
+"""
+
+import asyncio
+import logging
+import time
 import uuid
+from datetime import datetime, timezone
+from enum import Enum
 from io import BytesIO
-from typing import Optional
+from typing import Any, Dict, Optional
 from zipfile import ZIP_DEFLATED, ZipFile
-from pydantic import BaseModel, Field
-from fastapi import APIRouter, Depends, status
+
+from fastapi import APIRouter, BackgroundTasks, Depends, status
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import NotFoundException, ServiceUnavailableException
 from app.database.session import get_db
 from app.dependencies.auth import get_current_user
-from app.models.user import User
 from app.models.generated_website import GeneratedWebsite
+from app.models.user import User
+from app.repositories.generated_website import generated_website_repository
+from app.repositories.lead import lead_repository
 from app.schemas.generated_website import GeneratedWebsiteCreate, GeneratedWebsiteResponse
 from app.schemas.response import StandardResponse
-from app.services.website_intelligence import website_intelligence_service
 from app.services.markdown_engine.builder import MarkdownBuilder
-from app.services.website_generator.static_html_generator import StaticHTMLGenerator
 from app.services.website_generator.build.schemas import BuildResult
 from app.services.website_generator.deployment.package_manager import PackageManager
 from app.services.website_generator.preview.schemas import PreviewResult
-from app.core.exceptions import NotFoundException, ServiceUnavailableException
-from app.repositories.lead import lead_repository
-from app.repositories.generated_website import generated_website_repository
+from app.services.website_generator.static_html_generator import StaticHTMLGenerator
+from app.services.website_intelligence import website_intelligence_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# ---------------------------------------------------------------------------
+# Shared in-memory job store
+# ---------------------------------------------------------------------------
+
+class JobStatus(str, Enum):
+    PENDING   = "pending"
+    RUNNING   = "running"
+    SUCCEEDED = "succeeded"
+    FAILED    = "failed"
+
+
+class GenerationJob(BaseModel):
+    job_id:       str
+    lead_id:      str
+    user_id:      str
+    status:       JobStatus = JobStatus.PENDING
+    progress:     str       = "Queued"
+    website_id:   Optional[str] = None
+    generation_id: Optional[str] = None
+    html:         Optional[str] = None
+    preview_path: Optional[str] = None
+    package_id:   Optional[str] = None
+    project_name: Optional[str] = None
+    generation_time: float  = 0.0
+    error:        Optional[str] = None
+    created_at:   float     = Field(default_factory=time.monotonic)
+
+
+# job_id -> GenerationJob
+_JOBS: Dict[str, GenerationJob] = {}
+
+# Evict jobs older than 30 minutes to prevent unbounded memory growth
+_JOB_TTL_SECONDS = 1800
+
+
+def _evict_old_jobs() -> None:
+    now = time.monotonic()
+    stale = [jid for jid, j in _JOBS.items() if now - j.created_at > _JOB_TTL_SECONDS]
+    for jid in stale:
+        _JOBS.pop(jid, None)
+
+
+# ---------------------------------------------------------------------------
+# Background worker
+# ---------------------------------------------------------------------------
+
+async def _run_generation_job(job_id: str, lead_id: uuid.UUID, user_id: str) -> None:
+    """Background task: full generation pipeline, writes result into _JOBS."""
+    job = _JOBS.get(job_id)
+    if not job:
+        return
+
+    # We need a fresh DB session since we are running outside the request lifecycle
+    from app.database.session import AsyncSessionLocal
+
+    try:
+        async with AsyncSessionLocal() as db:
+            job.status   = JobStatus.RUNNING
+            job.progress = "Loading lead data"
+
+            lead = await lead_repository.get(db, id=lead_id)
+            if not lead or str(lead.user_id) != user_id:
+                job.status = JobStatus.FAILED
+                job.error  = f"Lead '{lead_id}' not found or access denied."
+                return
+
+            # ── Step 1: Profile ──────────────────────────────────────────── #
+            job.progress = "Crawling website"
+            response = await website_intelligence_service.load_profile(db, lead_id=lead_id)
+            if not response:
+                if not lead.website:
+                    job.status = JobStatus.FAILED
+                    job.error  = "No website URL on this lead and no cached profile."
+                    return
+                job.progress = "Crawling website (fresh)"
+                profile = await website_intelligence_service.build_profile(
+                    db, lead=lead, url=lead.website
+                )
+                if not profile:
+                    job.status = JobStatus.FAILED
+                    job.error  = "Website crawl returned no usable data. The site may block bots."
+                    return
+            else:
+                profile = response.profile
+
+            # ── Step 2: Markdown package ─────────────────────────────────── #
+            job.progress = "Building markdown context"
+            builder  = MarkdownBuilder(blueprint=profile)
+            package  = builder.build_package()
+
+            # ── Step 3: AI generation ────────────────────────────────────── #
+            job.progress = "Generating HTML with AI"
+            generator = StaticHTMLGenerator()
+            result    = await generator.generate(blueprint=profile, package=package)
+
+            if not result.success or not result.website_project:
+                job.status = JobStatus.FAILED
+                job.error  = "; ".join(result.errors) if result.errors else "Unknown generation error"
+                return
+
+            # ── Step 4: Persist ──────────────────────────────────────────── #
+            job.progress = "Saving result"
+            html_content  = result.website_project.files[0].content if result.website_project.files else ""
+            preview_record = GeneratedWebsite(
+                lead_id      = lead_id,
+                generation_id= result.website_project.generation_id,
+                project_name = result.website_project.project_name,
+                framework    = result.website_project.framework,
+                status       = "generated",
+                html         = html_content,
+                preview_path = "",
+                build_metadata={
+                    "generation_time":   result.generation_time,
+                    "warnings":          result.warnings,
+                    "file_count":        len(result.website_project.files),
+                    "provider_used":     result.provider_used,
+                    "provider_attempts": result.provider_attempts,
+                },
+            )
+            db.add(preview_record)
+            await db.flush()
+
+            preview_record.preview_path = f"/preview/{preview_record.id}"
+
+            build_result = BuildResult(
+                success=True, build_success=True, npm_install_success=True,
+                logs=["Static HTML generated; no build step required."],
+            )
+            preview_result = PreviewResult(
+                success=True, preview_url=preview_record.preview_path,
+                status="ready", health_check=True,
+            )
+            pkg = PackageManager().create_package(result.website_project, build_result, preview_result)
+            preview_record.package_id       = pkg.package_id
+            preview_record.package_metadata = pkg.model_dump(mode="json")
+            db.add(preview_record)
+            await db.commit()
+            await db.refresh(preview_record)
+
+            # ── Write success into job ────────────────────────────────────── #
+            job.status          = JobStatus.SUCCEEDED
+            job.progress        = "Complete"
+            job.website_id      = str(preview_record.id)
+            job.generation_id   = result.website_project.generation_id
+            job.html            = html_content
+            job.preview_path    = preview_record.preview_path
+            job.package_id      = preview_record.package_id
+            job.project_name    = result.website_project.project_name
+            job.generation_time = result.generation_time
+
+    except Exception as exc:
+        logger.exception("Generation job %s failed: %s", job_id, exc)
+        if job:
+            job.status = JobStatus.FAILED
+            job.error  = f"{type(exc).__name__}: {exc}"
+
+
+# ---------------------------------------------------------------------------
+# Request / Response schemas
+# ---------------------------------------------------------------------------
+
+class CreateJobRequest(BaseModel):
+    lead_id: uuid.UUID = Field(..., description="UUID of the lead to generate a website for.")
+
+
+class JobStatusResponse(BaseModel):
+    job_id:         str
+    lead_id:        str
+    status:         JobStatus
+    progress:       str
+    website_id:     Optional[str] = None
+    generation_id:  Optional[str] = None
+    html:           Optional[str] = None
+    preview_path:   Optional[str] = None
+    package_id:     Optional[str] = None
+    project_name:   Optional[str] = None
+    generation_time: float = 0.0
+    error:          Optional[str] = None
 
 
 class GenerateRequest(BaseModel):
@@ -35,16 +240,20 @@ class BuildProfileRequest(BaseModel):
 
 
 class GenerateResponse(BaseModel):
-    website_id: uuid.UUID
-    lead_id: uuid.UUID
-    generation_id: str
-    html: str
+    website_id:     uuid.UUID
+    lead_id:        uuid.UUID
+    generation_id:  str
+    html:           str
     generation_time: float = 0.0
-    project_name: Optional[str] = None
-    preview_path: str
-    package_id: Optional[str] = None
-    status: str = "generated"
+    project_name:   Optional[str] = None
+    preview_path:   str
+    package_id:     Optional[str] = None
+    status:         str = "generated"
 
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
 
 @router.post(
     "/build",
@@ -89,19 +298,109 @@ async def build_website_intelligence(
 
 
 @router.post(
+    "/jobs",
+    response_model=StandardResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Submit an async website generation job",
+    description=(
+        "Immediately returns a job_id.  The generation runs in the background "
+        "(crawl + AI call).  Poll GET /jobs/{job_id} until status is "
+        "'succeeded' or 'failed'."
+    ),
+)
+async def create_generation_job(
+    payload: CreateJobRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _evict_old_jobs()
+
+    # Quick ownership check before queuing
+    lead = await lead_repository.get(db, id=payload.lead_id)
+    if not lead or lead.user_id != current_user.id:
+        raise NotFoundException(f"Lead '{payload.lead_id}' not found.")
+
+    job_id = uuid.uuid4().hex
+    job = GenerationJob(
+        job_id   = job_id,
+        lead_id  = str(payload.lead_id),
+        user_id  = str(current_user.id),
+        status   = JobStatus.PENDING,
+        progress = "Queued",
+    )
+    _JOBS[job_id] = job
+
+    background_tasks.add_task(
+        _run_generation_job,
+        job_id  = job_id,
+        lead_id = payload.lead_id,
+        user_id = str(current_user.id),
+    )
+
+    logger.info(
+        "Generation job queued | job_id=%s | lead_id=%s | user=%s",
+        job_id, payload.lead_id, current_user.id,
+    )
+
+    return StandardResponse(
+        success=True,
+        message="Generation job queued.",
+        data={"job_id": job_id, "status": "pending"},
+    )
+
+
+@router.get(
+    "/jobs/{job_id}",
+    response_model=StandardResponse[JobStatusResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Poll a generation job for status and result",
+)
+async def get_generation_job(
+    job_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    job = _JOBS.get(job_id)
+    if not job:
+        raise NotFoundException(f"Job '{job_id}' not found (may have expired).")
+    if job.user_id != str(current_user.id):
+        raise NotFoundException(f"Job '{job_id}' not found.")
+
+    return StandardResponse(
+        success=True,
+        message=f"Job status: {job.status}",
+        data=JobStatusResponse(
+            job_id          = job.job_id,
+            lead_id         = job.lead_id,
+            status          = job.status,
+            progress        = job.progress,
+            website_id      = job.website_id,
+            generation_id   = job.generation_id,
+            html            = job.html,
+            preview_path    = job.preview_path,
+            package_id      = job.package_id,
+            project_name    = job.project_name,
+            generation_time = job.generation_time,
+            error           = job.error,
+        ),
+    )
+
+
+@router.post(
     "/generate",
     response_model=StandardResponse[GenerateResponse],
     status_code=status.HTTP_200_OK,
-    summary="Generate a static HTML website for a lead",
+    summary="Generate a static HTML website for a lead (synchronous)",
     description=(
         "Fetches the lead's WebsiteProfile and builds a MarkdownPackage, "
-        "then runs the StaticHTMLGenerator to produce a single self-contained HTML file."
+        "then runs the StaticHTMLGenerator to produce a single self-contained HTML file. "
+        "Note: prefer POST /jobs for production use to avoid proxy timeouts."
     ),
     responses={
         200: {"description": "Website generated successfully."},
         401: {"description": "Missing or invalid credentials."},
         404: {"description": "Lead or website intelligence data not found."},
-        503: {"description": "AI Provider (Groq) is unavailable."},
+        503: {"description": "AI Provider is unavailable."},
     }
 )
 async def generate_website(
@@ -181,13 +480,13 @@ async def generate_website(
         status="ready",
         health_check=True,
     )
-    package = PackageManager().create_package(
+    package_obj = PackageManager().create_package(
         result.website_project,
         build_result,
         preview_result,
     )
-    preview_record.package_id = package.package_id
-    preview_record.package_metadata = package.model_dump(mode="json")
+    preview_record.package_id = package_obj.package_id
+    preview_record.package_metadata = package_obj.model_dump(mode="json")
     db.add(preview_record)
     await db.commit()
     await db.refresh(preview_record)
