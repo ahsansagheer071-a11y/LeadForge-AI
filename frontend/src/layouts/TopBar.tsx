@@ -1,19 +1,13 @@
 import { useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  Sun,
-  Moon,
-  Monitor,
   ChevronDown,
   LogOut,
   Settings,
 } from 'lucide-react';
 import { cn } from '@/utils';
-import { useTheme } from '@/contexts/ThemeContext';
 import { useAuthStore } from '@/store';
 import { useOutsideClick } from '@/hooks/hooks';
-
-const themeIcons = { light: Sun, dark: Moon, system: Monitor } as const;
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
   '/dashboard': { title: 'Command Center', subtitle: 'Mission Status & Priority Intel' },
@@ -28,8 +22,6 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
 };
 
 export function TopBar({ className }: { className?: string }) {
-  const { mode, cycle } = useTheme();
-  const ThemeIcon = themeIcons[mode];
   const navigate = useNavigate();
   const location = useLocation();
   const user = useAuthStore((s) => s.user);
@@ -62,16 +54,6 @@ export function TopBar({ className }: { className?: string }) {
 
       {/* Right */}
       <div className="flex items-center gap-2">
-        {/* Theme toggle */}
-        <button
-          onClick={cycle}
-          className="size-8 rounded-[var(--radius-sm)] flex items-center justify-center text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] transition-colors"
-          aria-label={`Theme: ${mode}`}
-          title={`Theme: ${mode}`}
-        >
-          <ThemeIcon className="size-4" />
-        </button>
-
         {/* Avatar / User menu */}
         <div className="relative" ref={menuRef}>
           <button
