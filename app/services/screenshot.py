@@ -430,32 +430,60 @@ _CLOUDINARY_MAX_BYTES = 9_500_000
 _MAX_SCREENSHOT_WIDTH = 1920
 _INITIAL_WEBP_QUALITY = 85
 _MIN_WEBP_QUALITY = 15
+_FALLBACK_WIDTHS = (1600, 1200, 800, 600)
 
 
 def _optimize_image(input_path: str, output_path: str) -> int:
     """
     Resize (max 1920 px wide) and convert to WebP with progressive quality
-    reduction until the file is safely under Cloudinary's 10 MB limit.
+    reduction.  If quality alone cannot reach the target, also reduce
+    dimensions in a second pass.
     Returns the final size in bytes.
     """
     with Image.open(input_path) as img:
         if img.mode in ("RGBA", "LA", "P"):
             img = img.convert("RGB")
 
-        # Resize if wider than threshold
-        if img.width > _MAX_SCREENSHOT_WIDTH:
-            ratio = _MAX_SCREENSHOT_WIDTH / img.width
-            new_height = int(img.height * ratio)
-            img = img.resize((_MAX_SCREENSHOT_WIDTH, new_height), Image.LANCZOS)
+        original_width = img.width
+        original_height = img.height
+
+        # --- Pass 1: resize to max width, reduce quality progressively ---
+        working = img
+        if working.width > _MAX_SCREENSHOT_WIDTH:
+            ratio = _MAX_SCREENSHOT_WIDTH / working.width
+            working = working.resize(
+                (_MAX_SCREENSHOT_WIDTH, int(working.height * ratio)), Image.LANCZOS
+            )
 
         quality = _INITIAL_WEBP_QUALITY
         while quality >= _MIN_WEBP_QUALITY:
-            img.save(output_path, "WEBP", quality=quality)
+            working.save(output_path, "WEBP", quality=quality)
             size = os.path.getsize(output_path)
             if size <= _CLOUDINARY_MAX_BYTES:
                 return size
             quality -= 5
 
+        # --- Pass 2: also reduce width until the file fits (quality stays at minimum) ---
+        current = working
+        for w in _FALLBACK_WIDTHS:
+            if current.width <= w:
+                continue
+            ratio = w / current.width
+            current = current.resize((w, int(current.height * ratio)), Image.LANCZOS)
+            current.save(output_path, "WEBP", quality=_MIN_WEBP_QUALITY)
+            size = os.path.getsize(output_path)
+            if size <= _CLOUDINARY_MAX_BYTES:
+                logger.info(
+                    "Fallback resize to %dpx achieved target size (%d bytes)",
+                    w, size,
+                )
+                return size
+
+        logger.warning(
+            "Screenshot still exceeds Cloudinary limit after fallback "
+            "(original %dx%d, file %d bytes)",
+            original_width, original_height, os.path.getsize(output_path),
+        )
         return os.path.getsize(output_path)
 
 
@@ -573,20 +601,28 @@ class ScreenshotService:
 
         # Upload all three optimised images concurrently
         upload_start = time.monotonic()
-        desktop_res, mobile_res, full_page_res = await asyncio.gather(
-            cloudinary_service.upload_image(opt_desktop),
-            cloudinary_service.upload_image(opt_mobile),
-            cloudinary_service.upload_image(opt_full),
-        )
-        logger.info(f"Cloudinary upload completed in {int((time.monotonic() - upload_start) * 1000)}ms")
+        try:
+            desktop_res, mobile_res, full_page_res = await asyncio.gather(
+                cloudinary_service.upload_image(opt_desktop),
+                cloudinary_service.upload_image(opt_mobile),
+                cloudinary_service.upload_image(opt_full),
+            )
+        except Exception:
+            logger.error("Cloudinary upload failed; temporary files will be cleaned up")
+            raise
+        finally:
+            # Always clean up ALL temporary files (original PNGs + optimised WebP)
+            # Cloudinary's upload_image deletes the file it receives on success,
+            # so deletion here is best-effort for any remaining files.
+            for p in (desktop_path, mobile_path, full_page_path,
+                      opt_desktop, opt_mobile, opt_full):
+                try:
+                    if os.path.exists(p):
+                        os.remove(p)
+                except Exception as e:
+                    logger.warning("Failed to delete temporary file %s: %s", p, e)
 
-        # Clean up original PNGs (upload_image deletes the optimised files)
-        for p in (desktop_path, mobile_path, full_page_path):
-            try:
-                if os.path.exists(p):
-                    os.remove(p)
-            except Exception as e:
-                logger.warning("Failed to delete temporary PNG %s: %s", p, e)
+        logger.info(f"Cloudinary upload completed in {int((time.monotonic() - upload_start) * 1000)}ms")
 
         screenshot_data = {
             "desktop_local_path": desktop_path if not desktop_res.get("secure_url") else None,
@@ -600,7 +636,21 @@ class ScreenshotService:
             "full_page_public_id": full_page_res.get("public_id"),
         }
 
+        # Preserve existing screenshot if recapture fails but old data exists
         existing = await screenshot_repository.get_by_lead_id(db, lead_id=lead_id)
+        if existing and not any([
+            desktop_res.get("secure_url"),
+            mobile_res.get("secure_url"),
+            full_page_res.get("secure_url"),
+        ]):
+            logger.info("Recapture returned no Cloudinary URLs; keeping existing screenshot")
+            return CaptureScreenshotResponse(
+                lead_id=lead_id,
+                desktop_url=existing.desktop_cloudinary_url,
+                mobile_url=existing.mobile_cloudinary_url,
+                full_page_url=existing.full_page_cloudinary_url,
+            )
+
         if existing:
             await screenshot_repository.update(db, db_obj=existing, obj_in=screenshot_data)
         else:

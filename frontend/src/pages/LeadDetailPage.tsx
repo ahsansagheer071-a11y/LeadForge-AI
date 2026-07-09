@@ -102,7 +102,7 @@ function getActiveStage(
   const states = STAGES.map(s => rawState(s.id, screenshot, analysis, audit, website, outreach, mutations));
   for (let i = 0; i < STAGES.length; i++) {
     if (states[i] === 'completed') continue;
-    if (states[i] === 'active' || states[i] === 'pending') return STAGES[i];
+    if (states[i] === 'active' || states[i] === 'pending' || states[i] === 'failed') return STAGES[i];
     break;
   }
   return null;
@@ -206,7 +206,7 @@ export function LeadDetailPage() {
 
   const auditMutation = useMutation({
     mutationFn: () => auditService.run({ lead_id: id! }),
-    onSuccess: (result) => { setAuditResult(result); toast.success(`Audit complete — Score: ${result.score.overall_score}/100 (${result.score.category})`); },
+    onSuccess: (result) => { setAuditResult(result); queryClient.invalidateQueries({ queryKey: ['lead', id] }); toast.success(`Audit complete — Score: ${result.score.overall_score}/100 (${result.score.category})`); },
     onError: (err) => { toast.error(getApiErrorMessage(err, 'Audit failed')); },
   });
 
