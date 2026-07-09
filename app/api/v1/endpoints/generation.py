@@ -5,15 +5,12 @@ requests.  Website generation (crawl + AI call) routinely takes 60-180 seconds
 for complex business sites, so a synchronous /generate call will always be
 killed by the proxy before it completes.
 
-This module implements a simple in-memory async job pattern:
+This module implements an async job pattern using the database:
   POST /api/v1/generation/jobs        → { job_id, status: "pending" }
   GET  /api/v1/generation/jobs/{id}   → { status, result, error, progress }
 
 The background task runs the full pipeline and writes the result into the
-in-memory job store.  The frontend polls GET every 3 seconds.
-
-NOTE: In-memory store means jobs are lost on dyno restart.  That is acceptable
-since the completed website is persisted in the DB via GeneratedWebsite.
+persistent `generation_jobs` table. The frontend polls GET every 3 seconds.
 """
 
 import asyncio
@@ -29,12 +26,14 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from fastapi import APIRouter, BackgroundTasks, Depends, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundException, ServiceUnavailableException
 from app.database.session import get_db
 from app.dependencies.auth import get_current_user
 from app.models.generated_website import GeneratedWebsite
+from app.models.generation_job import GenerationJob as DBGenerationJob
 from app.models.user import User
 from app.repositories.generated_website import generated_website_repository
 from app.repositories.lead import lead_repository
@@ -51,9 +50,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# ---------------------------------------------------------------------------
-# Shared in-memory job store
-# ---------------------------------------------------------------------------
 
 class JobStatus(str, Enum):
     PENDING   = "pending"
@@ -62,97 +58,73 @@ class JobStatus(str, Enum):
     FAILED    = "failed"
 
 
-class GenerationJob(BaseModel):
-    job_id:       str
-    lead_id:      str
-    user_id:      str
-    status:       JobStatus = JobStatus.PENDING
-    progress:     str       = "Queued"
-    website_id:   Optional[str] = None
-    generation_id: Optional[str] = None
-    html:         Optional[str] = None
-    preview_path: Optional[str] = None
-    package_id:   Optional[str] = None
-    project_name: Optional[str] = None
-    generation_time: float  = 0.0
-    error:        Optional[str] = None
-    created_at:   float     = Field(default_factory=time.monotonic)
-
-
-# job_id -> GenerationJob
-_JOBS: Dict[str, GenerationJob] = {}
-
-# Evict jobs older than 30 minutes to prevent unbounded memory growth
-_JOB_TTL_SECONDS = 1800
-
-
-def _evict_old_jobs() -> None:
-    now = time.monotonic()
-    stale = [jid for jid, j in _JOBS.items() if now - j.created_at > _JOB_TTL_SECONDS]
-    for jid in stale:
-        _JOBS.pop(jid, None)
-
-
 # ---------------------------------------------------------------------------
 # Background worker
 # ---------------------------------------------------------------------------
 
-async def _run_generation_job(job_id: str, lead_id: uuid.UUID, user_id: str) -> None:
-    """Background task: full generation pipeline, writes result into _JOBS."""
-    job = _JOBS.get(job_id)
-    if not job:
-        return
+async def _update_job_status(db: AsyncSession, job_id: str, status: JobStatus, progress: str, error: Optional[str] = None, **kwargs):
+    stmt = select(DBGenerationJob).filter_by(job_id=job_id)
+    result = await db.execute(stmt)
+    job = result.scalar_one_or_none()
+    if job:
+        job.status = status.value
+        job.progress = progress
+        if error:
+            job.error = error
+        for k, v in kwargs.items():
+            setattr(job, k, v)
+        db.add(job)
+        await db.commit()
+    return job
 
+async def _run_generation_job(job_id: str, lead_id: uuid.UUID, user_id: str) -> None:
+    """Background task: full generation pipeline, writes result into database."""
     # We need a fresh DB session since we are running outside the request lifecycle
     from app.database.session import AsyncSessionLocal
 
     try:
         async with AsyncSessionLocal() as db:
-            job.status   = JobStatus.RUNNING
-            job.progress = "Loading lead data"
+            await _update_job_status(db, job_id, JobStatus.RUNNING, "Loading lead data")
 
             lead = await lead_repository.get(db, id=lead_id)
             if not lead or str(lead.user_id) != user_id:
-                job.status = JobStatus.FAILED
-                job.error  = f"Lead '{lead_id}' not found or access denied."
+                await _update_job_status(db, job_id, JobStatus.FAILED, "Failed", error=f"Lead '{lead_id}' not found or access denied.")
                 return
 
             # ── Step 1: Profile ──────────────────────────────────────────── #
-            job.progress = "Crawling website"
+            await _update_job_status(db, job_id, JobStatus.RUNNING, "Crawling website")
             response = await website_intelligence_service.load_profile(db, lead_id=lead_id)
             if not response:
                 if not lead.website:
-                    job.status = JobStatus.FAILED
-                    job.error  = "No website URL on this lead and no cached profile."
+                    await _update_job_status(db, job_id, JobStatus.FAILED, "Failed", error="No website URL on this lead and no cached profile.")
                     return
-                job.progress = "Crawling website (fresh)"
+                await _update_job_status(db, job_id, JobStatus.RUNNING, "Crawling website (fresh)")
                 profile = await website_intelligence_service.build_profile(
                     db, lead=lead, url=lead.website
                 )
                 if not profile:
-                    job.status = JobStatus.FAILED
-                    job.error  = "Website crawl returned no usable data. The site may block bots."
+                    await _update_job_status(db, job_id, JobStatus.FAILED, "Failed", error="Website crawl returned no usable data. The site may block bots.")
                     return
             else:
                 profile = response.profile
 
             # ── Step 2: Markdown package ─────────────────────────────────── #
-            job.progress = "Building markdown context"
+            await _update_job_status(db, job_id, JobStatus.RUNNING, "Building markdown context")
             builder  = MarkdownBuilder(blueprint=profile)
             package  = builder.build_package()
 
             # ── Step 3: AI generation ────────────────────────────────────── #
-            job.progress = "Generating HTML with AI"
+            await _update_job_status(db, job_id, JobStatus.RUNNING, "Generating HTML with AI")
             generator = StaticHTMLGenerator()
             result    = await generator.generate(blueprint=profile, package=package)
 
             if not result.success or not result.website_project:
-                job.status = JobStatus.FAILED
-                job.error  = "; ".join(result.errors) if result.errors else "Unknown generation error"
+                error_msg = "; ".join(result.errors) if result.errors else "Unknown generation error"
+                await _update_job_status(db, job_id, JobStatus.FAILED, "Failed", error=error_msg)
                 return
 
             # ── Step 4: Persist ──────────────────────────────────────────── #
-            job.progress = "Saving result"
+            await _update_job_status(db, job_id, JobStatus.RUNNING, "Saving result")
             html_content  = result.website_project.files[0].content if result.website_project.files else ""
             preview_record = GeneratedWebsite(
                 lead_id      = lead_id,
@@ -191,21 +163,21 @@ async def _run_generation_job(job_id: str, lead_id: uuid.UUID, user_id: str) -> 
             await db.refresh(preview_record)
 
             # ── Write success into job ────────────────────────────────────── #
-            job.status          = JobStatus.SUCCEEDED
-            job.progress        = "Complete"
-            job.website_id      = str(preview_record.id)
-            job.generation_id   = result.website_project.generation_id
-            job.html            = html_content
-            job.preview_path    = preview_record.preview_path
-            job.package_id      = preview_record.package_id
-            job.project_name    = result.website_project.project_name
-            job.generation_time = result.generation_time
+            await _update_job_status(
+                db, job_id, JobStatus.SUCCEEDED, "Complete",
+                website_id      = str(preview_record.id),
+                generation_id   = result.website_project.generation_id,
+                html            = html_content,
+                preview_path    = preview_record.preview_path,
+                package_id      = preview_record.package_id,
+                project_name    = result.website_project.project_name,
+                generation_time = result.generation_time
+            )
 
     except Exception as exc:
         logger.exception("Generation job %s failed: %s", job_id, exc)
-        if job:
-            job.status = JobStatus.FAILED
-            job.error  = f"{type(exc).__name__}: {exc}"
+        async with AsyncSessionLocal() as db:
+            await _update_job_status(db, job_id, JobStatus.FAILED, "Failed", error=f"{type(exc).__name__}: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -219,7 +191,7 @@ class CreateJobRequest(BaseModel):
 class JobStatusResponse(BaseModel):
     job_id:         str
     lead_id:        str
-    status:         JobStatus
+    status:         str
     progress:       str
     website_id:     Optional[str] = None
     generation_id:  Optional[str] = None
@@ -314,22 +286,37 @@ async def create_generation_job(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _evict_old_jobs()
-
     # Quick ownership check before queuing
     lead = await lead_repository.get(db, id=payload.lead_id)
     if not lead or lead.user_id != current_user.id:
         raise NotFoundException(f"Lead '{payload.lead_id}' not found.")
 
-    job_id = uuid.uuid4().hex
-    job = GenerationJob(
-        job_id   = job_id,
-        lead_id  = str(payload.lead_id),
-        user_id  = str(current_user.id),
-        status   = JobStatus.PENDING,
-        progress = "Queued",
+    # Check for existing active jobs for this lead
+    stmt = select(DBGenerationJob).filter(
+        DBGenerationJob.lead_id == payload.lead_id,
+        DBGenerationJob.status.in_(["pending", "running"])
     )
-    _JOBS[job_id] = job
+    result = await db.execute(stmt)
+    existing_job = result.scalar_one_or_none()
+    
+    if existing_job:
+        return StandardResponse(
+            success=True,
+            message="Active generation job already exists for this lead.",
+            data={"job_id": existing_job.job_id, "status": existing_job.status},
+        )
+
+    job_id = uuid.uuid4().hex
+    
+    db_job = DBGenerationJob(
+        job_id=job_id,
+        lead_id=payload.lead_id,
+        user_id=current_user.id,
+        status=JobStatus.PENDING.value,
+        progress="Queued",
+    )
+    db.add(db_job)
+    await db.commit()
 
     background_tasks.add_task(
         _run_generation_job,
@@ -358,12 +345,16 @@ async def create_generation_job(
 )
 async def get_generation_job(
     job_id: str,
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    job = _JOBS.get(job_id)
+    stmt = select(DBGenerationJob).filter_by(job_id=job_id)
+    result = await db.execute(stmt)
+    job = result.scalar_one_or_none()
+    
     if not job:
-        raise NotFoundException(f"Job '{job_id}' not found (may have expired).")
-    if job.user_id != str(current_user.id):
+        raise NotFoundException(f"Job '{job_id}' not found.")
+    if str(job.user_id) != str(current_user.id):
         raise NotFoundException(f"Job '{job_id}' not found.")
 
     return StandardResponse(
@@ -371,7 +362,7 @@ async def get_generation_job(
         message=f"Job status: {job.status}",
         data=JobStatusResponse(
             job_id          = job.job_id,
-            lead_id         = job.lead_id,
+            lead_id         = str(job.lead_id),
             status          = job.status,
             progress        = job.progress,
             website_id      = job.website_id,
