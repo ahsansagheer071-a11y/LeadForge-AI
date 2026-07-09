@@ -1,4 +1,4 @@
-import { Download, Loader2, AlertCircle, CheckCircle2, Archive, Play } from 'lucide-react';
+import { Download, Loader2, AlertCircle, CheckCircle2, Archive, Play, Copy, Check, ArrowLeft, Send } from 'lucide-react';
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -13,17 +13,14 @@ import { PremiumCard } from '@/components/PremiumCard';
 import { toast } from 'sonner';
 
 const statusTone: Record<string, 'brand' | 'success' | 'warning' | 'danger' | 'info' | 'muted' | 'neutral'> = {
-  generated: 'success',
-  building: 'warning',
-  failed: 'danger',
-  pending: 'info',
-  error: 'danger',
+  generated: 'success', building: 'warning', failed: 'danger', pending: 'info', error: 'danger',
 };
 
 export function DeploymentPage() {
   const { websiteId } = useParams<{ websiteId: string }>();
   const navigate = useNavigate();
   const [downloadLoading, setDownloadLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const { data: website, isLoading, error } = useQuery({
     queryKey: ['generated-website', websiteId],
@@ -43,40 +40,34 @@ export function DeploymentPage() {
       await generationService.downloadPackage(websiteId);
       toast.success('Download sequence initiated');
     } catch (err) {
-      const msg = (err as { message?: string })?.message || 'Download failed';
-      toast.error(msg);
-    } finally {
-      setDownloadLoading(false);
-    }
+      toast.error((err as { message?: string })?.message || 'Download failed');
+    } finally { setDownloadLoading(false); }
+  };
+
+  const handleCopyLink = async () => {
+    const url = window.location.href;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { toast.error('Failed to copy link'); }
   };
 
   if (!websiteId) {
     return (
-      <div className="space-y-8">
-        <div>
-          <h1 className="text-[28px] font-extrabold tracking-tight text-white mb-1">Deployment Center</h1>
-          <p className="text-[13px] font-mono text-slate-400 uppercase tracking-widest">Extract and distribute synthesized assets</p>
-        </div>
-        <EmptyState
-          title="No target selected"
-          message="Initialize generation protocols first to create deployment artifacts."
-          action={<Button variant="brand" onClick={() => navigate('/generation')}>Go to Generation</Button>}
-        />
+      <div className="space-y-8 lf-fade-in">
+        <div><h1 className="text-[28px] font-extrabold tracking-tight text-white mb-1">Delivery Vault</h1><p className="text-[13px] font-mono text-[var(--color-text-secondary)] uppercase tracking-widest">Extract and distribute synthesized assets</p></div>
+        <EmptyState title="No target selected" message="Initialize generation protocols first to create deployment artifacts." action={<Button variant="brand" onClick={() => navigate('/generation')}>Go to Lab</Button>} />
       </div>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="space-y-8">
-        <div>
-          <Skeleton variant="text" width={240} height={32} className="bg-slate-800" />
-          <Skeleton variant="text" width={340} height={16} className="mt-2 bg-slate-800" />
-        </div>
-        <PremiumCard innerClassName="p-8 space-y-6">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} variant="rounded" width="100%" height={80} className="bg-slate-800/50" />
-          ))}
+      <div className="space-y-8 lf-fade-in">
+        <div><Skeleton variant="text" width={240} height={32} /><Skeleton variant="text" width={340} height={16} className="mt-2" /></div>
+        <PremiumCard variant="featured" innerClassName="p-10 space-y-6">
+          {Array.from({ length: 4 }).map((_, i) => (<Skeleton key={i} variant="rounded" width="100%" height={60} delay={i * 60} />))}
         </PremiumCard>
       </div>
     );
@@ -84,136 +75,150 @@ export function DeploymentPage() {
 
   if (error || !website) {
     return (
-      <div className="space-y-8">
-        <div>
-          <h1 className="text-[28px] font-extrabold tracking-tight text-white mb-1">Deployment Center</h1>
-          <p className="text-[13px] font-mono text-slate-400 uppercase tracking-widest">Extract and distribute synthesized assets</p>
-        </div>
-        <EmptyState
-          title="Asset not located"
-          message="The requested deployment package does not exist or access is restricted."
-          action={<Button variant="outline" onClick={() => navigate('/generation')}>Return to Generation</Button>}
-        />
+      <div className="space-y-8 lf-fade-in">
+        <div><h1 className="text-[28px] font-extrabold tracking-tight text-white mb-1">Delivery Vault</h1><p className="text-[13px] font-mono text-[var(--color-text-secondary)] uppercase tracking-widest">Extract and distribute synthesized assets</p></div>
+        <EmptyState title="Asset not located" message="The requested deployment package does not exist or access is restricted." action={<Button variant="outline" onClick={() => navigate('/generation')}>Return to Lab</Button>} />
       </div>
     );
   }
 
   return (
-    <div className="space-y-8 animate-[lf-fade-in_0.22s_ease]">
-      <div>
-        <h1 className="text-[28px] font-extrabold tracking-tight text-white mb-1">Deployment Center</h1>
-        <p className="text-[13px] font-mono text-slate-400 uppercase tracking-widest">Extract and distribute synthesized assets</p>
+    <div className="space-y-8 lf-fade-in">
+      {/* Header */}
+      <div className="flex items-center gap-4">
+        <button onClick={() => navigate(`/preview/${websiteId}`)} className="size-9 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] flex items-center justify-center text-[var(--color-text-muted)] hover:text-white transition-all">
+          <ArrowLeft size={16} />
+        </button>
+        <div>
+          <h1 className="text-[28px] font-extrabold tracking-tight text-white mb-1">Delivery Vault</h1>
+          <p className="text-[13px] font-mono text-[var(--color-text-secondary)] uppercase tracking-widest">Secure asset extraction &amp; distribution</p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Package status */}
-        <PremiumCard featured={hasArtifacts} className="lg:col-span-2" innerClassName="p-8 flex flex-col justify-between min-h-[400px]">
-          <div>
-            <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-800">
-               <div>
-                 <h2 className="text-[20px] font-bold text-white mb-1">{website.project_name || 'Generated Website'}</h2>
-                 <p className="text-[12px] font-mono text-slate-500 uppercase tracking-wider">Asset ID: {website.package_id || website.id}</p>
-               </div>
-               <Badge tone={statusTone[website.status] ?? 'muted'} className="font-mono px-3 py-1 text-[13px] shadow-lg">{website.status}</Badge>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* ── Featured Package Card ───────────────────────────── */}
+        <PremiumCard variant="featured" className="lg:col-span-2" innerClassName="p-8 lg:p-10 flex flex-col">
+          {/* Identity header */}
+          <div className="flex items-start justify-between mb-8 pb-6 border-b border-[var(--color-border)]">
+            <div>
+              <h2 className="text-[22px] font-bold text-white mb-1">{website.project_name || 'Generated Website'}</h2>
+              <p className="text-[11px] font-mono text-[var(--color-text-muted)]">Asset ID: {website.package_id || website.id}</p>
             </div>
-
-            {website.status === 'generated' || website.status === 'ready' ? (
-              <div className="flex items-center gap-6 p-6 rounded-[16px] bg-[#10b981]/5 border border-[#10b981]/20">
-                <div className="size-16 rounded-full bg-[#10b981]/20 border border-[#10b981]/50 flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(16,185,129,0.3)]">
-                  <CheckCircle2 className="size-8 text-[#10b981]" />
-                </div>
-                <div>
-                  <p className="text-[18px] font-bold text-white mb-1">Artifacts Ready</p>
-                  <p className="text-[13px] font-mono text-slate-400">
-                    Deployment package compiled and ready for secure extraction.
-                  </p>
-                </div>
-              </div>
-            ) : website.status === 'failed' || website.status === 'error' ? (
-              <div className="flex items-center gap-6 p-6 rounded-[16px] bg-red-500/5 border border-red-500/20">
-                <div className="size-16 rounded-full bg-red-500/20 border border-red-500/50 flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(239,68,68,0.3)]">
-                  <AlertCircle className="size-8 text-red-500" />
-                </div>
-                <div>
-                  <p className="text-[18px] font-bold text-white mb-1">Compilation Failed</p>
-                  <p className="text-[13px] font-mono text-slate-400">
-                    An anomaly occurred during asset synthesis. Check system logs.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-6 p-6 rounded-[16px] bg-[#0ea5e9]/5 border border-[#0ea5e9]/20 relative overflow-hidden">
-                <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent,rgba(14,165,233,0.1),transparent)] -translate-x-full animate-[lf-shimmer_2s_infinite]" />
-                <div className="size-16 rounded-full bg-[#0ea5e9]/20 border border-[#0ea5e9]/50 flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(14,165,233,0.3)]">
-                  <Loader2 className="size-8 text-[#0ea5e9] animate-spin" />
-                </div>
-                <div>
-                  <p className="text-[18px] font-bold text-white mb-1">Processing Package</p>
-                  <p className="text-[13px] font-mono text-slate-400">
-                    Compilation and minification in progress. Please hold.
-                  </p>
-                </div>
-              </div>
-            )}
+            <Badge tone={statusTone[website.status] ?? 'muted'} className="font-mono px-3 py-1 text-[12px]">{website.status}</Badge>
           </div>
 
-          <div className="grid grid-cols-2 gap-6 pt-6 border-t border-slate-800 mt-8">
-            <div className="bg-slate-900/50 rounded-[12px] p-4 border border-slate-800">
-              <p className="text-[11px] font-mono text-slate-500 uppercase tracking-widest mb-1">Architecture</p>
-              <p className="text-[16px] font-bold text-[#0ea5e9]">{website.framework}</p>
+          {/* Status panel */}
+          {isPackageReady ? (
+            <div className="flex items-center gap-5 p-6 rounded-[var(--radius-lg)] bg-emerald-500/5 border border-emerald-500/20 mb-8">
+              <div className="size-16 rounded-full bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
+                <CheckCircle2 className="size-8 text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-[18px] font-bold text-white mb-1">ZIP Package Ready</p>
+                <p className="text-[12px] font-mono text-[var(--color-text-secondary)] leading-relaxed">
+                  The website has been compiled into a downloadable ZIP archive.
+                  <span className="block text-[11px] text-[var(--color-text-muted)] mt-1">Note: This is a local package, not a public deployment. Download and host manually, or connect a deployment provider.</span>
+                </p>
+              </div>
             </div>
-            <div className="bg-slate-900/50 rounded-[12px] p-4 border border-slate-800">
-              <p className="text-[11px] font-mono text-slate-500 uppercase tracking-widest mb-1">Generated</p>
-              <p className="text-[14px] font-medium text-white">{formatRelative(website.created_at)}</p>
+          ) : website.status === 'failed' || website.status === 'error' ? (
+            <div className="flex items-center gap-5 p-6 rounded-[var(--radius-lg)] bg-red-500/5 border border-red-500/20 mb-8">
+              <div className="size-16 rounded-full bg-red-500/15 border border-red-500/40 flex items-center justify-center shrink-0">
+                <AlertCircle className="size-8 text-red-400" />
+              </div>
+              <div>
+                <p className="text-[18px] font-bold text-white mb-1">Compilation Failed</p>
+                <p className="text-[12px] font-mono text-[var(--color-text-secondary)]">An error occurred during asset synthesis. Regenerate the website.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-5 p-6 rounded-[var(--radius-lg)] bg-[#0ea5e9]/5 border border-[#0ea5e9]/20 mb-8 relative overflow-hidden">
+              <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent,rgba(14,165,233,0.08),transparent)] -translate-x-full animate-[lf-shimmer_2s_infinite]" />
+              <div className="size-16 rounded-full bg-[#0ea5e9]/15 border border-[#0ea5e9]/40 flex items-center justify-center shrink-0 relative">
+                <Loader2 className="size-8 text-[#0ea5e9] lf-spin" />
+              </div>
+              <div className="relative">
+                <p className="text-[18px] font-bold text-white mb-1">Processing Package</p>
+                <p className="text-[12px] font-mono text-[var(--color-text-secondary)]">Compilation in progress. Please wait.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Metadata grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="p-4 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] border border-[var(--color-border)]">
+              <p className="text-[10px] font-mono text-[var(--color-text-muted)] uppercase tracking-wider mb-1">Framework</p>
+              <p className="text-[15px] font-bold text-[#0ea5e9]">{website.framework}</p>
+            </div>
+            <div className="p-4 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] border border-[var(--color-border)]">
+              <p className="text-[10px] font-mono text-[var(--color-text-muted)] uppercase tracking-wider mb-1">Generated</p>
+              <p className="text-[13px] font-medium text-white">{formatRelative(website.created_at)}</p>
+            </div>
+            <div className="p-4 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] border border-[var(--color-border)]">
+              <p className="text-[10px] font-mono text-[var(--color-text-muted)] uppercase tracking-wider mb-1">Filename</p>
+              <p className="text-[13px] font-medium text-white font-mono truncate">leadforge-{website.id.slice(0, 8)}.zip</p>
+            </div>
+            <div className="p-4 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] border border-[var(--color-border)]">
+              <p className="text-[10px] font-mono text-[var(--color-text-muted)] uppercase tracking-wider mb-1">Status</p>
+              <Badge tone={statusTone[website.status] ?? 'muted'} className="font-mono text-[10px]">{website.status}</Badge>
             </div>
           </div>
         </PremiumCard>
 
-        {/* Actions */}
+        {/* ── Actions panel ──────────────────────────────────── */}
         <PremiumCard innerClassName="p-8 flex flex-col justify-between">
-           <div>
-              <h3 className="text-[14px] font-mono uppercase tracking-widest text-[#8b5cf6] mb-6 pb-2 border-b border-slate-800 flex items-center gap-2">
-                 <Archive size={16} /> Operations
-              </h3>
+          <div>
+            <h3 className="text-[14px] font-mono uppercase tracking-widest text-[#0ea5e9] mb-6 pb-3 border-b border-[var(--color-border)] flex items-center gap-2">
+              <Archive size={16} /> Operations
+            </h3>
 
-              <div className="space-y-4">
-                <button
-                  disabled={!hasArtifacts || downloadLoading}
-                  onClick={handleDownload}
-                  className={cn(
-                    "w-full flex items-center justify-center gap-3 py-4 rounded-[12px] text-[13px] font-mono uppercase tracking-widest font-bold transition-all duration-300",
-                    !hasArtifacts 
-                      ? "bg-slate-800/50 text-slate-500 border border-slate-700 cursor-not-allowed"
-                      : downloadLoading 
-                        ? "bg-[#0ea5e9]/20 text-[#0ea5e9] border border-[#0ea5e9]/50 cursor-wait"
-                        : "bg-gradient-to-r from-[#0ea5e9] to-[#3b82f6] text-white shadow-[0_0_20px_rgba(14,165,233,0.4)] hover:shadow-[0_0_30px_rgba(14,165,233,0.6)] hover:-translate-y-1"
-                  )}
-                >
-                  {downloadLoading ? <Loader2 size={16} className="animate-spin"/> : <Download size={16} />}
-                  {downloadLoading ? 'Extracting...' : 'Download Package'}
-                </button>
-                
-                <button
-                   onClick={() => navigate(`/preview/${websiteId}`)}
-                   className="w-full flex items-center justify-center gap-3 py-3 rounded-[12px] bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 transition-all text-white font-mono uppercase tracking-widest text-[12px]"
-                >
-                  <Play size={14} /> Enter Preview
-                </button>
-              </div>
-           </div>
+            <div className="space-y-3">
+              {/* Download */}
+              <button
+                disabled={!hasArtifacts || downloadLoading}
+                onClick={handleDownload}
+                className={cn(
+                  'w-full flex items-center justify-center gap-3 py-4 rounded-[var(--radius-md)] text-[13px] font-mono uppercase tracking-widest font-bold transition-all duration-300 border',
+                  !hasArtifacts
+                    ? 'bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] border-[var(--color-border)] cursor-not-allowed'
+                    : downloadLoading
+                      ? 'bg-[#0ea5e9]/10 text-[#0ea5e9] border-[#0ea5e9]/30 cursor-wait'
+                      : 'bg-gradient-to-r from-[#0ea5e9] to-[#3b82f6] text-white border-transparent shadow-[0_0_20px_rgba(14,165,233,0.4)] hover:shadow-[0_0_30px_rgba(14,165,233,0.6)] hover:-translate-y-0.5',
+                )}
+              >
+                {downloadLoading ? <Loader2 size={16} className="lf-spin" /> : <Download size={16} />}
+                {downloadLoading ? 'Extracting...' : 'Download ZIP Package'}
+              </button>
 
-           <div className="mt-8 pt-6 border-t border-slate-800 text-center">
-             {!hasArtifacts && website.status !== 'failed' && website.status !== 'error' && (
-               <p className="text-[11px] font-mono text-slate-500 uppercase tracking-widest">
-                 Extraction protocols unlock upon completion.
-               </p>
-             )}
-             {website.status === 'failed' && (
-               <p className="text-[11px] font-mono text-red-500 uppercase tracking-widest">
-                 Critical error. Abort operation.
-               </p>
-             )}
-           </div>
+              {/* Preview */}
+              <button
+                onClick={() => navigate(`/preview/${websiteId}`)}
+                className="w-full flex items-center justify-center gap-3 py-3.5 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] hover:bg-[color-mix(in_oklab,var(--color-surface-hover)_80%,#0ea5e9)] border border-[var(--color-border)] hover:border-[#0ea5e9]/30 transition-all text-white font-mono uppercase tracking-widest text-[12px]"
+              >
+                <Play size={14} /> Open Preview
+              </button>
+
+              {/* Copy link */}
+              <button
+                onClick={handleCopyLink}
+                className="w-full flex items-center justify-center gap-3 py-3 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] hover:bg-[color-mix(in_oklab,var(--color-surface-hover)_80%,#0ea5e9)] border border-[var(--color-border)] hover:border-[#0ea5e9]/30 transition-all text-white font-mono uppercase tracking-widest text-[11px]"
+              >
+                {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                {copied ? 'Link Copied' : 'Copy Vault Link'}
+              </button>
+            </div>
+          </div>
+
+          {/* Outreach CTA */}
+          <div className="mt-8 pt-6 border-t border-[var(--color-border)] space-y-4">
+            <p className="text-[10px] font-mono text-[var(--color-text-muted)] uppercase tracking-wider text-center">Next Step</p>
+            <button
+              onClick={() => navigate('/projects')}
+              className="w-full flex items-center justify-center gap-3 py-3.5 rounded-[var(--radius-md)] bg-gradient-to-r from-[#22d3ee]/10 to-[#06b6d4]/10 border border-[#22d3ee]/30 text-[#22d3ee] font-mono uppercase tracking-widest text-[12px] font-bold hover:from-[#22d3ee]/20 hover:to-[#06b6d4]/20 hover:-translate-y-0.5 transition-all"
+            >
+              <Send size={14} /> Generate Outreach
+            </button>
+          </div>
         </PremiumCard>
       </div>
     </div>

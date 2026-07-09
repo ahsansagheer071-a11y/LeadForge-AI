@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Globe, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Sparkles, Globe, Loader2, CheckCircle2, AlertCircle, Camera, Search, Shield, Zap } from 'lucide-react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Badge } from '@/components/Badge';
-
 import { Skeleton } from '@/components/Loading';
 import { EmptyState } from '@/components/ErrorStates';
 import { PremiumCard } from '@/components/PremiumCard';
@@ -12,6 +11,28 @@ import { getApiErrorMessage } from '@/services/apiClient';
 import { usePreviewStore } from '@/store';
 import { cn } from '@/utils';
 import { toast } from 'sonner';
+
+const statusBadgeTone = (status: string): 'success' | 'info' | 'brand' | 'muted' => {
+  if (status.includes('READY')) return 'success';
+  if (status.includes('ANALYZED') || status.includes('SCORED')) return 'info';
+  if (status.includes('SCRAPED') || status.includes('DISCOVERED') || status.includes('NEW')) return 'brand';
+  return 'muted';
+};
+
+/* ── Prerequisite check items ────────────────────────────────── */
+interface Prereq {
+  id: string;
+  label: string;
+  icon: typeof Camera;
+  color: string;
+  check: (lead: { screenshot?: unknown; audit?: unknown; score?: unknown } | null) => boolean;
+}
+
+const PREREQS: Prereq[] = [
+  { id: 'screenshot', label: 'Screenshot Captured', icon: Camera, color: '#06b6d4', check: (l) => !!l?.screenshot },
+  { id: 'analysis', label: 'Website Analyzed', icon: Search, color: '#8b5cf6', check: () => true },
+  { id: 'audit', label: 'Audit Complete', icon: Shield, color: '#f59e0b', check: (l) => !!l?.audit && !!l?.score },
+];
 
 export function GenerationPage() {
   const navigate = useNavigate();
@@ -26,44 +47,45 @@ export function GenerationPage() {
   const leads = page?.items ?? [];
   const selectedLead = leads.find((l) => l.id === selectedId) ?? null;
 
+  const { data: leadDetail } = useQuery({
+    queryKey: ['lead', selectedId],
+    queryFn: () => projectsService.getById(selectedId),
+    enabled: !!selectedId,
+  });
+
   const mutation = useMutation({
     mutationFn: () => generateWebsite(selectedId),
     onSuccess: (data) => {
+      if (!data?.website_id) { toast.error('Generation failed — no website ID returned'); return; }
       setHtmlContent(data.html);
-      toast.success('Website generated successfully');
       navigate(`/preview/${data.website_id}`);
     },
-    onError: (err) => {
-      toast.error(getApiErrorMessage(err, 'Generation failed'));
-    },
+    onError: (err) => { toast.error(getApiErrorMessage(err, 'Generation failed')); },
   });
 
-  const statusBadgeTone = (status: string) => {
-    if (status.includes('READY')) return 'success' as const;
-    if (status.includes('ANALYZED') || status.includes('SCORED')) return 'info' as const;
-    if (status.includes('SCRAPED') || status.includes('DISCOVERED') || status.includes('NEW')) return 'brand' as const;
-    return 'muted' as const;
-  };
+  const prereqsMet = PREREQS.every((p) => p.check(leadDetail ?? null));
+  const canGenerate = !!selectedId && prereqsMet && !mutation.isPending;
 
   return (
-    <div className="space-y-8 animate-[lf-fade-in_0.22s_ease]">
+    <div className="space-y-8 lf-fade-in">
+      {/* Header */}
       <div>
-        <h1 className="text-[28px] font-extrabold tracking-tight text-white mb-1">AI Synthesis Core</h1>
-        <p className="text-[13px] font-mono text-slate-400 uppercase tracking-widest">Generate immersive web properties from intelligence profiles</p>
+        <h1 className="text-[28px] font-extrabold tracking-tight text-white mb-1">AI Synthesis Lab</h1>
+        <p className="text-[13px] font-mono text-[var(--color-text-secondary)] uppercase tracking-widest">Generate premium websites from intelligence profiles</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Lead selector */}
-        <PremiumCard innerClassName="p-6 flex flex-col h-[600px]" className="lg:col-span-1">
-          <div className="mb-4 pb-4 border-b border-slate-800">
+        {/* ── Lead selector + prerequisites ────────────────────── */}
+        <PremiumCard innerClassName="p-6 flex flex-col" className="lg:col-span-1">
+          <div className="mb-4 pb-4 border-b border-[var(--color-border)]">
             <h3 className="text-[14px] font-mono uppercase tracking-widest text-[#0ea5e9]">Target Selection</h3>
           </div>
-          
-          <div className="flex-1 overflow-y-auto space-y-2 lf-thin-scroll pr-2">
+
+          <div className="flex-1 overflow-y-auto space-y-2 lf-thin-scroll pr-2 min-h-0">
             {isLoading ? (
               <div className="space-y-2">
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <Skeleton key={i} variant="rounded" width="100%" height={60} delay={i * 60} className="bg-slate-800/50" />
+                  <Skeleton key={i} variant="rounded" width="100%" height={64} delay={i * 60} />
                 ))}
               </div>
             ) : leads.length > 0 ? (
@@ -72,20 +94,19 @@ export function GenerationPage() {
                   key={lead.id}
                   onClick={() => setSelectedId(lead.id)}
                   className={cn(
-                    'w-full text-left px-4 py-3 rounded-[12px] transition-all duration-200 group',
+                    'w-full text-left px-4 py-3 rounded-[var(--radius-md)] transition-all duration-200 group border',
                     selectedId === lead.id
-                      ? 'bg-gradient-to-r from-[#0ea5e9]/20 to-[#8b5cf6]/20 border-l-2 border-l-[#0ea5e9] shadow-[0_0_15px_rgba(14,165,233,0.1)]'
-                      : 'bg-slate-900/50 border border-slate-800 hover:bg-slate-800 hover:border-slate-700',
+                      ? 'bg-gradient-to-r from-[#0ea5e9]/15 to-[#8b5cf6]/15 border-[#0ea5e9]/30 shadow-[0_0_15px_rgba(14,165,233,0.1)]'
+                      : 'bg-[var(--color-surface-hover)] border-transparent hover:border-[var(--color-border-strong)]',
                   )}
                 >
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className={cn("font-bold truncate text-[14px]", selectedId === lead.id ? "text-white" : "text-slate-300 group-hover:text-white")}>{lead.name}</span>
-                      <Badge tone={statusBadgeTone(lead.status)} className="scale-90 font-mono origin-right">{lead.status.replace(/_/g, ' ')}</Badge>
-                    </div>
-                    {lead.website && (
-                      <p className="text-[11px] font-mono text-slate-500 truncate">{lead.website}</p>
-                    )}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={cn("font-bold truncate text-[14px]", selectedId === lead.id ? "text-white" : "text-[var(--color-text)]")}>{lead.name}</span>
+                    <Badge tone={statusBadgeTone(lead.status)} className="scale-90 font-mono origin-right shrink-0">{lead.status.replace(/_/g, ' ')}</Badge>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    {lead.website && <span className="text-[11px] font-mono text-[var(--color-text-muted)] truncate">{lead.website}</span>}
+                    {lead.rating != null && <span className="text-[11px] font-mono text-amber-400 shrink-0">★ {lead.rating.toFixed(1)}</span>}
                   </div>
                 </button>
               ))
@@ -94,110 +115,219 @@ export function GenerationPage() {
             )}
           </div>
 
+          {/* Prerequisite checklist */}
+          {selectedId && (
+            <div className="pt-5 mt-4 border-t border-[var(--color-border)] space-y-3">
+              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--color-text-muted)]">Prerequisites</p>
+              {PREREQS.map((p) => {
+                const met = p.check(leadDetail ?? null);
+                const Icon = p.icon;
+                return (
+                  <div key={p.id} className="flex items-center gap-3">
+                    <div className={cn(
+                      'size-7 rounded-md flex items-center justify-center shrink-0 transition-all',
+                      met ? 'bg-emerald-500/15 border border-emerald-500/30' : 'bg-[var(--color-surface-hover)] border border-[var(--color-border)]',
+                    )}>
+                      {met ? <CheckCircle2 size={13} className="text-emerald-400" /> : <Icon size={13} className="text-[var(--color-text-muted)]" />}
+                    </div>
+                    <span className={cn('text-[12px] font-mono', met ? 'text-emerald-400' : 'text-[var(--color-text-muted)]')}>{p.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Generate button */}
           {leads.length > 0 && (
-            <div className="pt-5 mt-4 border-t border-slate-800">
-              <div className="flex items-center justify-between text-[11px] font-mono uppercase text-slate-500 mb-3 tracking-wider">
-                <span className="truncate pr-2">{selectedLead ? selectedLead.name : 'Awaiting Selection'}</span>
-                {selectedLead?.rating != null && (
-                  <span className="text-amber-500 flex-shrink-0">★ {selectedLead.rating.toFixed(1)}</span>
-                )}
+            <div className="pt-5 mt-4 border-t border-[var(--color-border)]">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[11px] font-mono text-[var(--color-text-muted)] truncate">{selectedLead?.name || 'Awaiting Selection'}</span>
               </div>
               <button
-                disabled={!selectedId || mutation.isPending}
+                disabled={!canGenerate}
                 onClick={() => mutation.mutate()}
                 className={cn(
-                  "w-full flex items-center justify-center gap-2 py-3 rounded-[12px] text-[13px] font-mono uppercase tracking-widest font-bold transition-all duration-300",
-                  (!selectedId || mutation.isPending) 
-                    ? "bg-slate-800 text-slate-500 cursor-not-allowed"
-                    : "bg-gradient-to-r from-[#8b5cf6] to-[#d946ef] text-white shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:shadow-[0_0_30px_rgba(139,92,246,0.5)]"
+                  'w-full flex items-center justify-center gap-2 py-3.5 rounded-[var(--radius-md)] text-[13px] font-mono uppercase tracking-widest font-bold transition-all duration-300',
+                  canGenerate
+                    ? 'bg-gradient-to-r from-[#8b5cf6] to-[#d946ef] text-white shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:shadow-[0_0_30px_rgba(139,92,246,0.5)] hover:-translate-y-0.5'
+                    : 'bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] cursor-not-allowed',
                 )}
               >
                 {mutation.isPending ? (
-                   <><Loader2 className="size-4 animate-spin" /> Synthesizing...</>
+                  <><Loader2 className="size-4 lf-spin" /> Synthesizing...</>
                 ) : (
-                   <><Sparkles className="size-4" /> Initiate Generation</>
+                  <><Sparkles className="size-4" /> Initiate Generation</>
                 )}
               </button>
+              {selectedId && !prereqsMet && (
+                <p className="text-[10px] font-mono text-[var(--color-text-muted)] text-center mt-2">Complete prerequisites above to enable generation</p>
+              )}
             </div>
           )}
         </PremiumCard>
 
-        {/* Status */}
-        <PremiumCard featured={mutation.isPending} innerClassName="p-6 h-[600px] flex flex-col items-center justify-center relative overflow-hidden" className="lg:col-span-2">
-          
-          {/* Cyber background elements */}
-          <div className="absolute inset-0 z-0 opacity-10 bg-[radial-gradient(circle_at_center,rgba(139,92,246,0.5)_0%,transparent_70%)] pointer-events-none" />
-          
-          <div className="relative z-10 w-full h-full flex flex-col items-center justify-center text-center">
+        {/* ── AI Processing Core ──────────────────────────────── */}
+        <PremiumCard
+          variant={mutation.isPending ? 'featured' : mutation.isSuccess ? 'standard' : 'standard'}
+          className="lg:col-span-2"
+          innerClassName="relative overflow-hidden p-8 flex flex-col items-center justify-center min-h-[500px] lg:min-h-[600px]"
+        >
+          {/* Background effects */}
+          {mutation.isPending && (
+            <>
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(139,92,246,0.12),transparent_60%)] pointer-events-none" />
+              <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,0.03) 39px, rgba(255,255,255,0.03) 40px), repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,0.03) 39px, rgba(255,255,255,0.03) 40px)' }} />
+              {/* Animated data lines */}
+              <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
+                <div className="absolute top-1/4 left-0 w-full h-px bg-gradient-to-r from-transparent via-[#8b5cf6] to-transparent animate-[lf-slide-right_2s_linear_infinite]" />
+                <div className="absolute top-2/4 left-0 w-full h-px bg-gradient-to-r from-transparent via-[#0ea5e9] to-transparent animate-[lf-slide-right_2.5s_linear_infinite]" />
+                <div className="absolute top-3/4 left-0 w-full h-px bg-gradient-to-r from-transparent via-[#d946ef] to-transparent animate-[lf-slide-right_3s_linear_infinite]" />
+              </div>
+            </>
+          )}
+
+          <div className="relative z-10 w-full flex flex-col items-center justify-center text-center">
+            {/* ── Idle state ──────────────────────────────────── */}
             {!selectedId && (
-              <div className="flex flex-col items-center animate-[lf-fade-in_0.5s_ease]">
-                <Globe className="size-16 text-slate-700 mb-6 drop-shadow-[0_0_15px_rgba(255,255,255,0.05)]" />
-                <p className="text-[13px] font-mono text-slate-500 uppercase tracking-widest max-w-xs leading-relaxed">
-                  Select a target profile to initiate AI web synthesis protocol.
+              <div className="flex flex-col items-center lf-fade-in">
+                <div className="size-20 rounded-full bg-[var(--color-surface-hover)] border border-[var(--color-border)] flex items-center justify-center mb-6">
+                  <Globe className="size-10 text-[var(--color-text-muted)]" />
+                </div>
+                <p className="text-[13px] font-mono text-[var(--color-text-muted)] uppercase tracking-widest max-w-xs leading-relaxed">
+                  Select a target profile to initiate AI web synthesis.
                 </p>
               </div>
             )}
 
-            {selectedId && mutation.isPending && (
+            {/* ── Pre-flight (selected, prerequisites shown) ──── */}
+            {selectedId && !mutation.isPending && !mutation.isSuccess && !mutation.isError && (
+              <div className="flex flex-col items-center lf-fade-in">
+                <div className="relative mb-8">
+                  <div className="size-24 rounded-full bg-gradient-to-br from-[#8b5cf6]/20 to-[#d946ef]/20 border border-[#8b5cf6]/30 flex items-center justify-center shadow-[0_0_30px_rgba(139,92,246,0.15)]">
+                    <Zap className="size-10 text-[#8b5cf6]" />
+                  </div>
+                </div>
+                <h3 className="text-[22px] font-bold text-white mb-2">{selectedLead?.name || 'Target Selected'}</h3>
+                <p className="text-[12px] font-mono text-[var(--color-text-secondary)] mb-6 max-w-md">
+                  {prereqsMet
+                    ? 'All prerequisites verified. Ready to synthesize a premium website from intelligence data.'
+                    : 'Complete the prerequisite checklist on the left panel to enable generation.'}
+                </p>
+                {prereqsMet && (
+                  <button
+                    onClick={() => mutation.mutate()}
+                    className="bg-gradient-to-r from-[#8b5cf6] to-[#d946ef] text-white px-8 py-3.5 rounded-[var(--radius-md)] font-bold font-mono uppercase tracking-widest text-[13px] shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:shadow-[0_0_30px_rgba(139,92,246,0.5)] hover:-translate-y-0.5 transition-all flex items-center gap-2"
+                  >
+                    <Sparkles size={16} /> Generate Website
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* ── Loading/generating state ────────────────────── */}
+            {mutation.isPending && (
               <div className="flex flex-col items-center">
                 <div className="relative mb-8">
-                  <div className="absolute inset-0 rounded-full bg-[#8b5cf6]/30 blur-2xl animate-pulse" />
-                  <div className="absolute inset-0 border-t-2 border-[#d946ef] rounded-full animate-spin [animation-duration:3s]" />
-                  <div className="absolute inset-2 border-b-2 border-[#0ea5e9] rounded-full animate-spin [animation-duration:2s] reverse" />
-                  <div className="relative size-24 rounded-full bg-slate-900/80 border border-slate-700 flex items-center justify-center shadow-[0_0_30px_rgba(139,92,246,0.3)] backdrop-blur-md">
+                  <div className="absolute inset-0 rounded-full bg-[#8b5cf6]/20 blur-2xl animate-pulse" />
+                  <div className="absolute inset-0 border-t-2 border-[#d946ef] rounded-full animate-spin" style={{ animationDuration: '3s' }} />
+                  <div className="absolute inset-2 border-b-2 border-[#0ea5e9] rounded-full animate-spin" style={{ animationDuration: '2s', animationDirection: 'reverse' }} />
+                  <div className="relative size-24 rounded-full bg-[var(--color-glass-strong)] border border-[var(--color-border-strong)] flex items-center justify-center backdrop-blur-md">
                     <Loader2 className="size-8 text-white lf-spin" />
                   </div>
                 </div>
-                <h3 className="text-[20px] font-bold text-white mb-2 tracking-wide">Synthesizing Digital Presence</h3>
-                <p className="text-[12px] font-mono text-[#0ea5e9] uppercase tracking-widest animate-pulse">Allocating Neural Resources...</p>
+                <h3 className="text-[20px] font-bold text-white mb-2">Synthesizing Digital Presence</h3>
+                <p className="text-[12px] font-mono text-[#0ea5e9] uppercase tracking-widest animate-pulse">Allocating neural resources...</p>
               </div>
             )}
 
-            {selectedId && mutation.isSuccess && (
-              <div className="flex flex-col items-center animate-[lf-fade-in_0.4s_ease]">
+            {/* ── Success state ───────────────────────────────── */}
+            {mutation.isSuccess && (
+              <div className="flex flex-col items-center lf-fade-in">
                 <div className="relative mb-6">
-                  <div className="absolute inset-0 rounded-full bg-[#10b981]/30 blur-xl" />
-                  <div className="relative size-20 rounded-full bg-[#10b981]/20 border border-[#10b981]/50 flex items-center justify-center">
-                    <CheckCircle2 className="size-10 text-[#10b981]" />
+                  <div className="absolute inset-0 rounded-full bg-emerald-500/20 blur-xl" />
+                  <div className="relative size-20 rounded-full bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center shadow-[0_0_30px_rgba(16,185,129,0.2)]">
+                    <CheckCircle2 className="size-10 text-emerald-400" />
                   </div>
                 </div>
                 <h3 className="text-[24px] font-bold text-white mb-2">Synthesis Complete</h3>
-                <p className="text-[13px] font-mono text-slate-400 mb-8 uppercase tracking-widest">Web property generated successfully.</p>
-                <button
-                  onClick={() => {
-                    const data = mutation.data;
-                    if (data) navigate(`/preview/${data.website_id}`);
-                  }}
-                  className="px-8 py-3 rounded-[12px] bg-[#10b981]/10 text-[#10b981] font-mono uppercase tracking-widest text-[13px] font-bold border border-[#10b981]/30 hover:bg-[#10b981]/20 hover:shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all"
-                >
-                  Enter Preview Mode
-                </button>
+                <p className="text-[13px] font-mono text-[var(--color-text-secondary)] mb-8 uppercase tracking-widest">Web property generated successfully</p>
+                <div className="flex flex-wrap gap-3 justify-center">
+                  <button
+                    onClick={() => { const d = mutation.data; if (d?.website_id) navigate(`/preview/${d.website_id}`); }}
+                    className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-8 py-3 rounded-[var(--radius-md)] font-mono uppercase tracking-widest text-[13px] font-bold hover:bg-emerald-500/20 hover:shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all flex items-center gap-2"
+                  >
+                    <CheckCircle2 size={15} /> Enter Preview Studio
+                  </button>
+                  <button
+                    onClick={() => navigate('/projects')}
+                    className="bg-[var(--color-glass)] backdrop-blur-md text-[var(--color-text)] border border-[var(--color-glass-border)] px-6 py-3 rounded-[var(--radius-md)] font-medium hover:bg-[var(--color-glass-strong)] transition-all font-mono text-[12px]"
+                  >
+                    Back to Pipeline
+                  </button>
+                </div>
               </div>
             )}
 
-            {selectedId && mutation.isError && (
-              <div className="flex flex-col items-center animate-[lf-fade-in_0.4s_ease]">
+            {/* ── Error state ─────────────────────────────────── */}
+            {mutation.isError && (
+              <div className="flex flex-col items-center lf-fade-in">
                 <div className="relative mb-6">
-                  <div className="absolute inset-0 rounded-full bg-red-500/30 blur-xl" />
-                  <div className="relative size-20 rounded-full bg-red-500/20 border border-red-500/50 flex items-center justify-center">
-                    <AlertCircle className="size-10 text-red-500" />
+                  <div className="absolute inset-0 rounded-full bg-red-500/20 blur-xl" />
+                  <div className="relative size-20 rounded-full bg-red-500/15 border border-red-500/40 flex items-center justify-center">
+                    <AlertCircle className="size-10 text-red-400" />
                   </div>
                 </div>
                 <h3 className="text-[20px] font-bold text-white mb-2">Synthesis Failed</h3>
-                <p className="text-[13px] text-slate-400 mb-6 font-mono text-center max-w-sm">
+                <p className="text-[13px] text-[var(--color-text-secondary)] mb-6 font-mono text-center max-w-sm">
                   {getApiErrorMessage(mutation.error, 'An unexpected error occurred.')}
                 </p>
-                <button 
-                  onClick={() => mutation.mutate()}
-                  className="px-6 py-2.5 rounded-[10px] bg-slate-800 text-white font-mono uppercase tracking-widest text-[12px] hover:bg-slate-700 transition-colors"
-                >
-                  Retry Generation
-                </button>
+                <div className="flex flex-wrap gap-3 justify-center">
+                  <button
+                    onClick={() => mutation.mutate()}
+                    className="bg-red-500/10 text-red-400 border border-red-500/30 px-6 py-2.5 rounded-[var(--radius-md)] font-mono uppercase tracking-widest text-[12px] font-bold hover:bg-red-500/20 transition-all flex items-center gap-2"
+                  >
+                    <Loader2 size={14} /> Retry Generation
+                  </button>
+                  <button
+                    onClick={() => setSelectedId('')}
+                    className="bg-[var(--color-glass)] text-[var(--color-text)] border border-[var(--color-glass-border)] px-6 py-2.5 rounded-[var(--radius-md)] font-mono text-[12px] hover:bg-[var(--color-glass-strong)] transition-all"
+                  >
+                    Select Different Target
+                  </button>
+                </div>
               </div>
             )}
           </div>
         </PremiumCard>
       </div>
+
+      {/* ═══════════════════════════════════════════════════════════
+         PREREQUISITE DETAIL (mobile/secondary)
+      ════════════════════════════════════════════════════════════ */}
+      {selectedId && !mutation.isPending && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {PREREQS.map((p) => {
+            const met = p.check(leadDetail ?? null);
+            const Icon = p.icon;
+            return (
+              <PremiumCard key={p.id} variant={met ? 'standard' : 'subtle'} innerClassName="p-4 flex items-center gap-4">
+                <div className={cn(
+                  'size-10 rounded-[var(--radius-md)] flex items-center justify-center shrink-0',
+                  met ? 'bg-emerald-500/10 border border-emerald-500/25' : 'bg-[var(--color-surface-hover)] border border-[var(--color-border)]',
+                )}>
+                  {met ? <CheckCircle2 size={18} className="text-emerald-400" /> : <Icon size={18} className="text-[var(--color-text-muted)]" />}
+                </div>
+                <div>
+                  <p className={cn('text-[13px] font-semibold', met ? 'text-emerald-400' : 'text-[var(--color-text-secondary)]')}>
+                    {met ? 'Completed' : p.label}
+                  </p>
+                  <p className="text-[10px] font-mono text-[var(--color-text-muted)]">{met ? 'Ready' : 'Required'}</p>
+                </div>
+              </PremiumCard>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
