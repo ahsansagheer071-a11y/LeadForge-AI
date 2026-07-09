@@ -59,7 +59,7 @@ export function GenerationPage() {
   const [selectedId, setSelectedId] = useState('');
 
   // Async job state
-  const [jobId, setJobId] = useState<string | null>(null);
+  const [_, setJobId] = useState<string | null>(null);
   const [jobResult, setJobResult] = useState<GenerationJobResult | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [jobError, setJobError] = useState<string | null>(null);
