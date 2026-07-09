@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, Globe, Loader2, CheckCircle2, AlertCircle, Camera, Search, Shield, Zap } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -6,9 +6,9 @@ import { Badge } from '@/components/Badge';
 import { Skeleton } from '@/components/Loading';
 import { EmptyState } from '@/components/ErrorStates';
 import { PremiumCard } from '@/components/PremiumCard';
-import { projectsService, createGenerationJob, pollGenerationJob } from '@/services/services';
-import type { GenerationJobResult } from '@/services/services';
+import { projectsService } from '@/services/services';
 import { usePreviewStore } from '@/store';
+import { useGenerationJob } from '@/hooks/useGenerationJob';
 import { cn } from '@/utils';
 import { toast } from 'sonner';
 
@@ -50,21 +50,11 @@ function friendlyProgress(raw: string): string {
   return PROGRESS_LABELS[raw] ?? raw;
 }
 
-/* ── Poll interval (ms) ─────────────────────────────────────── */
-const POLL_INTERVAL_MS = 3000;
-
 export function GenerationPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const setHtmlContent = usePreviewStore((s) => s.setHtmlContent);
   const [selectedId, setSelectedId] = useState('');
-
-  // Async job state
-  const [_, setJobId] = useState<string | null>(null);
-  const [jobResult, setJobResult] = useState<GenerationJobResult | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [jobError, setJobError] = useState<string | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { data: page, isLoading } = useQuery({
     queryKey: ['leads'],
@@ -80,93 +70,34 @@ export function GenerationPage() {
     enabled: !!selectedId,
   });
 
-  // ── Job polling ──────────────────────────────────────────────
-  const stopPolling = () => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-  };
-
-  const startPolling = (id: string) => {
-    stopPolling();
-    pollRef.current = setInterval(async () => {
-      try {
-        const result = await pollGenerationJob(id);
-        setJobResult(result);
-        if (result.status === 'succeeded') {
-          stopPolling();
-          if (result.html) setHtmlContent(result.html);
-          if (result.website_id) {
-            toast.success('Website generated successfully!');
-            queryClient.invalidateQueries({ queryKey: ['lead', selectedId] });
-            queryClient.invalidateQueries({ queryKey: ['generated-website-latest', selectedId] });
-          }
-        } else if (result.status === 'failed') {
-          stopPolling();
-          const msg = result.error || 'Generation failed. Please try again.';
-          setJobError(msg);
-          toast.error(msg);
-        }
-      } catch (err: unknown) {
-        console.warn('Poll error (will retry):', err);
-        // Don't stop polling on transient network errors
-      }
-    }, POLL_INTERVAL_MS);
-  };
-
-  useEffect(() => {
-    return () => stopPolling();
-  }, []);
-
-  // ── Submit generation job ────────────────────────────────────
-  const handleGenerate = async () => {
-    if (!selectedId || isSubmitting) return;
-    setIsSubmitting(true);
-    setJobId(null);
-    setJobResult(null);
-    setJobError(null);
-
-    try {
-      const { job_id } = await createGenerationJob(selectedId);
-      setJobId(job_id);
-      // Set initial pending state immediately
-      setJobResult({
-        job_id,
-        lead_id: selectedId,
-        status: 'pending',
-        progress: 'Queued',
-        generation_time: 0,
-      });
-      startPolling(job_id);
-    } catch (err: unknown) {
-      const msg = (() => {
-        if (err && typeof err === 'object') {
-          const e = err as Record<string, unknown>;
-          if (e.category === 'network') return 'Cannot connect to the LeadForge API. Please check your connection.';
-          if (e.category === 'timeout') return 'Request timed out queuing the job. Please retry.';
-          if (e.category === 'authentication') return 'Your session expired. Please sign in again.';
-          if (typeof e.message === 'string') return e.message;
-        }
-        return 'Failed to queue generation job. Please retry.';
-      })();
-      setJobError(msg);
+  const {
+    jobResult,
+    jobError,
+    isRunning,
+    isSuccess,
+    isError,
+    generate,
+    reset,
+  } = useGenerationJob({
+    leadId: selectedId,
+    onSuccess: (websiteId, htmlContent) => {
+      if (htmlContent) setHtmlContent(htmlContent);
+      queryClient.invalidateQueries({ queryKey: ['lead', selectedId] });
+      queryClient.invalidateQueries({ queryKey: ['generated-website-latest', selectedId] });
+      toast.success('Website generated successfully!');
+    },
+    onError: (msg) => {
       toast.error(msg);
-    } finally {
-      setIsSubmitting(false);
-    }
+    },
+  });
+
+  const handleGenerate = () => {
+    generate();
   };
 
   const handleReset = () => {
-    stopPolling();
-    setJobId(null);
-    setJobResult(null);
-    setJobError(null);
+    reset();
   };
-
-  const isRunning = jobResult?.status === 'pending' || jobResult?.status === 'running' || isSubmitting;
-  const isSuccess = jobResult?.status === 'succeeded';
-  const isError = !!jobError || jobResult?.status === 'failed';
 
   const prereqsMet = PREREQS.every((p) => p.check(leadDetail ?? null));
   const canGenerate = !!selectedId && prereqsMet && !isRunning && !isSuccess;

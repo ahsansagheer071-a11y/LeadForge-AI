@@ -9,9 +9,10 @@ import { EmptyState } from '@/components/ErrorStates';
 import { PremiumCard } from '@/components/PremiumCard';
 import { ScoreGauge } from '@/components/ScoreGauge';
 import { AnimatedCounter } from '@/components/AnimatedCounter';
-import { projectsService, generateWebsite, auditService, analysisService, screenshotService, outreachService, generationService } from '@/services/services';
+import { projectsService, auditService, analysisService, screenshotService, outreachService, generationService } from '@/services/services';
 import { getApiErrorMessage } from '@/services/apiClient';
 import { usePreviewStore } from '@/store';
+import { useGenerationJob } from '@/hooks/useGenerationJob';
 import { formatRelative, cn } from '@/utils';
 import { toast } from 'sonner';
 import type { AuditAndScoreResult, WebsiteAnalysisResponse, CaptureScreenshotResponse, OutreachResponse } from '@/types';
@@ -178,15 +179,22 @@ export function LeadDetailPage() {
     }
   }, [lead]);
 
-  const generationMutation = useMutation({
-    mutationFn: () => generateWebsite(id!),
-    onSuccess: (data) => {
-      if (!data?.website_id) { toast.error('Generation failed — no website ID returned'); return; }
-      setHtmlContent(data.html);
+  const {
+    jobResult,
+    jobError,
+    isRunning: isGenerationRunning,
+    generate,
+  } = useGenerationJob({
+    leadId: id!,
+    onSuccess: (websiteId, htmlContent) => {
+      if (htmlContent) setHtmlContent(htmlContent);
+      queryClient.invalidateQueries({ queryKey: ['lead', id] });
+      queryClient.invalidateQueries({ queryKey: ['generated-website-latest', id] });
       toast.success('Website generated successfully');
-      navigate(`/preview/${data.website_id}`);
     },
-    onError: (err) => { toast.error(getApiErrorMessage(err, 'Generation failed')); },
+    onError: (msg) => {
+      toast.error(msg);
+    },
   });
 
   const analysisMutation = useMutation({
@@ -220,7 +228,8 @@ export function LeadDetailPage() {
 
   const mutations = {
     screenshot: screenshotMutation, analysis: analysisMutation, audit: auditMutation,
-    generation: generationMutation, outreach: outreachMutation,
+    generation: { isPending: isGenerationRunning, error: jobError },
+    outreach: outreachMutation,
   };
   const activeStage = getActiveStage(screenshotResult, analysisResult, auditResult, existingWebsite, outreachResult, mutations);
 
@@ -314,7 +323,7 @@ export function LeadDetailPage() {
                       else if (activeStage.id === 'audit') auditMutation.mutate();
                       else if (activeStage.id === 'generation') {
                         if (existingWebsite) navigate(`/preview/${existingWebsite.id}`);
-                        else generationMutation.mutate();
+                        else generate();
                       }
                       else if (activeStage.id === 'outreach') outreachMutation.mutate();
                     }}
@@ -322,12 +331,16 @@ export function LeadDetailPage() {
                       (activeStage.id === 'screenshot' && screenshotMutation.isPending) ||
                       (activeStage.id === 'analysis' && analysisMutation.isPending) ||
                       (activeStage.id === 'audit' && auditMutation.isPending) ||
-                      (activeStage.id === 'generation' && generationMutation.isPending) ||
+                      (activeStage.id === 'generation' && isGenerationRunning) ||
                       (activeStage.id === 'outreach' && outreachMutation.isPending)
                     }
                     leftIcon={<activeStage.icon size={15} />}
                   >
-                    {activeStage.id === 'generation' && existingWebsite ? 'View Website' : `Run ${activeStage.label}`}
+                    {activeStage.id === 'generation' && existingWebsite
+                      ? 'View Website'
+                      : activeStage.id === 'generation' && isGenerationRunning
+                      ? `Synthesizing (${jobResult ? (jobResult.progress || 'Queued') : 'Queued'})`
+                      : `Run ${activeStage.label}`}
                   </Button>
                 ) : (
                   <Button variant="glass" disabled><CheckCircle size={15} /> All Stages Complete</Button>
@@ -736,12 +749,18 @@ export function LeadDetailPage() {
               <ActionButton icon={Shield} label="AI Audit" active={!!auditResult} loading={auditMutation.isPending} onClick={() => auditMutation.mutate()} />
               <ActionButton
                 icon={Zap}
-                label={existingWebsite ? 'View Website' : 'Generate Website'}
+                label={existingWebsite ? 'View Website' : isGenerationRunning ? `Synthesizing (${jobResult ? (jobResult.progress || 'Queued') : 'Queued'})` : 'Generate Website'}
                 active={!!existingWebsite}
-                loading={generationMutation.isPending}
-                onClick={() => { if (existingWebsite) navigate(`/preview/${existingWebsite.id}`); else generationMutation.mutate(); }}
+                loading={isGenerationRunning}
+                onClick={() => { if (existingWebsite) navigate(`/preview/${existingWebsite.id}`); else generate(); }}
                 variant={existingWebsite ? 'preview' : 'primary'}
               />
+              {jobError && (
+                <div className="text-[10px] font-mono text-red-400 bg-red-500/10 border border-red-500/20 p-2 rounded flex items-start gap-1 mt-1">
+                  <AlertTriangle size={11} className="shrink-0 mt-0.5" />
+                  <span>{jobError}</span>
+                </div>
+              )}
               {existingWebsite?.package_id && (
                 <ActionButton icon={Download} label="Download Package" onClick={() => generationService.downloadPackage(existingWebsite.id)} />
               )}
