@@ -1,13 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, Globe, Loader2, CheckCircle2, AlertCircle, Camera, Search, Shield, Zap } from 'lucide-react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Badge } from '@/components/Badge';
 import { Skeleton } from '@/components/Loading';
 import { EmptyState } from '@/components/ErrorStates';
 import { PremiumCard } from '@/components/PremiumCard';
-import { projectsService, generateWebsite } from '@/services/services';
-import { extractApiError, getApiErrorMessage } from '@/services/apiClient';
+import { projectsService, createGenerationJob, pollGenerationJob } from '@/services/services';
+import type { GenerationJobResult } from '@/services/services';
 import { usePreviewStore } from '@/store';
 import { cn } from '@/utils';
 import { toast } from 'sonner';
@@ -34,10 +34,36 @@ const PREREQS: Prereq[] = [
   { id: 'audit', label: 'Audit Complete', icon: Shield, color: '#f59e0b', check: (l) => !!l?.audit && !!l?.score },
 ];
 
+// Progress messages to rotate through during generation
+const PROGRESS_LABELS: Record<string, string> = {
+  Queued: 'Queued — waiting to start…',
+  'Loading lead data': 'Loading lead data…',
+  'Crawling website': 'Crawling website (this may take 30–60 s)…',
+  'Crawling website (fresh)': 'Crawling website — fresh scan…',
+  'Building markdown context': 'Building AI context from site data…',
+  'Generating HTML with AI': 'Generating HTML with AI (this may take 60–120 s)…',
+  'Saving result': 'Saving generated website…',
+  Complete: 'Complete!',
+};
+
+function friendlyProgress(raw: string): string {
+  return PROGRESS_LABELS[raw] ?? raw;
+}
+
+/* ── Poll interval (ms) ─────────────────────────────────────── */
+const POLL_INTERVAL_MS = 3000;
+
 export function GenerationPage() {
   const navigate = useNavigate();
   const setHtmlContent = usePreviewStore((s) => s.setHtmlContent);
   const [selectedId, setSelectedId] = useState('');
+
+  // Async job state
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [jobResult, setJobResult] = useState<GenerationJobResult | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [jobError, setJobError] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { data: page, isLoading } = useQuery({
     queryKey: ['leads'],
@@ -53,25 +79,95 @@ export function GenerationPage() {
     enabled: !!selectedId,
   });
 
-  const mutation = useMutation({
-    mutationFn: () => generateWebsite(selectedId),
-    onSuccess: (data) => {
-      if (!data?.website_id) { toast.error('Generation failed — no website ID returned'); return; }
-      setHtmlContent(data.html);
-      navigate(`/preview/${data.website_id}`);
-    },
-    onError: (err) => {
-      const apiErr = extractApiError(err);
-      if (apiErr.category === 'network') toast.error('Cannot connect to the LeadForge API. Please try again.');
-      else if (apiErr.category === 'timeout') toast.error('Website generation took too long. No duplicate request was submitted; you can safely retry.');
-      else if (apiErr.category === 'provider') toast.error('The AI generation provider is temporarily unavailable. Please retry.');
-      else if (apiErr.category === 'authentication') toast.error('Your session expired. Please sign in again.');
-      else toast.error(apiErr.message || 'Generation failed');
-    },
-  });
+  // ── Job polling ──────────────────────────────────────────────
+  const stopPolling = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
+
+  const startPolling = (id: string) => {
+    stopPolling();
+    pollRef.current = setInterval(async () => {
+      try {
+        const result = await pollGenerationJob(id);
+        setJobResult(result);
+        if (result.status === 'succeeded') {
+          stopPolling();
+          if (result.html) setHtmlContent(result.html);
+          if (result.website_id) {
+            toast.success('Website generated successfully!');
+            navigate(`/preview/${result.website_id}`);
+          }
+        } else if (result.status === 'failed') {
+          stopPolling();
+          const msg = result.error || 'Generation failed. Please try again.';
+          setJobError(msg);
+          toast.error(msg);
+        }
+      } catch (err: unknown) {
+        console.warn('Poll error (will retry):', err);
+        // Don't stop polling on transient network errors
+      }
+    }, POLL_INTERVAL_MS);
+  };
+
+  useEffect(() => {
+    return () => stopPolling();
+  }, []);
+
+  // ── Submit generation job ────────────────────────────────────
+  const handleGenerate = async () => {
+    if (!selectedId || isSubmitting) return;
+    setIsSubmitting(true);
+    setJobId(null);
+    setJobResult(null);
+    setJobError(null);
+
+    try {
+      const { job_id } = await createGenerationJob(selectedId);
+      setJobId(job_id);
+      // Set initial pending state immediately
+      setJobResult({
+        job_id,
+        lead_id: selectedId,
+        status: 'pending',
+        progress: 'Queued',
+        generation_time: 0,
+      });
+      startPolling(job_id);
+    } catch (err: unknown) {
+      const msg = (() => {
+        if (err && typeof err === 'object') {
+          const e = err as Record<string, unknown>;
+          if (e.category === 'network') return 'Cannot connect to the LeadForge API. Please check your connection.';
+          if (e.category === 'timeout') return 'Request timed out queuing the job. Please retry.';
+          if (e.category === 'authentication') return 'Your session expired. Please sign in again.';
+          if (typeof e.message === 'string') return e.message;
+        }
+        return 'Failed to queue generation job. Please retry.';
+      })();
+      setJobError(msg);
+      toast.error(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleReset = () => {
+    stopPolling();
+    setJobId(null);
+    setJobResult(null);
+    setJobError(null);
+  };
+
+  const isRunning = jobResult?.status === 'pending' || jobResult?.status === 'running' || isSubmitting;
+  const isSuccess = jobResult?.status === 'succeeded';
+  const isError = !!jobError || jobResult?.status === 'failed';
 
   const prereqsMet = PREREQS.every((p) => p.check(leadDetail ?? null));
-  const canGenerate = !!selectedId && prereqsMet && !mutation.isPending;
+  const canGenerate = !!selectedId && prereqsMet && !isRunning && !isSuccess;
 
   return (
     <div className="space-y-8 lf-fade-in">
@@ -99,7 +195,7 @@ export function GenerationPage() {
               leads.map((lead) => (
                 <button
                   key={lead.id}
-                  onClick={() => setSelectedId(lead.id)}
+                  onClick={() => { setSelectedId(lead.id); handleReset(); }}
                   className={cn(
                     'w-full text-left px-4 py-3 rounded-[var(--radius-md)] transition-all duration-200 group border',
                     selectedId === lead.id
@@ -152,7 +248,7 @@ export function GenerationPage() {
               </div>
               <button
                 disabled={!canGenerate}
-                onClick={() => mutation.mutate()}
+                onClick={handleGenerate}
                 className={cn(
                   'w-full flex items-center justify-center gap-2 py-3.5 rounded-[var(--radius-md)] text-[13px] font-mono uppercase tracking-widest font-bold transition-all duration-300',
                   canGenerate
@@ -160,12 +256,20 @@ export function GenerationPage() {
                     : 'bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] cursor-not-allowed',
                 )}
               >
-                {mutation.isPending ? (
+                {isRunning ? (
                   <><Loader2 className="size-4 lf-spin" /> Synthesizing...</>
                 ) : (
                   <><Sparkles className="size-4" /> Initiate Generation</>
                 )}
               </button>
+              {isError && !isRunning && (
+                <button
+                  onClick={handleReset}
+                  className="w-full mt-2 py-2 text-[11px] font-mono text-[var(--color-text-muted)] hover:text-white transition-colors"
+                >
+                  Reset &amp; try again
+                </button>
+              )}
               {selectedId && !prereqsMet && (
                 <p className="text-[10px] font-mono text-[var(--color-text-muted)] text-center mt-2">Complete prerequisites above to enable generation</p>
               )}
@@ -175,12 +279,12 @@ export function GenerationPage() {
 
         {/* ── AI Processing Core ──────────────────────────────── */}
         <PremiumCard
-          variant={mutation.isPending ? 'featured' : mutation.isSuccess ? 'standard' : 'standard'}
+          variant={isRunning ? 'featured' : isSuccess ? 'standard' : 'standard'}
           className="lg:col-span-2"
           innerClassName="relative overflow-hidden p-8 flex flex-col items-center justify-center min-h-[500px] lg:min-h-[600px]"
         >
           {/* Background effects */}
-          {mutation.isPending && (
+          {isRunning && (
             <>
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(139,92,246,0.12),transparent_60%)] pointer-events-none" />
               <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,0.03) 39px, rgba(255,255,255,0.03) 40px), repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,0.03) 39px, rgba(255,255,255,0.03) 40px)' }} />
@@ -207,7 +311,7 @@ export function GenerationPage() {
             )}
 
             {/* ── Pre-flight (selected, prerequisites shown) ──── */}
-            {selectedId && !mutation.isPending && !mutation.isSuccess && !mutation.isError && (
+            {selectedId && !isRunning && !isSuccess && !isError && (
               <div className="flex flex-col items-center lf-fade-in">
                 <div className="relative mb-8">
                   <div className="size-24 rounded-full bg-gradient-to-br from-[#8b5cf6]/20 to-[#d946ef]/20 border border-[#8b5cf6]/30 flex items-center justify-center shadow-[0_0_30px_rgba(139,92,246,0.15)]">
@@ -222,7 +326,7 @@ export function GenerationPage() {
                 </p>
                 {prereqsMet && (
                   <button
-                    onClick={() => mutation.mutate()}
+                    onClick={handleGenerate}
                     className="bg-gradient-to-r from-[#8b5cf6] to-[#d946ef] text-white px-8 py-3.5 rounded-[var(--radius-md)] font-bold font-mono uppercase tracking-widest text-[13px] shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:shadow-[0_0_30px_rgba(139,92,246,0.5)] hover:-translate-y-0.5 transition-all flex items-center gap-2"
                   >
                     <Sparkles size={16} /> Generate Website
@@ -232,7 +336,7 @@ export function GenerationPage() {
             )}
 
             {/* ── Loading/generating state ────────────────────── */}
-            {mutation.isPending && (
+            {isRunning && (
               <div className="flex flex-col items-center">
                 <div className="relative mb-8">
                   <div className="absolute inset-0 rounded-full bg-[#8b5cf6]/20 blur-2xl animate-pulse" />
@@ -243,12 +347,17 @@ export function GenerationPage() {
                   </div>
                 </div>
                 <h3 className="text-[20px] font-bold text-white mb-2">Synthesizing Digital Presence</h3>
-                <p className="text-[12px] font-mono text-[#0ea5e9] uppercase tracking-widest animate-pulse">Allocating neural resources...</p>
+                <p className="text-[12px] font-mono text-[#0ea5e9] uppercase tracking-widest animate-pulse mb-1">
+                  {jobResult ? friendlyProgress(jobResult.progress) : 'Queuing job…'}
+                </p>
+                <p className="text-[10px] font-mono text-[var(--color-text-muted)]">
+                  Generation takes 60–180 s. You can safely leave this page.
+                </p>
               </div>
             )}
 
             {/* ── Success state ───────────────────────────────── */}
-            {mutation.isSuccess && (
+            {isSuccess && (
               <div className="flex flex-col items-center lf-fade-in">
                 <div className="relative mb-6">
                   <div className="absolute inset-0 rounded-full bg-emerald-500/20 blur-xl" />
@@ -260,7 +369,7 @@ export function GenerationPage() {
                 <p className="text-[13px] font-mono text-[var(--color-text-secondary)] mb-8 uppercase tracking-widest">Web property generated successfully</p>
                 <div className="flex flex-wrap gap-3 justify-center">
                   <button
-                    onClick={() => { const d = mutation.data; if (d?.website_id) navigate(`/preview/${d.website_id}`); }}
+                    onClick={() => { if (jobResult?.website_id) navigate(`/preview/${jobResult.website_id}`); }}
                     className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-8 py-3 rounded-[var(--radius-md)] font-mono uppercase tracking-widest text-[13px] font-bold hover:bg-emerald-500/20 hover:shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all flex items-center gap-2"
                   >
                     <CheckCircle2 size={15} /> Enter Preview Studio
@@ -276,7 +385,7 @@ export function GenerationPage() {
             )}
 
             {/* ── Error state ─────────────────────────────────── */}
-            {mutation.isError && (
+            {isError && !isRunning && (
               <div className="flex flex-col items-center lf-fade-in">
                 <div className="relative mb-6">
                   <div className="absolute inset-0 rounded-full bg-red-500/20 blur-xl" />
@@ -286,17 +395,17 @@ export function GenerationPage() {
                 </div>
                 <h3 className="text-[20px] font-bold text-white mb-2">Synthesis Failed</h3>
                 <p className="text-[13px] text-[var(--color-text-secondary)] mb-6 font-mono text-center max-w-sm">
-                  {getApiErrorMessage(mutation.error, 'An unexpected error occurred.')}
+                  {jobError || jobResult?.error || 'An unexpected error occurred.'}
                 </p>
                 <div className="flex flex-wrap gap-3 justify-center">
                   <button
-                    onClick={() => mutation.mutate()}
+                    onClick={() => { handleReset(); handleGenerate(); }}
                     className="bg-red-500/10 text-red-400 border border-red-500/30 px-6 py-2.5 rounded-[var(--radius-md)] font-mono uppercase tracking-widest text-[12px] font-bold hover:bg-red-500/20 transition-all flex items-center gap-2"
                   >
                     <Loader2 size={14} /> Retry Generation
                   </button>
                   <button
-                    onClick={() => setSelectedId('')}
+                    onClick={() => { handleReset(); setSelectedId(''); }}
                     className="bg-[var(--color-glass)] text-[var(--color-text)] border border-[var(--color-glass-border)] px-6 py-2.5 rounded-[var(--radius-md)] font-mono text-[12px] hover:bg-[var(--color-glass-strong)] transition-all"
                   >
                     Select Different Target
@@ -311,7 +420,7 @@ export function GenerationPage() {
       {/* ═══════════════════════════════════════════════════════════
          PREREQUISITE DETAIL (mobile/secondary)
       ════════════════════════════════════════════════════════════ */}
-      {selectedId && !mutation.isPending && (
+      {selectedId && !isRunning && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {PREREQS.map((p) => {
             const met = p.check(leadDetail ?? null);

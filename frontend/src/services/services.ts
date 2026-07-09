@@ -191,6 +191,42 @@ export async function generateWebsite(leadId: string): Promise<GenerateWebsiteRe
   return unwrap(resp);
 }
 
+export type JobStatus = 'pending' | 'running' | 'succeeded' | 'failed';
+
+export interface GenerationJobResult {
+  job_id: string;
+  lead_id: string;
+  status: JobStatus;
+  progress: string;
+  website_id?: string | null;
+  generation_id?: string | null;
+  html?: string | null;
+  preview_path?: string | null;
+  package_id?: string | null;
+  project_name?: string | null;
+  generation_time: number;
+  error?: string | null;
+}
+
+/** Submit an async generation job. Returns immediately with a job_id. */
+export async function createGenerationJob(leadId: string): Promise<{ job_id: string; status: JobStatus }> {
+  const resp = await apiClient.post<{ success: boolean; data: { job_id: string; status: JobStatus } }>(
+    '/generation/jobs',
+    { lead_id: leadId },
+    { timeout: 15_000 },
+  );
+  return unwrap(resp);
+}
+
+/** Poll a generation job for its current status and result. */
+export async function pollGenerationJob(jobId: string): Promise<GenerationJobResult> {
+  const resp = await apiClient.get<{ success: boolean; data: GenerationJobResult }>(
+    `/generation/jobs/${jobId}`,
+    { timeout: 10_000 },
+  );
+  return unwrap(resp);
+}
+
 export const generationService = {
   async getById(websiteId: string): Promise<GeneratedWebsiteResponse> {
     const resp = await apiClient.get<{ success: boolean; data: GeneratedWebsiteResponse }>(
