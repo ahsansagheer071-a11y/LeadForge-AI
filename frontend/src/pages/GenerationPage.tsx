@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/Loading';
 import { EmptyState } from '@/components/ErrorStates';
 import { PremiumCard } from '@/components/PremiumCard';
 import { projectsService, generateWebsite } from '@/services/services';
-import { getApiErrorMessage } from '@/services/apiClient';
+import { extractApiError, getApiErrorMessage } from '@/services/apiClient';
 import { usePreviewStore } from '@/store';
 import { cn } from '@/utils';
 import { toast } from 'sonner';
@@ -60,7 +60,14 @@ export function GenerationPage() {
       setHtmlContent(data.html);
       navigate(`/preview/${data.website_id}`);
     },
-    onError: (err) => { toast.error(getApiErrorMessage(err, 'Generation failed')); },
+    onError: (err) => {
+      const apiErr = extractApiError(err);
+      if (apiErr.category === 'network') toast.error('Cannot connect to the LeadForge API. Please try again.');
+      else if (apiErr.category === 'timeout') toast.error('Website generation took too long. No duplicate request was submitted; you can safely retry.');
+      else if (apiErr.category === 'provider') toast.error('The AI generation provider is temporarily unavailable. Please retry.');
+      else if (apiErr.category === 'authentication') toast.error('Your session expired. Please sign in again.');
+      else toast.error(apiErr.message || 'Generation failed');
+    },
   });
 
   const prereqsMet = PREREQS.every((p) => p.check(leadDetail ?? null));

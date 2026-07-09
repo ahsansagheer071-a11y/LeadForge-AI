@@ -2,10 +2,12 @@ import os
 import uuid
 import asyncio
 import time
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 from urllib.parse import urlparse
 from dataclasses import dataclass, field
 from contextlib import asynccontextmanager
+
+from PIL import Image
 
 from playwright.async_api import (
     async_playwright,
@@ -424,6 +426,39 @@ async def _capture_single_viewport(
 # Main Service
 # =====================================================================
 
+_CLOUDINARY_MAX_BYTES = 9_500_000
+_MAX_SCREENSHOT_WIDTH = 1920
+_INITIAL_WEBP_QUALITY = 85
+_MIN_WEBP_QUALITY = 15
+
+
+def _optimize_image(input_path: str, output_path: str) -> int:
+    """
+    Resize (max 1920 px wide) and convert to WebP with progressive quality
+    reduction until the file is safely under Cloudinary's 10 MB limit.
+    Returns the final size in bytes.
+    """
+    with Image.open(input_path) as img:
+        if img.mode in ("RGBA", "LA", "P"):
+            img = img.convert("RGB")
+
+        # Resize if wider than threshold
+        if img.width > _MAX_SCREENSHOT_WIDTH:
+            ratio = _MAX_SCREENSHOT_WIDTH / img.width
+            new_height = int(img.height * ratio)
+            img = img.resize((_MAX_SCREENSHOT_WIDTH, new_height), Image.LANCZOS)
+
+        quality = _INITIAL_WEBP_QUALITY
+        while quality >= _MIN_WEBP_QUALITY:
+            img.save(output_path, "WEBP", quality=quality)
+            size = os.path.getsize(output_path)
+            if size <= _CLOUDINARY_MAX_BYTES:
+                return size
+            quality -= 5
+
+        return os.path.getsize(output_path)
+
+
 class ScreenshotService:
 
     def _validate_url(self, website: Optional[str]) -> str:
@@ -522,14 +557,36 @@ class ScreenshotService:
                 logger.error(f"Screenshot non-retryable error: {e}")
                 raise
 
-        # Upload all three images concurrently
+        # Optimise oversized PNGs to WebP before upload
+        opt_desktop = desktop_path.replace(".png", "_opt.webp")
+        opt_mobile = mobile_path.replace(".png", "_opt.webp")
+        opt_full = full_page_path.replace(".png", "_opt.webp")
+
+        desktop_size = _optimize_image(desktop_path, opt_desktop)
+        mobile_size = _optimize_image(mobile_path, opt_mobile)
+        full_size = _optimize_image(full_page_path, opt_full)
+
+        logger.info(
+            "Screenshot optimisation | desktop=%d  mobile=%d  full=%d bytes",
+            desktop_size, mobile_size, full_size,
+        )
+
+        # Upload all three optimised images concurrently
         upload_start = time.monotonic()
         desktop_res, mobile_res, full_page_res = await asyncio.gather(
-            cloudinary_service.upload_image(desktop_path),
-            cloudinary_service.upload_image(mobile_path),
-            cloudinary_service.upload_image(full_page_path),
+            cloudinary_service.upload_image(opt_desktop),
+            cloudinary_service.upload_image(opt_mobile),
+            cloudinary_service.upload_image(opt_full),
         )
         logger.info(f"Cloudinary upload completed in {int((time.monotonic() - upload_start) * 1000)}ms")
+
+        # Clean up original PNGs (upload_image deletes the optimised files)
+        for p in (desktop_path, mobile_path, full_page_path):
+            try:
+                if os.path.exists(p):
+                    os.remove(p)
+            except Exception as e:
+                logger.warning("Failed to delete temporary PNG %s: %s", p, e)
 
         screenshot_data = {
             "desktop_local_path": desktop_path if not desktop_res.get("secure_url") else None,

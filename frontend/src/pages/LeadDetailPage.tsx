@@ -10,7 +10,7 @@ import { PremiumCard } from '@/components/PremiumCard';
 import { ScoreGauge } from '@/components/ScoreGauge';
 import { AnimatedCounter } from '@/components/AnimatedCounter';
 import { projectsService, generateWebsite, auditService, analysisService, screenshotService, outreachService, generationService } from '@/services/services';
-import { getApiErrorMessage } from '@/services/apiClient';
+import { extractApiError, getApiErrorMessage } from '@/services/apiClient';
 import { usePreviewStore } from '@/store';
 import { formatRelative, cn } from '@/utils';
 import { toast } from 'sonner';
@@ -42,6 +42,34 @@ const STAGES: StageDef[] = [
   { id: 'outreach', label: 'Outreach', icon: Send, color: '#22d3ee' },
 ];
 
+function rawState(
+  sid: StageId,
+  screenshot: CaptureScreenshotResponse | null,
+  analysis: WebsiteAnalysisResponse | null,
+  audit: AuditAndScoreResult | null,
+  website: unknown | null,
+  outreach: OutreachResponse | null,
+  mutations: Record<string, { isPending: boolean; error: unknown }>,
+): StageState {
+  if (sid === 'lead') return 'completed';
+
+  let hasData = false;
+  switch (sid) {
+    case 'screenshot': hasData = !!(screenshot?.desktop_url || screenshot?.mobile_url); break;
+    case 'analysis': hasData = !!analysis; break;
+    case 'audit': hasData = !!audit; break;
+    case 'generation': hasData = !!website; break;
+    case 'preview': hasData = !!website; break;
+    case 'package': hasData = !!(website && (website as { package_id?: string })?.package_id); break;
+    case 'outreach': hasData = !!outreach; break;
+  }
+
+  if (mutations[sid]?.isPending) return 'active';
+  if (hasData) return 'completed';
+  if (mutations[sid]?.error) return 'failed';
+  return 'pending';
+}
+
 function getStageState(
   id: StageId,
   screenshot: CaptureScreenshotResponse | null,
@@ -52,49 +80,15 @@ function getStageState(
   mutations: Record<string, { isPending: boolean; error: unknown }>,
 ): StageState {
   if (id === 'lead') return 'completed';
-  const err = mutations[id]?.error;
 
-  if (id === 'screenshot') {
-    if (err) return 'failed';
-    if (mutations['screenshot']?.isPending) return 'active';
-    if (screenshot?.desktop_url || screenshot?.mobile_url) return 'completed';
-  }
-  if (id === 'analysis') {
-    if (err) return 'failed';
-    if (mutations['analysis']?.isPending) return 'active';
-    if (analysis) return 'completed';
-  }
-  if (id === 'audit') {
-    if (err) return 'failed';
-    if (mutations['audit']?.isPending) return 'active';
-    if (audit) return 'completed';
-  }
-  if (id === 'generation') {
-    if (err) return 'failed';
-    if (mutations['generation']?.isPending) return 'active';
-    if (website) return 'completed';
-  }
-  if (id === 'preview') {
-    if (website) return 'completed';
-  }
-  if (id === 'package') {
-    if (website && (website as { package_id?: string })?.package_id) return 'completed';
-  }
-  if (id === 'outreach') {
-    if (err) return 'failed';
-    if (mutations['outreach']?.isPending) return 'active';
-    if (outreach) return 'completed';
-  }
+  const states = STAGES.map(s => rawState(s.id, screenshot, analysis, audit, website, outreach, mutations));
+  const targetIdx = STAGES.findIndex(s => s.id === id);
+  const firstNonCompleted = states.findIndex(s => s !== 'completed');
 
-  /* active = first non-completed, non-failed, non-pending in order */
-  for (const s of STAGES) {
-    const st = getStageState(s.id, screenshot, analysis, audit, website, outreach, mutations);
-    if (st === 'active') return id === s.id ? 'active' : 'blocked';
-    if (st === 'pending' || st === 'blocked') continue;
-    if (st === 'completed' && s.id === id) return 'completed';
-  }
-
-  return 'pending';
+  if (firstNonCompleted === -1) return 'completed';
+  if (targetIdx < firstNonCompleted) return 'completed';
+  if (targetIdx === firstNonCompleted) return states[targetIdx];
+  return 'blocked';
 }
 
 function getActiveStage(
@@ -105,9 +99,11 @@ function getActiveStage(
   outreach: OutreachResponse | null,
   mutations: Record<string, { isPending: boolean; error: unknown }>,
 ): StageDef | null {
-  for (const s of STAGES) {
-    const st = getStageState(s.id, screenshot, analysis, audit, website, outreach, mutations);
-    if (st === 'active' || st === 'pending') return s;
+  const states = STAGES.map(s => rawState(s.id, screenshot, analysis, audit, website, outreach, mutations));
+  for (let i = 0; i < STAGES.length; i++) {
+    if (states[i] === 'completed') continue;
+    if (states[i] === 'active' || states[i] === 'pending') return STAGES[i];
+    break;
   }
   return null;
 }
@@ -188,9 +184,18 @@ export function LeadDetailPage() {
       if (!data?.website_id) { toast.error('Generation failed — no website ID returned'); return; }
       setHtmlContent(data.html);
       toast.success('Website generated successfully');
+      queryClient.invalidateQueries({ queryKey: ['lead', id] });
+      queryClient.invalidateQueries({ queryKey: ['generated-website-latest', id] });
       navigate(`/preview/${data.website_id}`);
     },
-    onError: (err) => { toast.error(getApiErrorMessage(err, 'Generation failed')); },
+    onError: (err) => {
+      const apiErr = extractApiError(err);
+      if (apiErr.category === 'network') toast.error('Cannot connect to the LeadForge API. Please try again.');
+      else if (apiErr.category === 'timeout') toast.error('Website generation took too long. No duplicate request was submitted; you can safely retry.');
+      else if (apiErr.category === 'provider') toast.error('The AI generation provider is temporarily unavailable. Please retry.');
+      else if (apiErr.category === 'authentication') toast.error('Your session expired. Please sign in again.');
+      else toast.error(apiErr.message || 'Generation failed');
+    },
   });
 
   const analysisMutation = useMutation({
@@ -208,7 +213,14 @@ export function LeadDetailPage() {
   const screenshotMutation = useMutation({
     mutationFn: () => screenshotService.capture({ lead_id: id! }),
     onSuccess: (result) => { setScreenshotResult(result); queryClient.invalidateQueries({ queryKey: ['lead', id] }); toast.success('Screenshots captured successfully'); },
-    onError: (err) => { toast.error(getApiErrorMessage(err, 'Screenshot capture failed')); },
+    onError: (err) => {
+      const msg = extractApiError(err).message || '';
+      if (msg.includes('File size too large') || msg.includes('upload') || msg.includes('Cloudinary')) {
+        toast.error('Screenshot was captured, but the image could not be optimized for upload. Please retry.');
+      } else {
+        toast.error(getApiErrorMessage(err, 'Screenshot capture failed'));
+      }
+    },
   });
 
   const outreachMutation = useMutation({
