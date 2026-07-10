@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class NavigationItem(BaseModel):
@@ -13,10 +13,26 @@ class NavigationItem(BaseModel):
 
 
 class HeroSection(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     title: Optional[str] = None
     subtitle: Optional[str] = None
     cta_buttons: List[Dict[str, Any]] = Field(default_factory=list)
     background_image: Optional[str] = None
+
+    @field_validator("cta_buttons", mode="before")
+    @classmethod
+    def coerce_cta_buttons(cls, v: Any) -> Any:
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return [
+                item if isinstance(item, dict)
+                else item.model_dump() if hasattr(item, "model_dump")
+                else item
+                for item in v
+            ]
+        return v
 
 
 class AboutSection(BaseModel):

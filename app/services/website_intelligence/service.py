@@ -1856,6 +1856,7 @@ class WebsiteIntelligenceService:
             best_cat = max(scores, key=lambda k: scores[k])
             confidence = scores[best_cat]
 
+            section_type = best_cat
             if confidence < 30:
                 section_type = "Other"
                 confidence = 0.0
