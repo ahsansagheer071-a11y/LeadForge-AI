@@ -40,3 +40,6 @@ Thumbs.db
 # Backend static screenshots (generated at runtime)
 app/static/screenshots/*
 !app/static/screenshots/.gitkeep
+
+# Asset download workspace (generated at runtime)
+app/static/assets/

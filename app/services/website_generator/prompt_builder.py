@@ -12,6 +12,7 @@ class PromptBuilder:
             system_context=context.system_context,
             developer_context=context.developer_context,
             branding_context=context.branding_context,
+            content_context=context.content_context,
             layout_context=context.layout_context,
             components_context=context.components_context,
             animation_context=context.animation_context,

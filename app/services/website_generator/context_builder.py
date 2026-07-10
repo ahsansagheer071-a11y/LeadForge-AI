@@ -24,6 +24,7 @@ class ContextBuilder:
             system_context=package.system_md.content,
             developer_context=package.developer_md.content,
             branding_context=package.branding_md.content,
+            content_context=package.content_md.content,
             layout_context=package.layout_md.content,
             components_context=package.components_md.content,
             animation_context=package.animations_md.content,

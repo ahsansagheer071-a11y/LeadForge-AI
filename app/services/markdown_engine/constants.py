@@ -13,6 +13,7 @@ class MarkdownCategory(str, Enum):
     PERFORMANCE = "PERFORMANCE"
     ACCESSIBILITY = "ACCESSIBILITY"
     ASSETS = "ASSETS"
+    CONTENT = "CONTENT"
     RULES = "RULES"
     OUTPUT = "OUTPUT"
 
@@ -26,20 +27,22 @@ CATEGORY_PRIORITIES: Dict[MarkdownCategory, int] = {
     MarkdownCategory.RULES: 2,
     MarkdownCategory.DEVELOPER: 3,
     MarkdownCategory.BRANDING: 4,
-    MarkdownCategory.LAYOUT: 5,
-    MarkdownCategory.COMPONENTS: 6,
-    MarkdownCategory.ANIMATIONS: 7,
-    MarkdownCategory.SEO: 8,
-    MarkdownCategory.PERFORMANCE: 9,
-    MarkdownCategory.ACCESSIBILITY: 10,
-    MarkdownCategory.ASSETS: 11,
-    MarkdownCategory.OUTPUT: 12,
+    MarkdownCategory.CONTENT: 5,
+    MarkdownCategory.LAYOUT: 6,
+    MarkdownCategory.COMPONENTS: 7,
+    MarkdownCategory.ANIMATIONS: 8,
+    MarkdownCategory.SEO: 9,
+    MarkdownCategory.PERFORMANCE: 10,
+    MarkdownCategory.ACCESSIBILITY: 11,
+    MarkdownCategory.ASSETS: 12,
+    MarkdownCategory.OUTPUT: 13,
 }
 
 CATEGORY_DISPLAY_NAMES: Dict[MarkdownCategory, str] = {
     MarkdownCategory.SYSTEM: "System Rules",
     MarkdownCategory.DEVELOPER: "Developer Guide",
     MarkdownCategory.BRANDING: "Brand Identity",
+    MarkdownCategory.CONTENT: "Source Content",
     MarkdownCategory.LAYOUT: "Layout Structure",
     MarkdownCategory.COMPONENTS: "Component Library",
     MarkdownCategory.ANIMATIONS: "Animation System",
@@ -55,13 +58,14 @@ CATEGORY_FILENAMES: Dict[MarkdownCategory, str] = {
     MarkdownCategory.SYSTEM: "00-system.md",
     MarkdownCategory.DEVELOPER: "01-developer.md",
     MarkdownCategory.BRANDING: "02-branding.md",
-    MarkdownCategory.LAYOUT: "03-layout.md",
-    MarkdownCategory.COMPONENTS: "04-components.md",
-    MarkdownCategory.ANIMATIONS: "05-animations.md",
-    MarkdownCategory.SEO: "06-seo.md",
-    MarkdownCategory.PERFORMANCE: "07-performance.md",
-    MarkdownCategory.ACCESSIBILITY: "08-accessibility.md",
-    MarkdownCategory.ASSETS: "09-assets.md",
-    MarkdownCategory.RULES: "10-rules.md",
-    MarkdownCategory.OUTPUT: "11-output.md",
+    MarkdownCategory.CONTENT: "03-content.md",
+    MarkdownCategory.LAYOUT: "04-layout.md",
+    MarkdownCategory.COMPONENTS: "05-components.md",
+    MarkdownCategory.ANIMATIONS: "06-animations.md",
+    MarkdownCategory.SEO: "07-seo.md",
+    MarkdownCategory.PERFORMANCE: "08-performance.md",
+    MarkdownCategory.ACCESSIBILITY: "09-accessibility.md",
+    MarkdownCategory.ASSETS: "10-assets.md",
+    MarkdownCategory.RULES: "11-rules.md",
+    MarkdownCategory.OUTPUT: "12-output.md",
 }

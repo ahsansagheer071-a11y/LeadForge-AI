@@ -206,6 +206,7 @@ class GroqProvider(AIProvider):
         body_parts = [
             ("Developer Guide", prompt_context.developer_context),
             ("Brand Identity", prompt_context.branding_context),
+            ("Source Website Content", prompt_context.content_context),
             ("Layout Structure", prompt_context.layout_context),
             ("Component Library", prompt_context.components_context),
             ("Animation System", prompt_context.animation_context),

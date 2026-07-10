@@ -57,49 +57,54 @@ class MarkdownPackage(BaseModel):
         priority=CATEGORY_PRIORITIES[MarkdownCategory.BRANDING],
         content="", word_count=0, estimated_tokens=0,
     ))
+    content_md: MarkdownDocument = Field(default_factory=lambda: MarkdownDocument(
+        filename="03-content.md", title="Source Content", category=MarkdownCategory.CONTENT.value,
+        priority=CATEGORY_PRIORITIES[MarkdownCategory.CONTENT],
+        content="", word_count=0, estimated_tokens=0,
+    ))
     layout_md: MarkdownDocument = Field(default_factory=lambda: MarkdownDocument(
-        filename="03-layout.md", title="Layout Structure", category=MarkdownCategory.LAYOUT.value,
+        filename="04-layout.md", title="Layout Structure", category=MarkdownCategory.LAYOUT.value,
         priority=CATEGORY_PRIORITIES[MarkdownCategory.LAYOUT],
         content="", word_count=0, estimated_tokens=0,
     ))
     components_md: MarkdownDocument = Field(default_factory=lambda: MarkdownDocument(
-        filename="04-components.md", title="Component Library", category=MarkdownCategory.COMPONENTS.value,
+        filename="05-components.md", title="Component Library", category=MarkdownCategory.COMPONENTS.value,
         priority=CATEGORY_PRIORITIES[MarkdownCategory.COMPONENTS],
         content="", word_count=0, estimated_tokens=0,
     ))
     animations_md: MarkdownDocument = Field(default_factory=lambda: MarkdownDocument(
-        filename="05-animations.md", title="Animation System", category=MarkdownCategory.ANIMATIONS.value,
+        filename="06-animations.md", title="Animation System", category=MarkdownCategory.ANIMATIONS.value,
         priority=CATEGORY_PRIORITIES[MarkdownCategory.ANIMATIONS],
         content="", word_count=0, estimated_tokens=0,
     ))
     seo_md: MarkdownDocument = Field(default_factory=lambda: MarkdownDocument(
-        filename="06-seo.md", title="SEO Configuration", category=MarkdownCategory.SEO.value,
+        filename="07-seo.md", title="SEO Configuration", category=MarkdownCategory.SEO.value,
         priority=CATEGORY_PRIORITIES[MarkdownCategory.SEO],
         content="", word_count=0, estimated_tokens=0,
     ))
     performance_md: MarkdownDocument = Field(default_factory=lambda: MarkdownDocument(
-        filename="07-performance.md", title="Performance Targets", category=MarkdownCategory.PERFORMANCE.value,
+        filename="08-performance.md", title="Performance Targets", category=MarkdownCategory.PERFORMANCE.value,
         priority=CATEGORY_PRIORITIES[MarkdownCategory.PERFORMANCE],
         content="", word_count=0, estimated_tokens=0,
     ))
     accessibility_md: MarkdownDocument = Field(default_factory=lambda: MarkdownDocument(
-        filename="08-accessibility.md", title="Accessibility Requirements",
+        filename="09-accessibility.md", title="Accessibility Requirements",
         category=MarkdownCategory.ACCESSIBILITY.value,
         priority=CATEGORY_PRIORITIES[MarkdownCategory.ACCESSIBILITY],
         content="", word_count=0, estimated_tokens=0,
     ))
     assets_md: MarkdownDocument = Field(default_factory=lambda: MarkdownDocument(
-        filename="09-assets.md", title="Asset Management", category=MarkdownCategory.ASSETS.value,
+        filename="10-assets.md", title="Asset Management", category=MarkdownCategory.ASSETS.value,
         priority=CATEGORY_PRIORITIES[MarkdownCategory.ASSETS],
         content="", word_count=0, estimated_tokens=0,
     ))
     rules_md: MarkdownDocument = Field(default_factory=lambda: MarkdownDocument(
-        filename="10-rules.md", title="Coding Standards", category=MarkdownCategory.RULES.value,
+        filename="11-rules.md", title="Coding Standards", category=MarkdownCategory.RULES.value,
         priority=CATEGORY_PRIORITIES[MarkdownCategory.RULES],
         content="", word_count=0, estimated_tokens=0,
     ))
     output_md: MarkdownDocument = Field(default_factory=lambda: MarkdownDocument(
-        filename="11-output.md", title="Output Requirements", category=MarkdownCategory.OUTPUT.value,
+        filename="12-output.md", title="Output Requirements", category=MarkdownCategory.OUTPUT.value,
         priority=CATEGORY_PRIORITIES[MarkdownCategory.OUTPUT],
         content="", word_count=0, estimated_tokens=0,
     ))
@@ -109,7 +114,7 @@ class MarkdownPackage(BaseModel):
 
     def list_documents(self) -> List[MarkdownDocument]:
         return [
-            self.system_md, self.developer_md, self.branding_md,
+            self.system_md, self.developer_md, self.branding_md, self.content_md,
             self.layout_md, self.components_md, self.animations_md,
             self.seo_md, self.performance_md, self.accessibility_md,
             self.assets_md, self.rules_md, self.output_md,

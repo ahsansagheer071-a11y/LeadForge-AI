@@ -62,6 +62,7 @@ def _enforce_prompt_budget(prompt: PromptContext) -> PromptContext:
         ("system_context",       prompt.system_context),
         ("developer_context",    prompt.developer_context),
         ("branding_context",     prompt.branding_context),
+        ("content_context",      prompt.content_context),
         ("layout_context",       prompt.layout_context),
         ("components_context",   prompt.components_context),
         ("animation_context",    prompt.animation_context),
