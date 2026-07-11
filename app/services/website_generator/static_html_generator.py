@@ -32,12 +32,12 @@ from app.services.ai.chain import run_chain
 logger = logging.getLogger(__name__)
 
 HTML_DIRECTIVE = """
-OUTPUT: A single complete HTML file. Start with <!DOCTYPE html>, end with </html>.
-Use embedded <style> in <head>. No markdown, no explanations, no extra text.
+OUTPUT: ONLY the inner HTML content for the <body> tag. Do NOT output:
+<!DOCTYPE>, <html>, <head>, <style>, <script>, or any closing tags.
+Output ONLY semantic HTML sections starting with a hero/header section.
 
-DESIGN: Modern, clean redesign. Dark or light theme matching the brand.
-Keep CSS minimal — use utility classes and inline styles where possible.
-Output ALL sections: hero, about, services, products, contact, footer.
+DESIGN: Modern, clean redesign. Use inline styles or CSS classes.
+Output ALL sections: hero, about, services/products, contact, footer.
 
 CONTENT RULES:
 - Use source content VERBATIM — never rewrite or paraphrase.
@@ -155,30 +155,31 @@ class StaticHTMLGenerator:
             chain_result.provider_used, time.monotonic() - t3,
         )
 
-        # Step 5 — Parse response: extract HTML and create single file
+        # Step 5 — Parse response: extract body content and wrap in template
         t5 = time.monotonic()
         raw_response = chain_result.result
-        html_content = self._extract_html_content(raw_response)
+        body_content = self._extract_body_content(raw_response)
         logger.info(
-            "[GEN] step=html_extract | raw_len=%d | html_len=%d | %.2fs",
+            "[GEN] step=body_extract | raw_len=%d | body_len=%d | %.2fs",
             len(raw_response) if raw_response else 0,
-            len(html_content) if html_content else 0,
+            len(body_content) if body_content else 0,
             time.monotonic() - t5,
         )
-        if not html_content:
-            logger.error("[GEN] html extraction failed — no valid HTML in AI response")
+        if not body_content:
+            logger.error("[GEN] body extraction failed — no valid content in AI response")
             return GenerationResult(
                 success=False,
-                errors=["No valid HTML content found in AI response"],
+                errors=["No valid body content found in AI response"],
                 generation_time=time.monotonic() - start,
                 warnings=[f"Raw AI response length: {len(raw_response)} chars"],
             )
 
-        if len(html_content) < 1000:
-            logger.warning("[GEN] very short HTML output (%d bytes) — AI may have truncated", len(html_content))
-
-        # Step 5a — Recover from truncated HTML
-        html_content = self._recover_truncated_html(html_content)
+        # Build complete HTML from template + AI body
+        t5a = time.monotonic()
+        html_template = self._build_html_template(blueprint)
+        html_content = html_template.replace("<!--BODY_CONTENT-->", body_content)
+        logger.info("[GEN] step=template_wrap | template=%d + body=%d = total=%d | %.2fs",
+            len(html_template), len(body_content), len(html_content), time.monotonic() - t5a)
 
         # Step 5b — Fidelity validation
         t5b = time.monotonic()
@@ -233,7 +234,7 @@ class StaticHTMLGenerator:
             except Exception:
                 pass
 
-        project_name = self._extract_project_name_from_raw(raw_response) or "generated_website"
+        project_name = (getattr(getattr(blueprint, 'business', None), 'name', None) or "generated_website").replace(" ", "_")
         generation_id = uuid.uuid4().hex[:12]
 
         html_file = GeneratedFile(
@@ -280,69 +281,127 @@ class StaticHTMLGenerator:
         """Extract HTML content from raw AI response, stripping markdown fences if present."""
         if not raw:
             return ""
-        # Try to find content between ```html and ``` or <!DOCTYPE ... and </html>
         import re
-        # Pattern for code fences with html tag
         fence_pattern = r"```(?:html)?\s*(<!DOCTYPE html[\s\S]*?</html>)\s*```"
         match = re.search(fence_pattern, raw, re.IGNORECASE)
         if match:
             return match.group(1).strip()
-        # If no fences, assume the whole string is the HTML (should start with <!DOCTYPE)
         stripped = raw.strip()
         if stripped.lower().startswith("<!doctype html>") or stripped.lower().startswith("<html"):
-            # Find the closing html tag
             end_pos = stripped.lower().rfind("</html>")
             if end_pos != -1:
                 return stripped[: end_pos + len("</html>")].strip()
-        # Fallback: return trimmed raw (may cause validation error upstream)
         return stripped
 
-    def _extract_project_name_from_raw(self, raw: str) -> Optional[str]:
+    def _extract_body_content(self, raw: str) -> str:
+        """Extract body content from AI response. Handles multiple formats:
+        1. Full HTML document → extract body innerHTML
+        2. Partial HTML with sections → return as-is
+        3. Markdown fences → strip and extract
+        """
         if not raw:
-            return None
+            return ""
         import re
-        patterns = [
-            r"<title>\s*(.*?)\s*</title>",
-            r"<h1>\s*(.*?)\s*</h1>",
-        ]
-        for pat in patterns:
-            match = re.search(pat, raw, re.IGNORECASE | re.DOTALL)
-            if match:
-                name = match.group(1).strip()
-                if name:
-                    return name
-        return None
+        stripped = raw.strip()
+        # Strip markdown fences if present
+        fence_match = re.search(r"```(?:html)?\s*([\s\S]*?)```", stripped, re.IGNORECASE)
+        if fence_match:
+            stripped = fence_match.group(1).strip()
+
+        # If AI returned a full HTML doc, extract body content
+        body_match = re.search(r"<body[^>]*>([\s\S]*?)</body>", stripped, re.IGNORECASE)
+        if body_match:
+            return body_match.group(1).strip()
+
+        # If it starts with DOCTYPE/html/head, extract everything after </style> or </head>
+        if stripped.lower().startswith("<!doctype") or stripped.lower().startswith("<html"):
+            after_head = re.sub(r"<!DOCTYPE[^>]*>\s*<html[^>]*>\s*<head[\s\S]*?</head>\s*", "", stripped, flags=re.IGNORECASE)
+            after_head = re.sub(r"</?html[^>]*>\s*", "", after_head, flags=re.IGNORECASE)
+            # Remove closing body/html tags
+            after_head = re.sub(r"</body>\s*</html>\s*$", "", after_head, flags=re.IGNORECASE)
+            after_head = re.sub(r"</html>\s*$", "", after_head, flags=re.IGNORECASE)
+            if after_head.strip():
+                return after_head.strip()
+
+        # Assume it's already body content (sections, divs, etc.)
+        return stripped
 
     @staticmethod
-    def _recover_truncated_html(html: str) -> str:
-        """If the AI response was truncated mid-HTML, try to salvage it by
-        closing any open tags so the result is at least valid HTML."""
-        if not html:
-            return html
-        lower = html.lower()
-        # Already complete
-        if "</html>" in lower:
-            return html
+    def _build_html_template(blueprint) -> str:
+        """Build a minimal HTML template with CSS derived from brand identity."""
+        # Extract brand colors
+        brand = getattr(blueprint, 'brand', None)
+        primary = "#1a1a2e"
+        secondary = "#16213e"
+        accent = "#e94560"
+        text_color = "#ffffff"
+        bg_color = "#0f0f23"
+        heading_font = "'Inter', 'Segoe UI', sans-serif"
+        body_font = "'Inter', 'Segoe UI', sans-serif"
 
-        # Build closing sequence for open tags
-        import re
-        open_tags = re.findall(r"<(style|script|head|body|html)\b", html, re.IGNORECASE)
-        # Remove tags that are already closed
-        for tag in list(open_tags):
-            if f"</{tag}>" in lower:
-                open_tags.remove(tag)
+        if brand:
+            palette = getattr(brand, 'color_palette', None)
+            if palette:
+                primary = getattr(palette, 'primary', None) or primary
+                secondary = getattr(palette, 'secondary', None) or secondary
+                accent = getattr(palette, 'accent', None) or accent
+            typography = getattr(brand, 'typography', None)
+            if typography:
+                heading_font = getattr(typography, 'heading_font', None) or heading_font
+                body_font = getattr(typography, 'body_font', None) or body_font
 
-        closings = []
-        for tag in reversed(open_tags):
-            closings.append(f"</{tag}>")
+        biz_name = getattr(getattr(blueprint, 'business', None), 'name', None) or 'Business'
+        seo = getattr(blueprint, 'seo', None)
+        description = ""
+        if seo:
+            description = getattr(seo, 'meta_description', None) or description
 
-        if not closings:
-            # No recognizable open tags — just append minimal closure
-            closings = ["</style>", "</head>", "<body></body>", "</html>"]
-
-        recovered = html + "\n" + "\n".join(closings)
-        logger.info(
-            "[GEN] html_recovery: added %d closing tags (%d -> %d bytes)",
-            len(closings), len(html), len(recovered),
-        )
-        return recovered
+        return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{biz_name}</title>
+<meta name="description" content="{description}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
+:root{{
+  --primary:{primary};
+  --secondary:{secondary};
+  --accent:{accent};
+  --text:{text_color};
+  --bg:{bg_color};
+  --heading-font:{heading_font};
+  --body-font:{body_font};
+}}
+html{{scroll-behavior:smooth}}
+body{{font-family:var(--body-font);color:var(--text);background:var(--bg);line-height:1.6}}
+h1,h2,h3,h4,h5,h6{{font-family:var(--heading-font);font-weight:600;line-height:1.2}}
+img{{max-width:100%;height:auto;display:block}}
+a{{color:var(--accent);text-decoration:none}}
+a:hover{{text-decoration:underline}}
+.container{{max-width:1200px;margin:0 auto;padding:0 20px}}
+section{{padding:80px 0}}
+.hero{{min-height:80vh;display:flex;align-items:center;background:linear-gradient(135deg,var(--primary),var(--secondary))}}
+.hero h1{{font-size:3rem;margin-bottom:1rem}}
+.hero p{{font-size:1.25rem;max-width:600px;opacity:0.9}}
+.btn{{display:inline-block;padding:12px 32px;background:var(--accent);color:#fff;border-radius:6px;font-weight:500;transition:opacity .2s}}
+.btn:hover{{opacity:0.9;text-decoration:none}}
+.grid{{display:grid;gap:2rem}}
+.grid-2{{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}}
+.grid-3{{grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}}
+.card{{background:rgba(255,255,255,0.05);border-radius:12px;padding:2rem;border:1px solid rgba(255,255,255,0.1)}}
+.card h3{{margin-bottom:0.75rem;color:var(--accent)}}
+footer{{background:var(--primary);padding:40px 0;text-align:center;opacity:0.8}}
+@media(max-width:768px){{
+  .hero h1{{font-size:2rem}}
+  section{{padding:40px 0}}
+}}
+</style>
+</head>
+<body>
+<!--BODY_CONTENT-->
+</body>
+</html>"""
