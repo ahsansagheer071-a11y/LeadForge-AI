@@ -83,6 +83,7 @@ class GroqProvider(AIProvider):
         payload = {
             "model": self._model,
             "messages": messages,
+            "max_tokens": 16384,
         }
 
         logger.debug("Groq request payload: %s", payload)

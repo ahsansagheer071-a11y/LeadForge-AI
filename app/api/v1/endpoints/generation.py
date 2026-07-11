@@ -174,6 +174,7 @@ async def _run_generation_job(job_id: str, lead_id: uuid.UUID, user_id: str) -> 
                 preview_path    = preview_record.preview_path,
                 package_id      = preview_record.package_id,
                 project_name    = result.website_project.project_name,
+                provider_used   = result.provider_used,
                 generation_time = result.generation_time
             )
 
@@ -599,7 +600,6 @@ async def download_generated_website_package(
                     zf.writestr(clean_path, str(content))
             else:
                 zf.writestr(clean_path, str(content))
-        zf.writestr("leadforge-package.json", json.dumps(package, indent=2))
 
     buffer.seek(0)
     safe_name = (website.project_name or "leadforge-website").lower()

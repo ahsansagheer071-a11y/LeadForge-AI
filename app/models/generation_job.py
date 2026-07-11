@@ -25,6 +25,7 @@ class GenerationJob(Base):
     preview_path: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     package_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     project_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    provider_used: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     generation_time: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     

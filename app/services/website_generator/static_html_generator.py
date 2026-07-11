@@ -177,6 +177,9 @@ class StaticHTMLGenerator:
                 warnings=[f"Raw AI response length: {len(raw_response)} chars"],
             )
 
+        if len(html_content) < 1000:
+            logger.warning("[GEN] very short HTML output (%d bytes) — AI may have truncated", len(html_content))
+
         # Step 5b — Fidelity validation
         t5b = time.monotonic()
         manifest = getattr(package, 'asset_manifest', None)

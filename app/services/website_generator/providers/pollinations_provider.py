@@ -92,6 +92,7 @@ class PollinationsProvider(AIProvider):
         payload = {
             "model": model,
             "messages": messages,
+            "max_tokens": 16384,
         }
 
         try:
