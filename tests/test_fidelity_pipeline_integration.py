@@ -374,7 +374,10 @@ class TestStaticHtmlGeneratorIntegration:
                         attempts=[],
                     )
 
-                    result = await gen.generate(sample_profile, pkg)
+                    from app.services.website_generator.asset_packager import AssetPackager
+                    with patch.object(AssetPackager, 'package_assets_async') as mock_packager:
+                        mock_packager.return_value = (clean_html, [], [])
+                        result = await gen.generate(sample_profile, pkg)
 
         assert result.success
         assert len(result.warnings) == 0, f"Expected no warnings, got: {result.warnings}"
@@ -438,7 +441,10 @@ class TestStaticHtmlGeneratorIntegration:
                         attempts=[],
                     )
 
-                    result = await gen.generate(sample_profile, pkg)
+                    from app.services.website_generator.asset_packager import AssetPackager
+                    with patch.object(AssetPackager, 'package_assets_async') as mock_packager:
+                        mock_packager.return_value = (clean_html, [], [])
+                        result = await gen.generate(sample_profile, pkg)
 
         assert result.success
         assert result.website_project is not None

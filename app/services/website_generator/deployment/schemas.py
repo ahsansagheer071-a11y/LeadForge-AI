@@ -12,6 +12,7 @@ class DeploymentArtifact(BaseModel):
     size: int = 0
     checksum: Optional[str] = None
     content: Optional[str] = None
+    encoding: Optional[str] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(from_attributes=True)

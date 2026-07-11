@@ -14,6 +14,8 @@ persistent `generation_jobs` table. The frontend polls GET every 3 seconds.
 """
 
 import asyncio
+import base64
+import json
 import logging
 import time
 import uuid
@@ -125,6 +127,7 @@ async def _run_generation_job(job_id: str, lead_id: uuid.UUID, user_id: str) -> 
 
             # ── Step 4: Persist ──────────────────────────────────────────── #
             await _update_job_status(db, job_id, JobStatus.RUNNING, "Saving result")
+            preview_html = getattr(result.website_project, 'preview_html', None)
             html_content  = result.website_project.files[0].content if result.website_project.files else ""
             preview_record = GeneratedWebsite(
                 lead_id      = lead_id,
@@ -132,7 +135,7 @@ async def _run_generation_job(job_id: str, lead_id: uuid.UUID, user_id: str) -> 
                 project_name = result.website_project.project_name,
                 framework    = result.website_project.framework,
                 status       = "generated",
-                html         = html_content,
+                html         = preview_html or html_content,
                 preview_path = "",
                 build_metadata={
                     "generation_time":   result.generation_time,
@@ -167,7 +170,7 @@ async def _run_generation_job(job_id: str, lead_id: uuid.UUID, user_id: str) -> 
                 db, job_id, JobStatus.SUCCEEDED, "Complete",
                 website_id      = str(preview_record.id),
                 generation_id   = result.website_project.generation_id,
-                html            = html_content,
+                html            = preview_html or html_content,
                 preview_path    = preview_record.preview_path,
                 package_id      = preview_record.package_id,
                 project_name    = result.website_project.project_name,
@@ -437,6 +440,7 @@ async def generate_website(
             data=None,
         )
 
+    preview_html = getattr(result.website_project, 'preview_html', None)
     html_content = result.website_project.files[0].content if result.website_project.files else ""
     preview_record = GeneratedWebsite(
         lead_id=payload.lead_id,
@@ -444,7 +448,7 @@ async def generate_website(
         project_name=result.website_project.project_name,
         framework=result.website_project.framework,
         status="generated",
-        html=html_content,
+        html=preview_html or html_content,
         preview_path="",
         build_metadata={
             "generation_time": result.generation_time,
@@ -585,8 +589,17 @@ async def download_generated_website_package(
             path = artifact.get("path") or artifact.get("name")
             if content is None or not path:
                 continue
-            zf.writestr(str(path).lstrip("/\\"), str(content))
-        zf.writestr("leadforge-package.json", __import__("json").dumps(package, indent=2))
+            encoding = artifact.get("encoding")
+            clean_path = str(path).lstrip("/\\")
+            if encoding == "base64":
+                try:
+                    decoded = base64.b64decode(content)
+                    zf.writestr(clean_path, decoded)
+                except Exception:
+                    zf.writestr(clean_path, str(content))
+            else:
+                zf.writestr(clean_path, str(content))
+        zf.writestr("leadforge-package.json", json.dumps(package, indent=2))
 
     buffer.seek(0)
     safe_name = (website.project_name or "leadforge-website").lower()

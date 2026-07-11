@@ -52,6 +52,17 @@ class GeneratedFile(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ImageArtifact(BaseModel):
+    filename: str
+    path: str
+    content_base64: str
+    type: str = "image"
+    size: int = 0
+    original_url: str = ""
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class GeneratedSection(BaseModel):
     section_name: str
     component_name: str
@@ -71,6 +82,7 @@ class WebsiteProject(BaseModel):
     assets: List[str] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
     statistics: Dict[str, Any] = Field(default_factory=dict)
+    preview_html: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

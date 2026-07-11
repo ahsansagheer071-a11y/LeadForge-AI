@@ -26,6 +26,7 @@ from app.services.website_generator.schemas import (
 )
 from app.services.website_generator.prompt_budget import PromptBudgetController
 from app.services.website_generator.fidelity_validator import FidelityValidator
+from app.services.website_generator.asset_packager import AssetPackager
 from app.services.ai.chain import run_chain
 
 logger = logging.getLogger(__name__)
@@ -194,6 +195,41 @@ class StaticHTMLGenerator:
             logger.info("[GEN] fidelity check passed | %.2fs", time.monotonic() - t5b)
         fidelity_issue_count = len(fidelity_result.issues)
 
+        # Step 5c — Asset packaging: download images, rewrite HTML to local paths
+        t5c = time.monotonic()
+        original_html = html_content
+        packager = AssetPackager()
+        image_artifacts: List[str] = []
+        try:
+            rewritten_html, artifacts_list, asset_warnings = await packager.package_assets_async(
+                html_content, manifest
+            ) if manifest else (html_content, [], ["No manifest for asset packaging."])
+            warnings.extend(asset_warnings)
+
+            if rewritten_html != html_content:
+                html_content = rewritten_html
+
+            # Store image artifacts as JSON-encoded strings in project.assets
+            import json as _json
+            image_artifacts = [
+                _json.dumps(a.model_dump(mode="json")) for a in artifacts_list
+            ]
+
+            logger.info(
+                "[GEN] step=asset_packaging | images=%d | html_rewritten=%s | %.2fs",
+                len(artifacts_list),
+                rewritten_html != html_content,
+                time.monotonic() - t5c,
+            )
+        except Exception as exc:
+            logger.warning("[GEN] asset packaging failed (non-fatal): %s", exc)
+            warnings.append(f"Asset packaging failed: {exc}")
+        finally:
+            try:
+                packager.cleanup()
+            except Exception:
+                pass
+
         project_name = self._extract_project_name_from_raw(raw_response) or "generated_website"
         generation_id = uuid.uuid4().hex[:12]
 
@@ -211,13 +247,15 @@ class StaticHTMLGenerator:
             version="1.0.0",
             generated_at=datetime.now(timezone.utc),
             files=[html_file],
-            assets=[],  # no separate assets since everything is inline
+            assets=image_artifacts,
             metadata={},
             statistics={
                 "file_count": 1,
+                "asset_count": len(image_artifacts),
                 "fidelity_valid": fidelity_result.valid,
                 "fidelity_issues": fidelity_issue_count,
             },
+            preview_html=original_html,
         )
 
         total_elapsed = time.monotonic() - start

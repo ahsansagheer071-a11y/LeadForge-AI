@@ -136,24 +136,32 @@ class PackageManager:
             try:
                 if isinstance(raw_asset, str):
                     asset_dict = json.loads(raw_asset)
-                    asset = GeneratedAsset(**asset_dict)
                 elif isinstance(raw_asset, dict):
-                    asset = GeneratedAsset(**raw_asset)
+                    asset_dict = raw_asset
                 else:
                     continue
 
+                name = asset_dict.get("filename") or asset_dict.get("name", "asset")
+                path = asset_dict.get("path") or asset_dict.get("reference", name)
+                asset_type = asset_dict.get("type") or asset_dict.get("asset_type", "asset")
+                content_b64 = asset_dict.get("content_base64") or asset_dict.get("content")
+                size = asset_dict.get("size") or asset_dict.get("size_bytes", 0)
+                encoding = asset_dict.get("encoding")
+
                 art = DeploymentArtifact(
-                    name=asset.filename,
-                    path=asset.reference,
-                    type=asset.asset_type or "asset",
-                    size=asset.size_bytes or 0,
+                    name=name,
+                    path=path,
+                    type=asset_type,
+                    size=size or len(content_b64) if content_b64 else 0,
+                    content=content_b64,
+                    encoding=encoding or "base64" if content_b64 and asset_type in ("image", "binary") else None,
                     metadata={
                         "source": "generated_asset",
-                        **(asset.metadata or {}),
+                        **(asset_dict.get("metadata", {})),
                     },
                 )
                 artifacts.append(art)
-            except (json.JSONDecodeError, Exception) as e:
+            except Exception as e:
                 warnings.append(
                     f"Failed to parse asset: {e}"
                 )
