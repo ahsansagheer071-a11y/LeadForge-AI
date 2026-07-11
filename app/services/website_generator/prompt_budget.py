@@ -64,6 +64,9 @@ class BudgetReport:
     actions: List[BudgetAction] = field(default_factory=list)
 
 
+MAX_CONTENT_CHARS = 80000  # ~20K tokens — keeps prompt within free-tier limits
+
+
 class PromptBudgetController:
     """Removes boilerplate, duplicates, and tracking content from prompts
     while preserving all meaningful business content verbatim."""
@@ -115,6 +118,8 @@ class PromptBudgetController:
             text, a = self._remove_duplicate_nav_labels(text)
             actions.extend(a)
             text, a = self._remove_tracking_content(text)
+            actions.extend(a)
+            text, a = self._truncate_content(text)
             actions.extend(a)
 
         if field_name in ("content_context", "layout_context", "components_context"):
@@ -211,3 +216,26 @@ class PromptBudgetController:
                 ))
             text = new_text
         return text, actions
+
+    def _truncate_content(self, text: str) -> tuple[str, List[BudgetAction]]:
+        actions: List[BudgetAction] = []
+        if len(text) <= MAX_CONTENT_CHARS:
+            return text, actions
+        # Preserve the first N chars (which contain the most important content:
+        # business name, hero, key sections) and truncate the rest
+        truncated = text[:MAX_CONTENT_CHARS]
+        # Try to cut at a section boundary (## heading)
+        last_heading = truncated.rfind("\n## ")
+        if last_heading > MAX_CONTENT_CHARS * 0.7:
+            truncated = truncated[:last_heading]
+        removed = len(text) - len(truncated)
+        actions.append(BudgetAction(
+            field="content_context",
+            chars_removed=removed,
+            reason=f"content truncation to {MAX_CONTENT_CHARS} chars",
+        ))
+        logger.info(
+            "PromptBudget: content_context truncated %d -> %d chars (kept %.0f%%)",
+            len(text), len(truncated), len(truncated) / len(text) * 100,
+        )
+        return truncated, actions
