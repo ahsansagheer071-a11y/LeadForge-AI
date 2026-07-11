@@ -184,6 +184,9 @@ class StaticHTMLGenerator:
         if len(html_content) < 1000:
             logger.warning("[GEN] very short HTML output (%d bytes) — AI may have truncated", len(html_content))
 
+        # Step 5a — Recover from truncated HTML
+        html_content = self._recover_truncated_html(html_content)
+
         # Step 5b — Fidelity validation
         t5b = time.monotonic()
         manifest = getattr(package, 'asset_manifest', None)
@@ -316,3 +319,37 @@ class StaticHTMLGenerator:
                 if name:
                     return name
         return None
+
+    @staticmethod
+    def _recover_truncated_html(html: str) -> str:
+        """If the AI response was truncated mid-HTML, try to salvage it by
+        closing any open tags so the result is at least valid HTML."""
+        if not html:
+            return html
+        lower = html.lower()
+        # Already complete
+        if "</html>" in lower:
+            return html
+
+        # Build closing sequence for open tags
+        import re
+        open_tags = re.findall(r"<(style|script|head|body|html)\b", html, re.IGNORECASE)
+        # Remove tags that are already closed
+        for tag in list(open_tags):
+            if f"</{tag}>" in lower:
+                open_tags.remove(tag)
+
+        closings = []
+        for tag in reversed(open_tags):
+            closings.append(f"</{tag}>")
+
+        if not closings:
+            # No recognizable open tags — just append minimal closure
+            closings = ["</style>", "</head>", "<body></body>", "</html>"]
+
+        recovered = html + "\n" + "\n".join(closings)
+        logger.info(
+            "[GEN] html_recovery: added %d closing tags (%d -> %d bytes)",
+            len(closings), len(html), len(recovered),
+        )
+        return recovered

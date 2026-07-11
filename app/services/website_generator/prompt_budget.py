@@ -64,7 +64,7 @@ class BudgetReport:
     actions: List[BudgetAction] = field(default_factory=list)
 
 
-MAX_CONTENT_CHARS = 80000  # ~20K tokens — keeps prompt within free-tier limits
+MAX_CONTENT_CHARS = 40000  # ~10K tokens — safe for free-tier providers with limited context
 
 
 class PromptBudgetController:

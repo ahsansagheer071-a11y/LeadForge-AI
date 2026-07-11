@@ -92,7 +92,7 @@ class PollinationsProvider(AIProvider):
         payload = {
             "model": model,
             "messages": messages,
-            "max_tokens": 16384,
+            "max_tokens": 8192,
         }
 
         try:
@@ -157,8 +157,10 @@ class PollinationsProvider(AIProvider):
                 total_tokens=usage_data.get("total_tokens", 0),
             )
 
+        finish_reason = data.get("choices", [{}])[0].get("finish_reason", "unknown")
         latency = time.monotonic() - start
-        logger.info("Pollinations generation finished | model=%s | latency=%.2fs", model, latency)
+        logger.info("Pollinations generation finished | model=%s | latency=%.2fs | finish_reason=%s | content_len=%d",
+            model, latency, finish_reason, len(content) if content else 0)
 
         return AIResponse(
             success=True, provider="pollinations", model=model,
