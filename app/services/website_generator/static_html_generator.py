@@ -9,10 +9,11 @@ import logging
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import List, Optional
 
 from app.services.website_intelligence.schemas import WebsiteProfile
 from app.services.markdown_engine.schemas import MarkdownPackage
+from app.services.markdown_engine.asset_manifest import ManifestBuilder
 from app.services.website_generator.context_builder import ContextBuilder
 from app.services.website_generator.prompt_builder import PromptBuilder
 from app.services.website_generator.providers.provider_factory import ProviderFactory
@@ -23,76 +24,34 @@ from app.services.website_generator.schemas import (
     WebsiteProject,
     GeneratedFile,
 )
+from app.services.website_generator.prompt_budget import PromptBudgetController
+from app.services.website_generator.fidelity_validator import FidelityValidator
 from app.services.ai.chain import run_chain
 
 logger = logging.getLogger(__name__)
 
 HTML_DIRECTIVE = """
+You are redesigning the supplied source website.
 You MUST output ONLY a single, complete, valid HTML document starting with 
 <!DOCTYPE html> and ending with </html>. All CSS must be inside a <style> 
 tag in the head, and all JavaScript must be inside a <script> tag before 
 the closing </body> tag. Do NOT include any explanations, markdown fences, 
-or extra text outside the HTML. The HTML should be a functional, styled 
-website representing the given business.
+or extra text outside the HTML.
+
+REQUIREMENTS:
+- REDESIGN the source website — improve layout, theme, typography, spacing, responsiveness, visual hierarchy.
+- Use the provided source content VERBATIM. Never paraphrase, rewrite, or improve business claims.
+- Use ONLY approved source images listed in the Approved Asset Manifest.
+- Never use Lorem Ipsum placeholder text.
+- Never create "Service 1", "Service 2", or similar dummy entries.
+- Never add LeadForge branding, logos, or watermarks.
+- Never add fake testimonials, reviews, or contact details.
+- Do not omit any meaningful source section.
+- Do not add any section not present in the source.
+- Produce a complete, responsive, single-file HTML document.
+- Every <img> src must point to an approved asset from the Asset Manifest.
+- Never use stock photos, AI-generated images, or unsplash placeholders.
 """
-
-# Maximum characters per individual markdown section sent to the AI.
-# Groq llama-3.3-70b has a ~128k token context; each char ≈ 0.35 tokens.
-# We cap each section at ~6 000 tokens (≈ 17 000 chars) and the total
-# user message at ~80 000 tokens (≈ 228 000 chars) to leave room for the
-# completion.  Values are conservative to avoid 413/context-overflow errors.
-_MAX_SECTION_CHARS = 17_000
-_MAX_TOTAL_CHARS = 228_000
-
-
-def _trim_section(text: str, label: str) -> str:
-    """Hard-truncate a single context section and log a warning if it was cut."""
-    if not text or len(text) <= _MAX_SECTION_CHARS:
-        return text
-    logger.warning(
-        "Prompt section '%s' truncated: %d → %d chars",
-        label, len(text), _MAX_SECTION_CHARS,
-    )
-    return text[:_MAX_SECTION_CHARS] + "\n\n[… truncated for token budget …]"
-
-
-def _enforce_prompt_budget(prompt: PromptContext) -> PromptContext:
-    """Trim every section field to stay within per-section and total char budgets."""
-    fields = [
-        ("system_context",       prompt.system_context),
-        ("developer_context",    prompt.developer_context),
-        ("branding_context",     prompt.branding_context),
-        ("content_context",      prompt.content_context),
-        ("layout_context",       prompt.layout_context),
-        ("components_context",   prompt.components_context),
-        ("animation_context",    prompt.animation_context),
-        ("seo_context",          prompt.seo_context),
-        ("performance_context",  prompt.performance_context),
-        ("accessibility_context",prompt.accessibility_context),
-        ("assets_context",       prompt.assets_context),
-        ("rules_context",        prompt.rules_context),
-        ("output_context",       prompt.output_context),
-    ]
-    trimmed = {name: _trim_section(val or "", name) for name, val in fields}
-
-    # Total budget enforcement — drop least-important sections first
-    drop_order = [
-        "assets_context", "performance_context", "accessibility_context",
-        "animation_context", "seo_context",
-    ]
-    total = sum(len(v) for v in trimmed.values())
-    for field_name in drop_order:
-        if total <= _MAX_TOTAL_CHARS:
-            break
-        original_len = len(trimmed.get(field_name, ""))
-        if original_len > 0:
-            trimmed[field_name] = ""
-            total -= original_len
-            logger.warning("Prompt budget: dropped section '%s' (%d chars)", field_name, original_len)
-
-    updated = trimmed
-    updated["generation_constraints"] = prompt.generation_constraints
-    return prompt.model_copy(update=updated)
 
 class StaticHTMLGenerator:
     def __init__(
@@ -142,7 +101,13 @@ class StaticHTMLGenerator:
                     "rules_context": updated_rules,
                 }
             )
-            prompt = _enforce_prompt_budget(prompt)
+            # Apply PromptBudgetController to remove boilerplate/duplicates
+            budget_ctrl = PromptBudgetController()
+            prompt, budget_report = budget_ctrl.apply(prompt)
+            logger.info(
+                "[GEN] prompt_budget: saved %d chars (removed %d items)",
+                budget_report.chars_saved, len(budget_report.actions),
+            )
         except Exception as exc:
             logger.error("[GEN] PromptBuilder failed: %s", exc)
             return GenerationResult(
@@ -211,6 +176,24 @@ class StaticHTMLGenerator:
                 warnings=[f"Raw AI response length: {len(raw_response)} chars"],
             )
 
+        # Step 5b — Fidelity validation
+        t5b = time.monotonic()
+        manifest = getattr(package, 'asset_manifest', None)
+        validator = FidelityValidator(blueprint, manifest=manifest)
+        fidelity_result = validator.validate(html_content)
+        warnings: List[str] = []
+        if not fidelity_result.valid:
+            logger.warning(
+                "[GEN] fidelity check failed: %d issues",
+                len(fidelity_result.issues),
+            )
+            for issue in fidelity_result.issues:
+                logger.warning("[GEN] fidelity issue [%s]: %s", issue.category, issue.detail)
+                warnings.append(f"[{issue.category}] {issue.detail}")
+        else:
+            logger.info("[GEN] fidelity check passed | %.2fs", time.monotonic() - t5b)
+        fidelity_issue_count = len(fidelity_result.issues)
+
         project_name = self._extract_project_name_from_raw(raw_response) or "generated_website"
         generation_id = uuid.uuid4().hex[:12]
 
@@ -230,7 +213,11 @@ class StaticHTMLGenerator:
             files=[html_file],
             assets=[],  # no separate assets since everything is inline
             metadata={},
-            statistics={"file_count": 1},
+            statistics={
+                "file_count": 1,
+                "fidelity_valid": fidelity_result.valid,
+                "fidelity_issues": fidelity_issue_count,
+            },
         )
 
         total_elapsed = time.monotonic() - start
@@ -242,6 +229,7 @@ class StaticHTMLGenerator:
         return GenerationResult(
             success=True,
             website_project=website_project,
+            warnings=warnings,
             generation_time=total_elapsed,
             provider_used=chain_result.provider_used,
             provider_attempts=len(chain_result.attempts),

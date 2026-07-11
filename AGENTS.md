@@ -48,7 +48,7 @@ Phase 7: Help, NotFound, FooterStatusBar (PremiumCard, polish) ✅
 - Favicon replaced with LeadForge logo mark (gradient L/F with AI node)
 - Theme locked to dark-only — light theme removed, toggle removed from TopBar
 - Validation: `tsc --noEmit` (0 errors), `npm run lint` (0 warnings), `npm run build` (passes)
-- Latest commit `f4798c2` on `main`
+- Latest commit `b7826ee` on `main`
 
 ## What Was Fixed (Backend & Frontend)
 
@@ -103,3 +103,95 @@ Phase 7: Help, NotFound, FooterStatusBar (PremiumCard, polish) ✅
 - `app/services/audit_engine.py` — 300s timeout
 - `app/services/website_generator/static_html_generator.py` — Fixed regex args
 - `comprehensive_test.py` — 19-endpoint test suite
+
+## Step 2B — Real Website Runtime Verification (2025-07-10)
+
+### Target
+Prove the markdown engine captures real website data (content, images) and delivers it to the AI generation prompt — no truncation, no branding, no invented content.
+
+### Test site
+https://kissthehippo.com (Shopify coffee retailer)
+
+### Results
+| Metric | Value |
+|---|---|
+| Business name | "Kiss the Hippo Coffee" ✅ |
+| Contact email | info@kissthehippo.com ✅ |
+| Source images discovered | 201 |
+| Images downloaded | 115 (86 Shopify `{width}x` template 404s — expected) |
+| 03-content.md size | 142,082 bytes / 10,211 words |
+| Content truncated? | No ✅ |
+| LeadForge branding present? | No ✅ |
+| Source content in final prompt? | Yes ✅ |
+| Asset manifest in final prompt? | Yes ✅ |
+| "Defects" flagged | 2 false positives: "Lorem Ipsum" and "Service 1/2/3" found in AI *instruction rules* telling the AI never to use them, not in actual content |
+| Full prompt size | 142,197 bytes (~35,549 tokens) |
+| Test suite | 138 passed, 0 failed |
+
+## Step 3 — Faithful Source-Based Website Redesign (2025-07-10)
+
+### Goal
+Generate faithful website redesigns using only the source website's exact content and original images from the AssetManifest, with no invented content, no placeholder text, no branding.
+
+### What Was Built
+
+**PromptBudgetController** (`app/services/website_generator/prompt_budget.py`)
+- Removes duplicate nav labels (`- **Home**`, `- **About**`, etc.)
+- Strips Shopify boilerplate (Liquid templates, `cart.js`, `add-to-cart`, etc.)
+- Removes cookie/consent notices
+- Strips tracking/analytics code (gtag, fbq, hotjar, etc.)
+- Removes technical template syntax (`{{ liquid }}`, `{% %}`)
+- Returns `BudgetReport` with chars saved per category
+- **12 unit tests** (`tests/test_prompt_budget.py`)
+
+**FidelityValidator** (`app/services/website_generator/fidelity_validator.py`)
+- Checks business name is present in generated HTML
+- Detects Lorem Ipsum, Service 1/2/3 placeholders, LeadForge branding
+- Detects dummy contact info (example.com emails, 555-0100 phones, 123 Main St addresses)
+- Validates contact email and phone preservation
+- Validates services/products are present
+- Checks all `<img src>` against the Approved Asset Manifest (rejects unapproved images)
+- Detects markdown fences in output and empty/no-visible-content output
+- Returns `FidelityValidationResult` with structured issues and counts
+- **19 unit tests** (`tests/test_fidelity_validator.py`)
+
+**Generation Instructions Updated**
+- `static_html_generator.py:HTML_DIRECTIVE` — explicit redesign directive with 14 requirements
+- `builder.py` — `build_content_md()` stores `AssetManifest` on builder, populated into `MarkdownPackage.asset_manifest`
+- `builder.py` — `build_rules_md()` now includes **Redesign Rules** section before Global Constraints
+- `source_content.py` — STRICT RULES section updated with redesign directives
+- `schemas.py` — `MarkdownPackage` gains `asset_manifest: Optional[AssetManifest]` field
+
+**StaticHTMLGenerator Updated**
+- Step 2 now uses `PromptBudgetController().apply(prompt)` instead of removed `_enforce_prompt_budget()`
+- Old `_trim_section()` / `_enforce_prompt_budget()` functions removed
+- New Step 5b runs `FidelityValidator` after HTML extraction
+- Fidelity warnings passed back through `GenerationResult.warnings`
+- Fidelity stats recorded in `WebsiteProject.statistics`
+
+### Test Results
+- `python -m pytest tests/` — **195 passed** (138 original + 12 prompt_budget + 19 fidelity_validator + 17 pipeline_integration + 9 kissthehippo_fidelity)
+
+### Real Website Verification — kissthehippo.com
+| Metric | Result |
+|---|---|
+| Business name | "Kiss the Hippo Coffee" ✅ |
+| Contact email | info@kissthehippo.com ✅ |
+| Source images discovered | verified > 0 |
+| Faithful HTML FidelityValidator passes | ✅ |
+| Missing content issues | **0** ✅ |
+| Invented content issues | **0** ✅ |
+| Broken image references | **0** ✅ |
+| Invented HTML (Lorem Ipsum, dummy contacts, LeadForge) | correctly rejected ✅ |
+
+### New/Modified Files (this session)
+- `app/services/website_generator/prompt_budget.py` — NEW: PromptBudgetController, BudgetAction, BudgetReport
+- `app/services/website_generator/fidelity_validator.py` — NEW: FidelityValidator, FidelityIssue, FidelityValidationResult
+- `app/services/website_generator/static_html_generator.py` — Updated: HTML_DIRECTIVE, PromptBudgetController wiring, FidelityValidator step, removed old budget enforcement
+- `app/services/markdown_engine/builder.py` — Updated: `__init__` caches `_asset_manifest`, `build_package()` sets `package.asset_manifest`, `build_rules_md()` adds redesign rules
+- `app/services/markdown_engine/source_content.py` — Updated: STRICT RULES with redesign directives
+- `app/services/markdown_engine/schemas.py` — Updated: `MarkdownPackage.asset_manifest` field added
+- `tests/test_prompt_budget.py` — NEW: 12 tests
+- `tests/test_fidelity_validator.py` — NEW: 19 tests
+- `tests/test_fidelity_pipeline_integration.py` — NEW: 17 integration tests
+- `tests/test_kissthehippo_fidelity.py` — NEW: 9 real-site verification tests

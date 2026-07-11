@@ -45,6 +45,7 @@ class MarkdownBuilder:
         """Store the blueprint and prepare builder state."""
         self.blueprint = blueprint
         self._documents: Dict[MarkdownCategory, MarkdownDocument] = {}
+        self._asset_manifest = None
 
     def build_system_md(self) -> MarkdownDocument:
         """Build the system.md document — 100% static, client-agnostic identity
@@ -1566,6 +1567,26 @@ class MarkdownBuilder:
             sections_list.append("## Performance Rules\n\n" + "\n".join(perf_rules))
 
         # ================================================================
+        # Redesign Rules (always included)
+        # ================================================================
+        redesign_rules: List[str] = [
+            "- REDESIGN the supplied source website ONLY.",
+            "- Use the supplied text VERBATIM — do not paraphrase, rewrite, or improve business claims.",
+            "- Use ONLY approved source images from the Asset Manifest.",
+            "- Do NOT create missing information or sections not present in the source.",
+            "- Do NOT use Lorem Ipsum placeholder text.",
+            "- Do NOT create \"Service 1\", \"Service 2\", or similar dummy entries.",
+            "- Do NOT add LeadForge branding, logos, or watermarks.",
+            "- Do NOT add fake testimonials or reviews.",
+            "- Do NOT add fake contact details (email, phone, address).",
+            "- Do NOT omit any meaningful source section.",
+            "- Produce a complete, responsive, single-file HTML document.",
+            "- Every <img> src must point to an approved asset from the Asset Manifest.",
+            "- Never use stock photos, AI-generated images, or unsplash placeholders.",
+        ]
+        sections_list.append("## Redesign Rules\n\n" + "\n".join(redesign_rules))
+
+        # ================================================================
         # Global Constraints (always included)
         # ================================================================
         global_rules: List[str] = [
@@ -1906,6 +1927,7 @@ class MarkdownBuilder:
         """Build the content.md document with verbatim source content."""
         snapshot = SourceWebsiteSnapshot.from_profile(self.blueprint)
         manifest = ManifestBuilder(self.blueprint).build()
+        self._asset_manifest = manifest
         content = format_source_content(snapshot, manifest=manifest)
         content = sanitize_markdown(content)
         content = normalize_headings(content)
@@ -2057,6 +2079,8 @@ class MarkdownBuilder:
             total_documents=13,
             total_words=total_words,
         )
+
+        package.asset_manifest = self._asset_manifest
 
         logger.info(
             "Package generation complete: %d/13 successful, "

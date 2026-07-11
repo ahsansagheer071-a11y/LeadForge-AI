@@ -9,6 +9,11 @@ from app.services.markdown_engine.constants import (
     MarkdownCategory,
 )
 
+try:
+    from app.services.markdown_engine.asset_manifest import AssetManifest
+except ImportError:
+    AssetManifest = None  # type: ignore
+
 
 class MarkdownDocument(BaseModel):
     filename: str
@@ -109,8 +114,9 @@ class MarkdownPackage(BaseModel):
         content="", word_count=0, estimated_tokens=0,
     ))
     metadata: MarkdownMetadata = Field(default_factory=MarkdownMetadata)
+    asset_manifest: Any = Field(default=None, exclude=True)
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, arbitrary_types_allowed=True)
 
     def list_documents(self) -> List[MarkdownDocument]:
         return [
