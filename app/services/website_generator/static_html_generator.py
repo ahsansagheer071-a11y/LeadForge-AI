@@ -146,9 +146,13 @@ class StaticHTMLGenerator:
 
         if not chain_result.success:
             logger.error("[GEN] all providers failed in %.2fs: %s", time.monotonic() - t3, chain_result.last_error)
+            all_errors = [
+                f"{a.provider}: {a.error}" if a.error else f"{a.provider}: success={a.success}"
+                for a in chain_result.attempts
+            ]
             return GenerationResult(
                 success=False,
-                errors=[chain_result.last_error or "All AI providers failed"],
+                errors=all_errors or [chain_result.last_error or "All AI providers failed"],
                 generation_time=time.monotonic() - start,
                 provider_attempts=len(chain_result.attempts),
             )
