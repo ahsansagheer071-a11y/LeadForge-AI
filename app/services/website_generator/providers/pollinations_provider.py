@@ -143,6 +143,7 @@ class PollinationsProvider(AIProvider):
         try:
             content = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError):
+            logger.warning("Pollinations unexpected response: %s", str(data)[:500])
             return AIResponse(
                 success=False, provider="pollinations", model=model,
                 errors=["Unexpected response structure"], latency=time.monotonic() - start,

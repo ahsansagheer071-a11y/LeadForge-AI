@@ -64,7 +64,7 @@ class BudgetReport:
     actions: List[BudgetAction] = field(default_factory=list)
 
 
-MAX_CONTENT_CHARS = 40000  # ~10K tokens — safe for free-tier providers with limited context
+MAX_CONTENT_CHARS = 20000  # ~5K tokens — safe for Groq free-tier input limits
 
 
 class PromptBudgetController:
