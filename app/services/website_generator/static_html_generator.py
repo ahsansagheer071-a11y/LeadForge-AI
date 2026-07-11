@@ -32,26 +32,19 @@ from app.services.ai.chain import run_chain
 logger = logging.getLogger(__name__)
 
 HTML_DIRECTIVE = """
-You are redesigning the supplied source website.
-You MUST output ONLY a single, complete, valid HTML document starting with 
-<!DOCTYPE html> and ending with </html>. All CSS must be inside a <style> 
-tag in the head, and all JavaScript must be inside a <script> tag before 
-the closing </body> tag. Do NOT include any explanations, markdown fences, 
-or extra text outside the HTML.
+OUTPUT: A single complete HTML file. Start with <!DOCTYPE html>, end with </html>.
+Use embedded <style> in <head>. No markdown, no explanations, no extra text.
 
-REQUIREMENTS:
-- REDESIGN the source website — improve layout, theme, typography, spacing, responsiveness, visual hierarchy.
-- Use the provided source content VERBATIM. Never paraphrase, rewrite, or improve business claims.
-- Use ONLY approved source images listed in the Approved Asset Manifest.
-- Never use Lorem Ipsum placeholder text.
-- Never create "Service 1", "Service 2", or similar dummy entries.
-- Never add LeadForge branding, logos, or watermarks.
-- Never add fake testimonials, reviews, or contact details.
-- Do not omit any meaningful source section.
-- Do not add any section not present in the source.
-- Produce a complete, responsive, single-file HTML document.
-- Every <img> src must point to an approved asset from the Asset Manifest.
-- Never use stock photos, AI-generated images, or unsplash placeholders.
+DESIGN: Modern, clean redesign. Dark or light theme matching the brand.
+Keep CSS minimal — use utility classes and inline styles where possible.
+Output ALL sections: hero, about, services, products, contact, footer.
+
+CONTENT RULES:
+- Use source content VERBATIM — never rewrite or paraphrase.
+- Use ONLY images from the Approved Asset Manifest.
+- No Lorem Ipsum, no "Service 1/2", no LeadForge branding, no fake content.
+- Include all source sections; do not add new ones.
+- Every <img> src must reference an approved asset.
 """
 
 class StaticHTMLGenerator:
