@@ -36,7 +36,10 @@ logger = logging.getLogger(__name__)
 SECTION_SYSTEM_PROMPT = (
     "You are an expert HTML/CSS code generator. "
     "You output ONLY raw HTML body content — no explanations, no markdown, no text. "
-    "Every response must start with <header, <section, <div, <footer or <ul and contain valid HTML tags."
+    "Every response must start with <header, <section, <div, <footer or <ul and contain valid HTML tags. "
+    "NEVER use placeholder images (via.placeholder.com, example.com). "
+    "ONLY use image URLs explicitly provided in the prompt. "
+    "If a hero image URL is provided, use it as background-image on the hero."
 )
 
 
@@ -54,11 +57,17 @@ class StaticHTMLGenerator:
         logger.info("[GEN] generation started | business=%s", biz_name)
 
         brand_css = self._build_brand_css(blueprint)
+        provider_used = ""
+        provider_attempts = 0
+        warnings: List[str] = []
 
         t1 = time.monotonic()
-        hero_about_html = await self._ai_generate_hero_about(blueprint, brand_css)
-        logger.info("[GEN] step=hero_about | len=%d | %.2fs",
-            len(hero_about_html) if hero_about_html else 0, time.monotonic() - t1)
+        hero_about_html, prov1, att1 = await self._ai_generate_hero_about(blueprint, brand_css)
+        if prov1:
+            provider_used = prov1
+        provider_attempts += att1
+        logger.info("[GEN] step=hero_about | len=%d | provider=%s | %.2fs",
+            len(hero_about_html) if hero_about_html else 0, prov1, time.monotonic() - t1)
 
         t2 = time.monotonic()
         products_services_html = self._build_products_services(blueprint)
@@ -66,9 +75,12 @@ class StaticHTMLGenerator:
             len(products_services_html), time.monotonic() - t2)
 
         t3 = time.monotonic()
-        testimonials_faq_html = await self._ai_generate_testimonials_faq(blueprint, brand_css)
-        logger.info("[GEN] step=testimonials_faq | len=%d | %.2fs",
-            len(testimonials_faq_html) if testimonials_faq_html else 0, time.monotonic() - t3)
+        testimonials_faq_html, prov3, att3 = await self._ai_generate_testimonials_faq(blueprint, brand_css)
+        if prov3 and not provider_used:
+            provider_used = prov3
+        provider_attempts += att3
+        logger.info("[GEN] step=testimonials_faq | len=%d | provider=%s | %.2fs",
+            len(testimonials_faq_html) if testimonials_faq_html else 0, prov3, time.monotonic() - t3)
 
         t4 = time.monotonic()
         contact_footer_html = self._build_contact_footer(blueprint)
@@ -76,9 +88,6 @@ class StaticHTMLGenerator:
             len(contact_footer_html), time.monotonic() - t4)
 
         all_sections = []
-        provider_used = ""
-        provider_attempts = 0
-        warnings: List[str] = []
 
         for name, html_content in [
             ("hero_about", hero_about_html),
@@ -183,15 +192,17 @@ class StaticHTMLGenerator:
             provider_attempts=provider_attempts,
         )
 
-    async def _ai_generate_hero_about(self, blueprint: WebsiteProfile, brand_css: str) -> str:
+    async def _ai_generate_hero_about(self, blueprint: WebsiteProfile, brand_css: str) -> tuple:
         prompt_text = self._build_hero_about_prompt(blueprint, brand_css)
-        return await self._call_ai(prompt_text, "hero_about")
+        html, prov, att = await self._call_ai(prompt_text, "hero_about")
+        return html, prov, att
 
-    async def _ai_generate_testimonials_faq(self, blueprint: WebsiteProfile, brand_css: str) -> str:
+    async def _ai_generate_testimonials_faq(self, blueprint: WebsiteProfile, brand_css: str) -> tuple:
         prompt_text = self._build_testimonials_faq_prompt(blueprint, brand_css)
-        return await self._call_ai(prompt_text, "testimonials_faq")
+        html, prov, att = await self._call_ai(prompt_text, "testimonials_faq")
+        return html, prov, att
 
-    async def _call_ai(self, prompt_text: str, section_name: str) -> str:
+    async def _call_ai(self, prompt_text: str, section_name: str) -> tuple:
         budget_ctrl = PromptBudgetController()
         cleaned_text, _ = budget_ctrl._clean_text(prompt_text, "content_context")
 
@@ -216,17 +227,18 @@ class StaticHTMLGenerator:
 
         if not chain_result.success:
             logger.warning("[GEN] AI call for %s failed: %s", section_name, chain_result.last_error)
-            return ""
+            return "", "", 0
 
         raw = chain_result.result or ""
         body = self._extract_body_content(raw)
         body = self._recover_body_content(body)
-        return body
+        return body, chain_result.provider_used, len(chain_result.attempts)
 
     def _build_hero_about_prompt(self, bp: WebsiteProfile, brand_css: str) -> str:
         lines = [
             "Generate HTML for the HERO and ABOUT sections of a website.",
-            "Use inline styles. Start with <header> or <section>.",
+            "Use inline styles. The hero MUST be a <header> tag (NOT <section>).",
+            "The about section should be a <section> tag.",
             "",
             brand_css,
             "",
@@ -265,7 +277,14 @@ class StaticHTMLGenerator:
                 val = getattr(hero, attr, None)
                 if val:
                     lines.append(f"Hero Image URL: {val}")
+                    lines.append(f"USE THIS EXACT URL as background-image. Do NOT invent other image URLs.")
                     break
+            ctas = getattr(hero, 'ctas', None) or []
+            if ctas:
+                for cta in ctas[:3]:
+                    cta_text = getattr(cta, 'text', None) or getattr(cta, 'label', None) or "Learn More"
+                    cta_url = getattr(cta, 'url', None) or "#"
+                    lines.append(f"CTA Button: {cta_text} -> {cta_url}")
 
         company = bp.company
         if company:
@@ -282,13 +301,39 @@ class StaticHTMLGenerator:
             for m in team[:8]:
                 role = m.role or m.job_title or ""
                 name = m.full_name or m.name
-                lines.append(f"  - {name}, {role}")
+                avatar = getattr(m, 'avatar_url', None) or getattr(m, 'avatar', None) or ""
+                lines.append(f"  - {name}, {role}" + (f" [avatar: {avatar}]" if avatar else ""))
+
+        images = bp.images or []
+        if images:
+            real_images = []
+            for img in images[:15]:
+                url = img.url if hasattr(img, 'url') else str(img)
+                alt = img.alt if hasattr(img, 'alt') else ""
+                if url and "example.com" not in url and "placeholder" not in url.lower():
+                    real_images.append((url, alt))
+            if real_images:
+                lines.append(f"\n## AVAILABLE SOURCE IMAGES (use these, never invent new URLs):")
+                for url, alt in real_images[:10]:
+                    lines.append(f"  - {url}" + (f" (alt: {alt})" if alt else ""))
+
+        social = bp.social_links or []
+        if social:
+            lines.append(f"\n## SOCIAL LINKS:")
+            for sl in social[:6]:
+                platform = sl.platform if hasattr(sl, 'platform') else ""
+                url = sl.url if hasattr(sl, 'url') else str(sl)
+                if platform and url:
+                    lines.append(f"  - {platform}: {url}")
 
         lines.extend([
             "",
             "RULES:",
-            "- Include the hero image as a background-image on the hero section if a URL is provided",
-            "- Include ALL team members listed above",
+            "- The hero MUST use a <header> tag as the outermost element",
+            "- Include the hero image as background-image on the hero section if a Hero Image URL is provided",
+            "- Use ONLY image URLs listed in AVAILABLE SOURCE IMAGES above — never use via.placeholder.com, example.com, or any invented URLs",
+            "- Include ALL team members listed above with their avatars if available",
+            "- Include social links in the about section if available",
             "- Output ONLY HTML tags, no text commentary",
         ])
         return "\n".join(lines)

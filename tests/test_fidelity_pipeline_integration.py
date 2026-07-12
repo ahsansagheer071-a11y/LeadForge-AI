@@ -260,7 +260,7 @@ class TestStaticHtmlGeneratorIntegration:
 """
 
         with patch.object(gen, '_call_ai', new_callable=AsyncMock) as mock_call:
-            mock_call.return_value = fake_body_content
+            mock_call.return_value = (fake_body_content, "mock_provider", 1)
 
             from app.services.website_generator.asset_packager import AssetPackager
             with patch.object(AssetPackager, 'package_assets_async') as mock_packager:
@@ -294,7 +294,7 @@ class TestStaticHtmlGeneratorIntegration:
 """
 
         with patch.object(gen, '_call_ai', new_callable=AsyncMock) as mock_call:
-            mock_call.return_value = clean_body_content
+            mock_call.return_value = (clean_body_content, "mock_provider", 1)
 
             from app.services.website_generator.asset_packager import AssetPackager
             with patch.object(AssetPackager, 'package_assets_async') as mock_packager:
@@ -322,7 +322,7 @@ class TestStaticHtmlGeneratorIntegration:
 """
 
         with patch.object(gen, '_call_ai', new_callable=AsyncMock) as mock_call:
-            mock_call.return_value = clean_body_content
+            mock_call.return_value = (clean_body_content, "mock_provider", 1)
 
             from app.services.website_generator.asset_packager import AssetPackager
             with patch.object(AssetPackager, 'package_assets_async') as mock_packager:
