@@ -597,13 +597,13 @@ class WebsiteProfile(BaseModel):
             "brand": {
                 "tagline": _g("brand_tagline"),
                 "brand_voice": _g("brand_voice"),
-                "unique_selling_points": _g("brand_unique_selling_points"),
+                "unique_selling_points": _g("brand_unique_selling_points") or [],
                 "target_audience": _g("target_audience"),
             },
             "seo": {
                 "page_title": _g("seo_page_title"),
                 "meta_description": _g("seo_meta_description"),
-                "focus_keywords": _g("seo_focus_keywords"),
+                "focus_keywords": _g("seo_focus_keywords") or [],
                 "missing_meta_description": _g("seo_missing_meta_description"),
                 "missing_title": _g("seo_missing_title"),
                 "missing_h1": _g("seo_missing_h1"),
