@@ -64,7 +64,8 @@ class BudgetReport:
     actions: List[BudgetAction] = field(default_factory=list)
 
 
-MAX_CONTENT_CHARS = 20000  # ~5K tokens — safe for Groq free-tier input limits
+MAX_CONTENT_CHARS = 12000  # ~3K tokens — safe for all free-tier providers
+MAX_FIELD_CHARS = 8000  # Cap any single field to prevent oversized payloads
 
 
 class PromptBudgetController:
@@ -133,6 +134,15 @@ class PromptBudgetController:
         if field_name == "content_context":
             text, a = self._remove_technical_template(text)
             actions.extend(a)
+
+        # General cap on any oversized field
+        if len(text) > MAX_FIELD_CHARS:
+            text = text[:MAX_FIELD_CHARS]
+            actions.append(BudgetAction(
+                field=field_name,
+                chars_removed=len(original) - len(text) if len(original) > MAX_FIELD_CHARS else 0,
+                reason=f"field cap {MAX_FIELD_CHARS}",
+            ))
 
         chars_removed = len(original) - len(text)
         return text, actions
