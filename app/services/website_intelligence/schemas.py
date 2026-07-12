@@ -562,7 +562,121 @@ class WebsiteProfile(BaseModel):
                     setattr(data, key, [])
             if getattr(data, "statistics", None) is None:
                 setattr(data, "statistics", {})
+            # Reconstruct nested objects from flat DB columns
+            data = cls._reconstruct_from_flat_db(data)
         return data
+
+    @staticmethod
+    def _reconstruct_from_flat_db(db_obj: Any) -> dict:
+        """Convert flat SQLAlchemy columns back to nested WebsiteProfile structure."""
+        def _g(attr, default=None):
+            val = getattr(db_obj, attr, default)
+            return val if val is not None else default
+
+        result = {
+            "business": {
+                "name": _g("business_name", ""),
+                "legal_name": _g("business_legal_name"),
+                "category": _g("business_category"),
+                "industry": _g("business_industry"),
+                "description": _g("business_description"),
+                "logo": _g("logo_url"),
+                "favicon": _g("favicon_url"),
+                "website_url": _g("website_url"),
+                "phone": _g("phone"),
+                "email": _g("email"),
+                "address": _g("address"),
+                "city": _g("city"),
+                "country": _g("country"),
+                "google_maps_url": _g("google_maps_url"),
+                "opening_hours": _g("opening_hours"),
+                "founded_year": _g("founded_year"),
+                "employee_count": _g("employee_count"),
+                "social_links": _g("social_links") or [],
+            },
+            "brand": {
+                "tagline": _g("brand_tagline"),
+                "brand_voice": _g("brand_voice"),
+                "unique_selling_points": _g("brand_unique_selling_points"),
+                "target_audience": _g("target_audience"),
+            },
+            "seo": {
+                "page_title": _g("seo_page_title"),
+                "meta_description": _g("seo_meta_description"),
+                "focus_keywords": _g("seo_focus_keywords"),
+                "missing_meta_description": _g("seo_missing_meta_description"),
+                "missing_title": _g("seo_missing_title"),
+                "missing_h1": _g("seo_missing_h1"),
+                "https_enabled": _g("seo_https_enabled"),
+                "ssl_status": _g("seo_ssl_status"),
+            },
+            "colors": {
+                "primary": _g("color_primary"),
+                "secondary": _g("color_secondary"),
+                "accent": _g("color_accent"),
+                "background": _g("color_background"),
+                "text": _g("color_text"),
+                "surface": _g("color_surface"),
+                "heading": _g("color_heading"),
+                "border": _g("color_border"),
+                "muted": _g("color_muted"),
+                "dark": _g("color_dark"),
+                "light": _g("color_light"),
+                "success": _g("color_success"),
+                "warning": _g("color_warning"),
+                "danger": _g("color_danger"),
+                "info": _g("color_info"),
+            },
+            "typography": {
+                "fonts": _g("fonts"),
+                "heading_h1": _g("heading_h1"),
+                "heading_h2": _g("heading_h2"),
+                "heading_h3": _g("heading_h3"),
+                "body": _g("body_font"),
+            },
+            "hero_info": {
+                "hero_title": _g("hero_title"),
+                "hero_subtitle": None,
+                "hero_description": _g("hero_description"),
+                "hero_image": _g("hero_image"),
+                "primary_cta": _g("hero_primary_cta"),
+                "secondary_cta": _g("hero_secondary_cta"),
+                "background_image_url": _g("hero_background_image_url"),
+                "background_color": _g("hero_background_color"),
+                "hero_layout": _g("hero_layout"),
+                "hero_alignment": _g("hero_alignment"),
+                "hero_height": _g("hero_height"),
+                "is_fallback_detection": _g("is_fallback_detection", False),
+            },
+            "contact": {
+                "emails": _g("contact_emails") or [],
+                "phones": _g("contact_phones") or [],
+                "address": _g("contact_address"),
+                "contact_form_present": _g("contact_form_present", False),
+                "contact_form_fields": _g("contact_form_fields"),
+                "map_coordinates": _g("contact_map_coordinates"),
+            },
+            "services": _g("services") or [],
+            "products": _g("products") or [],
+            "images": _g("images") or [],
+            "testimonials": _g("testimonials") or [],
+            "faqs": _g("faqs") or [],
+            "team": _g("team_members") or [],
+            "social_links": _g("social_links_present") or [],
+            "statistics": _g("statistics") or {},
+            "website_summary": _g("website_summary"),
+            "company": _g("company_info"),
+            "trust_signals": _g("trust_signals") or [],
+            "blog_links": _g("blog_links") or [],
+            "navigation_info": {
+                "is_sticky": _g("is_sticky_nav", False),
+                "primary_nav_items": _g("nav_primary_items"),
+                "secondary_nav_items": _g("nav_secondary_items"),
+                "footer_nav_items": _g("nav_footer_items"),
+                "navigation_depth": _g("nav_depth"),
+            } if any(_g(a) for a in ["is_sticky_nav", "nav_primary_items", "nav_secondary_items"]) else None,
+        }
+        return result
 
 
 class WebsiteIntelligenceResponse(BaseModel):
