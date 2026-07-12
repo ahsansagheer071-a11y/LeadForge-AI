@@ -193,18 +193,19 @@ class CreateJobRequest(BaseModel):
 
 
 class JobStatusResponse(BaseModel):
-    job_id:         str
-    lead_id:        str
-    status:         str
-    progress:       str
-    website_id:     Optional[str] = None
-    generation_id:  Optional[str] = None
-    html:           Optional[str] = None
-    preview_path:   Optional[str] = None
-    package_id:     Optional[str] = None
-    project_name:   Optional[str] = None
+    job_id:          str
+    lead_id:         str
+    status:          str
+    progress:        str
+    website_id:      Optional[str] = None
+    generation_id:   Optional[str] = None
+    html:            Optional[str] = None
+    preview_path:    Optional[str] = None
+    package_id:      Optional[str] = None
+    project_name:    Optional[str] = None
+    provider_used:   Optional[str] = None
     generation_time: float = 0.0
-    error:          Optional[str] = None
+    error:           Optional[str] = None
 
 
 class GenerateRequest(BaseModel):
@@ -375,6 +376,7 @@ async def get_generation_job(
             preview_path    = job.preview_path,
             package_id      = job.package_id,
             project_name    = job.project_name,
+            provider_used   = job.provider_used,
             generation_time = job.generation_time,
             error           = job.error,
         ),

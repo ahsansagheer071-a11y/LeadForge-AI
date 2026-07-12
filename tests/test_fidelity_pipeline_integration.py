@@ -250,59 +250,22 @@ class TestStaticHtmlGeneratorIntegration:
         """When fidelity issues exist, warnings appear in GenerationResult."""
         gen = StaticHTMLGenerator()
 
-        # Build a MarkdownPackage carrying the asset_manifest
         pkg = MarkdownPackage()
         pkg.asset_manifest = sample_manifest
-        pkg.content_md = make_fake_markdown_doc("# Test Cafe\nLots of content here.\n")
-        pkg.system_md = make_fake_markdown_doc("## System Rules\n- Be good.\n")
-        pkg.rules_md = make_fake_markdown_doc("## Coding Rules\n- No placeholders.\n")
-        pkg.layout_md = make_fake_markdown_doc("## Layout\n- Header, hero, services.\n")
-        pkg.components_md = make_fake_markdown_doc("## Components\n- Nav, card.\n")
-        pkg.assets_md = make_fake_markdown_doc("## Assets\n- hero.jpg\n- logo.png\n")
-        pkg.branding_md = make_fake_markdown_doc("## Branding\n- Colors: blue\n")
-        pkg.output_md = make_fake_markdown_doc("## Output\n- HTML only.\n")
 
-        # Mock the provider to return body content with fidelity issues
         fake_body_content = """
 <h1>Wrong Cafe</h1>
 <p>Lorem ipsum dolor sit amet. Contact admin@example.com.</p>
 <img src="https://evil.com/virus.png" alt="Virus">
 """
 
-        with patch.object(gen.prompt_builder, 'build') as mock_build:
-            from app.services.website_generator.schemas import PromptContext
-            mock_prompt = PromptContext(
-                system_context="test",
-                developer_context="",
-                branding_context="test",
-                content_context="test",
-                layout_context="test",
-                components_context="test",
-                animation_context="",
-                seo_context="",
-                performance_context="",
-                accessibility_context="",
-                assets_context="test",
-                rules_context="test rules",
-                output_context="test",
-                generation_constraints="test",
-            )
-            mock_build.return_value = mock_prompt
+        with patch.object(gen, '_call_ai', new_callable=AsyncMock) as mock_call:
+            mock_call.return_value = fake_body_content
 
-            with patch.object(gen, '_extract_body_content') as mock_extract:
-                mock_extract.return_value = fake_body_content
-
-                from app.services.ai.chain import ChainResult
-
-                with patch('app.services.website_generator.static_html_generator.run_chain') as mock_chain:
-                    mock_chain.return_value = ChainResult(
-                        success=True,
-                        result=fake_body_content,
-                        provider_used='mock',
-                        attempts=[],
-                    )
-
-                    result = await gen.generate(sample_profile, pkg)
+            from app.services.website_generator.asset_packager import AssetPackager
+            with patch.object(AssetPackager, 'package_assets_async') as mock_packager:
+                mock_packager.return_value = (fake_body_content, [], [])
+                result = await gen.generate(sample_profile, pkg)
 
         assert result.success
         assert len(result.warnings) > 0, "Expected fidelity warnings in result"
@@ -319,14 +282,6 @@ class TestStaticHtmlGeneratorIntegration:
         gen = StaticHTMLGenerator()
         pkg = MarkdownPackage()
         pkg.asset_manifest = sample_manifest
-        pkg.content_md = make_fake_markdown_doc("# Test Cafe\nContent.\n")
-        pkg.system_md = make_fake_markdown_doc("## System\nRules.\n")
-        pkg.rules_md = make_fake_markdown_doc("## Rules\n- No placeholders.\n")
-        pkg.layout_md = make_fake_markdown_doc("## Layout\n- Header.\n")
-        pkg.components_md = make_fake_markdown_doc("## Components\n- Nav.\n")
-        pkg.assets_md = make_fake_markdown_doc("## Assets\n- hero.jpg\n- logo.png\n")
-        pkg.branding_md = make_fake_markdown_doc("## Branding\n- Blue.\n")
-        pkg.output_md = make_fake_markdown_doc("## Output\nHTML only.\n")
 
         clean_body_content = """
 <h1>Test Cafe</h1>
@@ -338,43 +293,13 @@ class TestStaticHtmlGeneratorIntegration:
 <p>Phone: +1-555-0199</p>
 """
 
-        with patch.object(gen.prompt_builder, 'build') as mock_build:
-            from app.services.website_generator.schemas import PromptContext
-            mock_prompt = PromptContext(
-                system_context="test",
-                developer_context="",
-                branding_context="test",
-                content_context="test",
-                layout_context="test",
-                components_context="test",
-                animation_context="",
-                seo_context="",
-                performance_context="",
-                accessibility_context="",
-                assets_context="test",
-                rules_context="test rules",
-                output_context="test",
-                generation_constraints="test",
-            )
-            mock_build.return_value = mock_prompt
+        with patch.object(gen, '_call_ai', new_callable=AsyncMock) as mock_call:
+            mock_call.return_value = clean_body_content
 
-            with patch.object(gen, '_extract_body_content') as mock_extract:
-                mock_extract.return_value = clean_body_content
-
-                from app.services.ai.chain import ChainResult
-
-                with patch('app.services.website_generator.static_html_generator.run_chain') as mock_chain:
-                    mock_chain.return_value = ChainResult(
-                        success=True,
-                        result=clean_body_content,
-                        provider_used='mock',
-                        attempts=[],
-                    )
-
-                    from app.services.website_generator.asset_packager import AssetPackager
-                    with patch.object(AssetPackager, 'package_assets_async') as mock_packager:
-                        mock_packager.return_value = (clean_body_content, [], [])
-                        result = await gen.generate(sample_profile, pkg)
+            from app.services.website_generator.asset_packager import AssetPackager
+            with patch.object(AssetPackager, 'package_assets_async') as mock_packager:
+                mock_packager.return_value = (clean_body_content, [], [])
+                result = await gen.generate(sample_profile, pkg)
 
         assert result.success
         assert len(result.warnings) == 0, f"Expected no warnings, got: {result.warnings}"
@@ -385,14 +310,6 @@ class TestStaticHtmlGeneratorIntegration:
         gen = StaticHTMLGenerator()
         pkg = MarkdownPackage()
         pkg.asset_manifest = sample_manifest
-        pkg.content_md = make_fake_markdown_doc("# Test Cafe\nContent.\n")
-        pkg.system_md = make_fake_markdown_doc("## System\nRules.\n")
-        pkg.rules_md = make_fake_markdown_doc("## Rules\n- No placeholders.\n")
-        pkg.layout_md = make_fake_markdown_doc("## Layout\n- Header.\n")
-        pkg.components_md = make_fake_markdown_doc("## Components\n- Nav.\n")
-        pkg.assets_md = make_fake_markdown_doc("## Assets\n- hero.jpg\n- logo.png\n")
-        pkg.branding_md = make_fake_markdown_doc("## Branding\n- Blue.\n")
-        pkg.output_md = make_fake_markdown_doc("## Output\nHTML only.\n")
 
         clean_body_content = """
 <h1>Test Cafe</h1>
@@ -404,43 +321,13 @@ class TestStaticHtmlGeneratorIntegration:
 <p>Phone: +1-555-0199</p>
 """
 
-        with patch.object(gen.prompt_builder, 'build') as mock_build:
-            from app.services.website_generator.schemas import PromptContext
-            mock_prompt = PromptContext(
-                system_context="test",
-                developer_context="",
-                branding_context="test",
-                content_context="test",
-                layout_context="test",
-                components_context="test",
-                animation_context="",
-                seo_context="",
-                performance_context="",
-                accessibility_context="",
-                assets_context="test",
-                rules_context="test rules",
-                output_context="test",
-                generation_constraints="test",
-            )
-            mock_build.return_value = mock_prompt
+        with patch.object(gen, '_call_ai', new_callable=AsyncMock) as mock_call:
+            mock_call.return_value = clean_body_content
 
-            with patch.object(gen, '_extract_body_content') as mock_extract:
-                mock_extract.return_value = clean_body_content
-
-                from app.services.ai.chain import ChainResult
-
-                with patch('app.services.website_generator.static_html_generator.run_chain') as mock_chain:
-                    mock_chain.return_value = ChainResult(
-                        success=True,
-                        result=clean_body_content,
-                        provider_used='mock',
-                        attempts=[],
-                    )
-
-                    from app.services.website_generator.asset_packager import AssetPackager
-                    with patch.object(AssetPackager, 'package_assets_async') as mock_packager:
-                        mock_packager.return_value = (clean_body_content, [], [])
-                        result = await gen.generate(sample_profile, pkg)
+            from app.services.website_generator.asset_packager import AssetPackager
+            with patch.object(AssetPackager, 'package_assets_async') as mock_packager:
+                mock_packager.return_value = (clean_body_content, [], [])
+                result = await gen.generate(sample_profile, pkg)
 
         assert result.success
         assert result.website_project is not None

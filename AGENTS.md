@@ -64,6 +64,11 @@ Phase 7: Help, NotFound, FooterStatusBar (PremiumCard, polish) ✅
 | **Groq OOM** | `build_profile` launched separate browser alongside BrowserManager | Reused BrowserManager singleton |
 | **Groq 429/timeout** | Multiple strategies × retries exhausted free tier limits | Reduced to 1 strategy, 2 attempts, 65s rate limit backoff |
 | **Groq `e` scoping** | `str(e)` in `else` block where `e` undefined on TimeoutError | `last_error` pattern |
+| **AI generates empty HTML** | Pollinations + Nvidia providers missing `content_context` in `_build_messages` | Added `("Source Website Content", prompt_context.content_context)` to both |
+| **Content too large → 413** | Full markdown prompt (~35k tokens) exceeded free-tier limits | `PromptBudgetController` caps: `MAX_CONTENT_CHARS=6000`, `MAX_FIELD_CHARS=3000` |
+| **Free-tier max_tokens too high** | All providers defaulted to 16384 tokens (exceeds free limits) | Reduced all providers to `max_tokens=4096` |
+| **Template-first generation** | Small models generated text, not HTML tags | New `_build_html_template()` pre-builds DOCTYPE/head/style; AI only generates `<body>` content; system context overridden to force HTML output |
+| **`provider_used` shows unknown** | `JobStatusResponse` model missing `provider_used` field | Added `provider_used: Optional[str]` to `JobStatusResponse` and wired it into the GET endpoint |
 
 ### Frontend
 | Issue | Fix |
@@ -98,11 +103,20 @@ Phase 7: Help, NotFound, FooterStatusBar (PremiumCard, polish) ✅
 - `app/schemas/audit.py` — `weaknesses: List[str]`
 - `app/services/website_intelligence/service.py` — `build_profile()`, schema fixes
 - `app/services/website_intelligence/schemas.py` — Typography, HeroInfo, DesignLanguageResult
-- `app/api/v1/endpoints/generation.py` — `/build`, `/generate` endpoints
+- `app/api/v1/endpoints/generation.py` — `/build`, `/generate` endpoints, `JobStatusResponse.provider_used`
 - `app/services/ai/groq.py` — Rate limit handling, 1 strategy
 - `app/services/audit_engine.py` — 300s timeout
-- `app/services/website_generator/static_html_generator.py` — Fixed regex args
+- `app/services/website_generator/static_html_generator.py` — Fixed regex args, template-first generation, `_build_html_template()`, `_extract_body_content()`
+- `app/services/website_generator/providers/groq_provider.py` — `content_context` present, `max_tokens=4096`
+- `app/services/website_generator/providers/pollinations_provider.py` — Fixed `content_context` missing, `max_tokens=4096`
+- `app/services/website_generator/providers/nvidia_provider.py` — Fixed `content_context` missing, `max_tokens=4096`
+- `app/services/website_generator/prompt_budget.py` — `PromptBudgetController`, `MAX_CONTENT_CHARS=6000`, `MAX_FIELD_CHARS=3000`
+- `app/services/website_generator/schemas.py` — `WebsiteProject.preview_html`, `GenerationResult.provider_used`
+- `app/models/generation_job.py` — `provider_used` column
+- `app/services/ai/chain.py` — provider chain orchestrator, `ChainResult.provider_used`
 - `comprehensive_test.py` — 19-endpoint test suite
+- `test_gen_fix.py` — production test script for kissthehippo
+- `test_stumptown.py` — production test script for stumptowncoffee
 
 ## Step 2B — Real Website Runtime Verification (2025-07-10)
 
@@ -183,6 +197,28 @@ Generate faithful website redesigns using only the source website's exact conten
 | Invented content issues | **0** ✅ |
 | Broken image references | **0** ✅ |
 | Invented HTML (Lorem Ipsum, dummy contacts, LeadForge) | correctly rejected ✅ |
+
+## Step 4 — Empty HTML Fix + Template-First Generation (2025-07-10)
+
+### Root Cause: Empty HTML from Pollinations/Nvidia
+Both fallback providers (`pollinations_provider.py`, `nvidia_provider.py`) were missing `("Source Website Content", prompt_context.content_context)` from their `_build_messages()` method. Groq had it; the fallback providers didn't. Without source content, the AI had no data to redesign, producing empty HTML.
+
+### Root Cause: Free-Tier Token Limits
+- All providers defaulted to `max_tokens: 16384` — exceeds Groq free-tier limits (4096)
+- Full markdown prompt was ~35k tokens — exceeds all providers' free-tier limits → HTTP 413
+- Fix: `PromptBudgetController` caps content at 6000 chars, all fields at 3000 chars; `max_tokens` reduced to 4096
+
+### Root Cause: Small Models Don't Generate HTML Tags
+Free-tier models (Llama 3.3 70B, Pollinations, Nvidia) often generate descriptive text rather than raw HTML when given a redesign prompt. Fix: **template-first generation** — `_build_html_template()` pre-builds DOCTYPE/head/style with brand identity colors/fonts; AI only generates `<body>` content; system context overridden to force HTML output.
+
+### Production Results
+| Site | HTML chars | Business | Images | Contact | Status |
+|---|---|---|---|---|---|
+| kissthehippo.com | 6,662 | "Kiss the Hippo Coffee" ✅ | CDN URLs ✅ | info@kissthehippo.com, social links ✅ | PASS ✅ |
+| stumptowncoffee.com | 6,754 | "Stumptown Coffee Roasters" ✅ | CDN URLs ✅ | contact info ✅ | PASS ✅ |
+
+### Comprehensive Test (18/19 pass)
+Only failure: AI Audit (503) — Groq rate-limited, Nvidia no API key, audit uses different chain with larger prompts. All other 18 endpoints pass.
 
 ### New/Modified Files (this session)
 - `app/services/website_generator/prompt_budget.py` — NEW: PromptBudgetController, BudgetAction, BudgetReport

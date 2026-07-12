@@ -64,8 +64,7 @@ class BudgetReport:
     actions: List[BudgetAction] = field(default_factory=list)
 
 
-MAX_CONTENT_CHARS = 6000  # ~1.5K tokens — content section
-MAX_FIELD_CHARS = 3000    # ~750 tokens per field — keeps total prompt under 10K tokens
+MAX_FIELD_CHARS = 12000
 
 
 class PromptBudgetController:
@@ -101,7 +100,7 @@ class PromptBudgetController:
                 )
 
         logger.info(
-            "PromptBudget: %d → %d chars (saved %d, %d actions)",
+            "PromptBudget: %d -> %d chars (saved %d, %d actions)",
             report.original_total_chars,
             report.final_total_chars,
             report.chars_saved,
@@ -120,8 +119,6 @@ class PromptBudgetController:
             actions.extend(a)
             text, a = self._remove_tracking_content(text)
             actions.extend(a)
-            text, a = self._truncate_content(text)
-            actions.extend(a)
 
         if field_name in ("content_context", "layout_context", "components_context"):
             text, a = self._remove_shopify_boilerplate(text)
@@ -135,12 +132,11 @@ class PromptBudgetController:
             text, a = self._remove_technical_template(text)
             actions.extend(a)
 
-        # General cap on any oversized field
         if len(text) > MAX_FIELD_CHARS:
             text = text[:MAX_FIELD_CHARS]
             actions.append(BudgetAction(
                 field=field_name,
-                chars_removed=len(original) - len(text) if len(original) > MAX_FIELD_CHARS else 0,
+                chars_removed=len(original) - MAX_FIELD_CHARS,
                 reason=f"field cap {MAX_FIELD_CHARS}",
             ))
 
@@ -226,26 +222,3 @@ class PromptBudgetController:
                 ))
             text = new_text
         return text, actions
-
-    def _truncate_content(self, text: str) -> tuple[str, List[BudgetAction]]:
-        actions: List[BudgetAction] = []
-        if len(text) <= MAX_CONTENT_CHARS:
-            return text, actions
-        # Preserve the first N chars (which contain the most important content:
-        # business name, hero, key sections) and truncate the rest
-        truncated = text[:MAX_CONTENT_CHARS]
-        # Try to cut at a section boundary (## heading)
-        last_heading = truncated.rfind("\n## ")
-        if last_heading > MAX_CONTENT_CHARS * 0.7:
-            truncated = truncated[:last_heading]
-        removed = len(text) - len(truncated)
-        actions.append(BudgetAction(
-            field="content_context",
-            chars_removed=removed,
-            reason=f"content truncation to {MAX_CONTENT_CHARS} chars",
-        ))
-        logger.info(
-            "PromptBudget: content_context truncated %d -> %d chars (kept %.0f%%)",
-            len(text), len(truncated), len(truncated) / len(text) * 100,
-        )
-        return truncated, actions
