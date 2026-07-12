@@ -159,12 +159,6 @@ class StaticHTMLGenerator:
         t5 = time.monotonic()
         raw_response = chain_result.result
         body_content = self._extract_body_content(raw_response)
-        logger.info(
-            "[GEN] step=body_extract | raw_len=%d | body_len=%d | %.2fs",
-            len(raw_response) if raw_response else 0,
-            len(body_content) if body_content else 0,
-            time.monotonic() - t5,
-        )
         if not body_content:
             logger.error("[GEN] body extraction failed — no valid content in AI response")
             return GenerationResult(
@@ -173,6 +167,13 @@ class StaticHTMLGenerator:
                 generation_time=time.monotonic() - start,
                 warnings=[f"Raw AI response length: {len(raw_response)} chars"],
             )
+        body_content = self._recover_body_content(body_content)
+        logger.info(
+            "[GEN] step=body_extract | raw_len=%d | body_len=%d | %.2fs",
+            len(raw_response) if raw_response else 0,
+            len(body_content),
+            time.monotonic() - t5,
+        )
 
         # Build complete HTML from template + AI body
         t5a = time.monotonic()
@@ -325,6 +326,25 @@ class StaticHTMLGenerator:
 
         # Assume it's already body content (sections, divs, etc.)
         return stripped
+
+    @staticmethod
+    def _recover_body_content(body: str) -> str:
+        """Close any unclosed HTML tags in body content (from truncated AI output)."""
+        if not body:
+            return body
+        import re
+        if body.rstrip().endswith("</body>") or body.rstrip().endswith("</html>"):
+            return body
+        open_tags = re.findall(r"<(section|div|header|footer|nav|main|article|aside|figure|ul|ol|li|table|tr|td|th|thead|tbody|p|h[1-6])\b", body, re.IGNORECASE)
+        closings = []
+        for tag in reversed(open_tags):
+            if not re.search(rf"</{tag}\s*>", body, re.IGNORECASE):
+                closings.append(f"</{tag}>")
+        if closings:
+            recovered = body.rstrip() + "\n" + "\n".join(closings)
+            logger.info("[GEN] body_recovery: added %d closing tags", len(closings))
+            return recovered
+        return body
 
     @staticmethod
     def _build_html_template(blueprint) -> str:
