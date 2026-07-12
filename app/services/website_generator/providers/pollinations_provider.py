@@ -92,7 +92,7 @@ class PollinationsProvider(AIProvider):
         payload = {
             "model": model,
             "messages": messages,
-            "max_tokens": 8192,
+            "max_tokens": 4096,
         }
 
         try:

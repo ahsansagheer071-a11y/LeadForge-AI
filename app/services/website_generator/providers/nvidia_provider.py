@@ -74,7 +74,7 @@ class NvidiaProvider(AIProvider):
         payload = {
             "model": self._model,
             "messages": messages,
-            "max_tokens": 16384,
+            "max_tokens": 4096,
         }
 
         try:
