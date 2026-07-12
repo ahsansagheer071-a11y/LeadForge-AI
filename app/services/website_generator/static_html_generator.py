@@ -32,19 +32,25 @@ from app.services.ai.chain import run_chain
 logger = logging.getLogger(__name__)
 
 HTML_DIRECTIVE = """
-OUTPUT: ONLY the inner HTML content for the <body> tag. Do NOT output:
-<!DOCTYPE>, <html>, <head>, <style>, <script>, or any closing tags.
-Output ONLY semantic HTML sections starting with a hero/header section.
+You are an HTML code generator. Your ONLY job is to output raw HTML body content.
+You must output ONLY HTML tags — no explanations, no markdown, no text summaries.
 
-DESIGN: Modern, clean redesign. Use inline styles or CSS classes.
-Output ALL sections: hero, about, services/products, contact, footer.
+OUTPUT: Only the inner content of a <body> tag. Start with <header> or <section>.
+Use inline styles for all elements. Use the provided source content VERBATIM.
 
-CONTENT RULES:
-- Use source content VERBATIM — never rewrite or paraphrase.
-- Use ONLY images from the Approved Asset Manifest.
-- No Lorem Ipsum, no "Service 1/2", no LeadForge branding, no fake content.
-- Include all source sections; do not add new ones.
-- Every <img> src must reference an approved asset.
+SECTIONS TO INCLUDE (in order):
+1. Hero/header with the business name and tagline
+2. About section
+3. Services or products (as grid cards)
+4. Contact info (email, phone, address)
+5. Footer
+
+RULES:
+- Output ONLY HTML tags, no text commentary
+- Use inline styles like: style="color:#fff;padding:20px"
+- Reference images with full URLs from the Approved Asset Manifest
+- Never use Lorem Ipsum or placeholder text
+- Never add LeadForge branding
 """
 
 class StaticHTMLGenerator:
@@ -87,10 +93,17 @@ class StaticHTMLGenerator:
         t2 = time.monotonic()
         try:
             prompt: PromptContext = self.prompt_builder.build(context)
-            updated_constraints = f"{prompt.generation_constraints}\n\n{HTML_DIRECTIVE}"
+            # Override system context with clear HTML generation instruction
+            system_msg = (
+                "You are an expert HTML/CSS code generator. "
+                "You output ONLY raw HTML body content — no explanations, no markdown, no text. "
+                "Every response must start with <header or <section and contain valid HTML tags."
+            )
+            updated_constraints = f"{HTML_DIRECTIVE}"
             updated_rules = f"{prompt.rules_context}\n\n{HTML_DIRECTIVE}"
             prompt = prompt.model_copy(
                 update={
+                    "system_context": system_msg,
                     "generation_constraints": updated_constraints,
                     "rules_context": updated_rules,
                 }
