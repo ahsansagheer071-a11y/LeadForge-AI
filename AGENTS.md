@@ -231,3 +231,54 @@ Only failure: AI Audit (503) — Groq rate-limited, Nvidia no API key, audit use
 - `tests/test_fidelity_validator.py` — NEW: 19 tests
 - `tests/test_fidelity_pipeline_integration.py` — NEW: 17 integration tests
 - `tests/test_kissthehippo_fidelity.py` — NEW: 9 real-site verification tests
+
+## Step 5 — Provider Tracking, Real Images, DB Reconstruction (2025-07-12)
+
+### What Was Fixed
+
+**1. `provider_used` now tracks correctly**
+- `_call_ai()` now returns `(html, provider_used, attempts)` tuple instead of just string
+- `generate()` aggregates provider info from both AI calls (hero_about + testimonials_faq)
+- Verified on production: both sites show `provider_used: "groq"`
+
+**2. Real source images instead of placeholders**
+- Hero/about prompt now includes `AVAILABLE SOURCE IMAGES` section with real URLs from `bp.images`
+- `SECTION_SYSTEM_PROMPT` updated: "NEVER use placeholder images (via.placeholder.com, example.com)"
+- Hero prompt forces `<header>` tag with background-image from `hero_info.hero_image`
+- Social links and CTA buttons now passed in the prompt
+- Production: 0 placeholder images, 5-13 real CDN images per site
+
+**3. WebsiteProfile loading from DB (flat → nested)**
+- DB stores flat columns (`business_name`, `services`, `products`, etc.) but `WebsiteProfile` expects nested objects
+- `WebsiteProfile._reconstruct_from_flat_db()` converts flat SQLAlchemy columns → nested dict for Pydantic
+- Fixed: `unique_selling_points` and `focus_keywords` need `or []` defaults (Pydantic rejects None for List fields)
+- 195 tests pass
+
+### Production Results (verified 2025-07-12)
+
+| Metric | kissthehippo | stumptown |
+|---|---|---|
+| **Title** | "Kiss the Hippo Coffee" ✅ | "Stumptown Coffee" ✅ |
+| **provider_used** | "groq" ✅ | "groq" ✅ |
+| **HTML chars** | 7,035 | 6,515 |
+| **Real images** | 5 ✅ | 13 ✅ |
+| **Placeholder images** | 0 ✅ | 0 ✅ |
+| **Hero `<header>`** | ✅ | ✅ |
+| **Hero bg-image** | real CDN URL ✅ | real CDN URL ✅ |
+| **Business name** | ✅ | ✅ |
+| **Social links** | FB, Pinterest, IG, LinkedIn, YouTube | IG, TikTok, YouTube, FB |
+| **Contact info** | info@kissthehippo.com, phone | contact info |
+| **Footer copyright** | 2026 Kiss the Hippo Coffee ✅ | ✅ |
+| **Warnings** | 0 | 0 |
+| **Generation time** | ~34s (includes fresh crawl) | ~4s |
+
+### Known Remaining Issues
+1. **Products/services cards: 0** — the `extract_services_and_products` crawler may not extract products from Shopify storefronts with many SKUs. This is a data extraction limitation, not a generation bug.
+2. **Stumptown h1 says "Sunrider"** — the AI picks the first hero text it finds; the Sunrider is a product name in the hero section of stumptowncoffee.com, not the business name.
+3. **AI generates same image multiple times** — kissthehippo reuses the logo icon 5 times instead of different product images.
+
+### New/Modified Files (this session)
+- `app/services/website_generator/static_html_generator.py` — `_call_ai()` returns tuple, hero prompt forces `<header>` + real images + social links, `SECTION_SYSTEM_PROMPT` anti-placeholder rule
+- `app/services/website_intelligence/schemas.py` — `WebsiteProfile._reconstruct_from_flat_db()` for DB loading
+- `tests/test_fidelity_pipeline_integration.py` — Updated mocks: `_call_ai` returns tuple
+- `test_comprehensive.py` — Updated hero detection regex
