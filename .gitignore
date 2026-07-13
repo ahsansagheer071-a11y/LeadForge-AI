@@ -14,6 +14,7 @@ dist/
 # Logs
 logs/
 *.log
+uvicorn_*.txt
 
 # Node / frontend
 node_modules/
@@ -23,6 +24,24 @@ frontend/dist/
 
 # Temp / agent artifacts
 .agents/
+tmp_*.py
+tmp_*.html
+tmp_*.zip
+tmp_*.json
+
+# Debug scripts (root-level one-off scripts)
+debug_*.py
+debug_*.png
+check_*.py
+clean_db.py
+_clean.py
+patch_*.py
+prep_tests.py
+production_results.json
+
+# Generated artifacts
+*.zip
+!frontend/dist/
 
 # OS
 .DS_Store

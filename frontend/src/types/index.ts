@@ -307,18 +307,6 @@ export interface GeneratedWebsiteResponse {
   updated_at: ISODate;
 }
 
-export interface GenerateWebsiteResponse {
-  website_id: UUID;
-  lead_id: UUID;
-  generation_id: string;
-  html: string;
-  generation_time: number;
-  project_name?: string | null;
-  preview_path: string;
-  package_id?: string | null;
-  status: string;
-}
-
 /* ─── Audit ─────────────────────────────────────────────────── */
 export interface AuditRequest {
   lead_id: UUID;

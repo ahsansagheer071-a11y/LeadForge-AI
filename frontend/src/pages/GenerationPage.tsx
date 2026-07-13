@@ -252,11 +252,17 @@ export function GenerationPage() {
                   </div>
                 </div>
                 <h3 className="text-[22px] font-bold text-white mb-2">{selectedLead?.name || 'Target Selected'}</h3>
-                <p className="text-[12px] font-mono text-[var(--color-text-secondary)] mb-6 max-w-md">
+                <p className="text-[12px] font-mono text-[var(--color-text-secondary)] mb-4 max-w-md">
                   {prereqsMet
-                    ? 'All prerequisites verified. Ready to synthesize a premium website from intelligence data.'
+                    ? 'All prerequisites verified. Premium website generation is being upgraded to a new design engine.'
                     : 'Complete the prerequisite checklist on the left panel to enable generation.'}
                 </p>
+                <div className="bg-amber-500/10 border border-amber-500/25 rounded-[var(--radius-md)] px-5 py-3 mb-6 max-w-md">
+                  <p className="text-[11px] font-mono text-amber-400 text-center leading-relaxed">
+                    Premium visual generation is being upgraded. Clicking Generate will attempt to create a website
+                    but may return an upgrade notice. Previously generated websites remain fully accessible.
+                  </p>
+                </div>
                 {prereqsMet && (
                   <button
                     onClick={handleGenerate}

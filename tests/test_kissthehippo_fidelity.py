@@ -280,12 +280,7 @@ class TestKissTheHippoFidelity:
                 print(f"\n  Warning: image {url[:80]} not in manifest (may be normal for dynamic URLs)")
 
     def test_html_extraction_from_markdown_package(self, profile: WebsiteProfile, manifest: AssetManifest):
-        """Verify the MarkdownPackage with manifest can be passed to StaticHTMLGenerator."""
-        from app.services.website_generator.static_html_generator import StaticHTMLGenerator
-        gen = StaticHTMLGenerator()
-        assert hasattr(gen, "generate")
-        assert gen is not None
-        assert hasattr(gen, "generate")
+        """Verify the MarkdownPackage with manifest can be created and populated."""
         pkg = MarkdownPackage()
         pkg.asset_manifest = manifest
         assert pkg.asset_manifest is not None

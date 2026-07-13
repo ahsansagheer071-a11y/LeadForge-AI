@@ -1,8 +1,0 @@
-INFO:     Started server process [20424]
-INFO:     Waiting for application startup.
-INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
-INFO  [alembic.runtime.migration] Will assume transactional DDL.
-INFO  [sqlalchemy.engine.Engine] BEGIN (implicit)
-INFO  [sqlalchemy.engine.Engine] SELECT 1
-INFO  [sqlalchemy.engine.Engine] [cached since 3.108s ago] ()
-INFO  [sqlalchemy.engine.Engine] COMMIT

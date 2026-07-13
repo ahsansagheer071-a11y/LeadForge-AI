@@ -1,11 +1,10 @@
 """Integration tests for FidelityValidator + asset_manifest pipeline.
 
-Tests the full data flow: MarkdownPackage → StaticHTMLGenerator → FidelityValidator,
+Tests the full data flow: WebsiteProfile → FidelityValidator,
 ensuring asset_manifest is correctly propagated and fidelity checks work end-to-end.
 """
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -19,7 +18,6 @@ from app.services.markdown_engine.asset_manifest import (
 )
 from app.services.markdown_engine.schemas import MarkdownPackage, MarkdownDocument, MarkdownMetadata
 from app.services.website_generator.fidelity_validator import FidelityValidator, FidelityIssue, FidelityValidationResult
-from app.services.website_generator.static_html_generator import StaticHTMLGenerator
 from app.services.website_generator.schemas import GenerationResult
 
 
@@ -242,100 +240,50 @@ class TestFidelityPipelineIntegration:
         assert result.approved_image_count >= 2
 
 
-class TestStaticHtmlGeneratorIntegration:
-    """Integration tests for StaticHTMLGenerator fidelity wiring."""
+class TestDesignProviderContract:
+    """Tests for the DesignProvider interface and DesignProviderNotConfigured stub."""
 
     @pytest.mark.asyncio
-    async def test_generate_fidelity_warnings_in_result(self, sample_profile, sample_manifest):
-        """When fidelity issues exist, warnings appear in GenerationResult."""
-        gen = StaticHTMLGenerator()
-
+    async def test_not_configured_provider_fails_gracefully(self, sample_profile, sample_manifest):
+        """DesignProviderNotConfigured returns a structured failure — no dummy HTML."""
+        from app.services.website_generator.design_provider import DesignProviderNotConfigured
+        provider = DesignProviderNotConfigured()
         pkg = MarkdownPackage()
         pkg.asset_manifest = sample_manifest
 
-        fake_body_content = """
-<h1>Wrong Cafe</h1>
-<p>Lorem ipsum dolor sit amet. Contact admin@example.com.</p>
-<img src="https://evil.com/virus.png" alt="Virus">
-"""
+        result = await provider.generate(sample_profile, pkg)
 
-        with patch.object(gen, '_call_ai', new_callable=AsyncMock) as mock_call:
-            mock_call.return_value = (fake_body_content, "mock_provider", 1)
-
-            from app.services.website_generator.asset_packager import AssetPackager
-            with patch.object(AssetPackager, 'package_assets_async') as mock_packager:
-                mock_packager.return_value = (fake_body_content, [], [])
-                result = await gen.generate(sample_profile, pkg)
-
-        assert result.success
-        assert len(result.warnings) > 0, "Expected fidelity warnings in result"
-        warning_categories = set()
-        for w in result.warnings:
-            if w.startswith("[") and "]" in w:
-                warning_categories.add(w[1:w.index("]")])
-        assert "lorem_ipsum" in warning_categories, f"Missing lorem_ipsum in {warning_categories}"
-        assert "dummy_email" in warning_categories, f"Missing dummy_email in {warning_categories}"
+        assert result.success is False
+        assert len(result.errors) > 0
+        assert "not configured" in result.errors[0].lower() or "upgraded" in result.errors[0].lower()
+        assert result.website_project is None
 
     @pytest.mark.asyncio
-    async def test_generate_fidelity_clean_html_no_warnings(self, sample_profile, sample_manifest):
-        """Clean HTML with no fidelity issues → no warnings."""
-        gen = StaticHTMLGenerator()
-        pkg = MarkdownPackage()
-        pkg.asset_manifest = sample_manifest
-
-        clean_body_content = """
-<h1>Test Cafe</h1>
-<section><h2>Espresso</h2><p>Rich espresso shot</p></section>
-<section><h2>Latte</h2><p>Creamy latte</p></section>
-<img src="https://testcafe.com/hero.jpg" alt="Hero">
-<img src="https://testcafe.com/logo.png" alt="Logo">
-<p>Email: hello@testcafe.com</p>
-<p>Phone: +1-555-0199</p>
-"""
-
-        with patch.object(gen, '_call_ai', new_callable=AsyncMock) as mock_call:
-            mock_call.return_value = (clean_body_content, "mock_provider", 1)
-
-            from app.services.website_generator.asset_packager import AssetPackager
-            with patch.object(AssetPackager, 'package_assets_async') as mock_packager:
-                mock_packager.return_value = (clean_body_content, [], [])
-                result = await gen.generate(sample_profile, pkg)
-
-        assert result.success
-        assert len(result.warnings) == 0, f"Expected no warnings, got: {result.warnings}"
+    async def test_not_configured_provider_name(self):
+        """DesignProviderNotConfigured has the expected provider_name."""
+        from app.services.website_generator.design_provider import DesignProviderNotConfigured
+        provider = DesignProviderNotConfigured()
+        assert provider.provider_name() == "not_configured"
 
     @pytest.mark.asyncio
-    async def test_generate_fidelity_stats_in_project(self, sample_profile, sample_manifest):
-        """Fidelity stats are recorded in WebsiteProject.statistics."""
-        gen = StaticHTMLGenerator()
+    async def test_not_configured_no_generated_website_created(self, sample_profile):
+        """No dummy GeneratedWebsite or WebsiteProject is created by the stub."""
+        from app.services.website_generator.design_provider import DesignProviderNotConfigured
+        provider = DesignProviderNotConfigured()
         pkg = MarkdownPackage()
-        pkg.asset_manifest = sample_manifest
 
-        clean_body_content = """
-<h1>Test Cafe</h1>
-<section><h2>Espresso</h2><p>Rich espresso shot</p></section>
-<section><h2>Latte</h2><p>Creamy latte</p></section>
-<img src="https://testcafe.com/hero.jpg" alt="Hero">
-<img src="https://testcafe.com/logo.png" alt="Logo">
-<p>Email: hello@testcafe.com</p>
-<p>Phone: +1-555-0199</p>
-"""
+        result = await provider.generate(sample_profile, pkg)
 
-        with patch.object(gen, '_call_ai', new_callable=AsyncMock) as mock_call:
-            mock_call.return_value = (clean_body_content, "mock_provider", 1)
+        assert result.website_project is None
+        assert result.success is False
+        # Verify no files were generated
+        assert len(result.warnings) == 0
 
-            from app.services.website_generator.asset_packager import AssetPackager
-            with patch.object(AssetPackager, 'package_assets_async') as mock_packager:
-                mock_packager.return_value = (clean_body_content, [], [])
-                result = await gen.generate(sample_profile, pkg)
-
-        assert result.success
-        assert result.website_project is not None
-        stats = result.website_project.statistics
-        assert "fidelity_valid" in stats
-        assert stats["fidelity_valid"] is True
-        assert "fidelity_issues" in stats
-        assert stats["fidelity_issues"] == 0
+    def test_design_provider_is_abstract(self):
+        """DesignProvider cannot be instantiated directly."""
+        from app.services.website_generator.design_provider import DesignProvider
+        with pytest.raises(TypeError):
+            DesignProvider()
 
 
 class TestPromptBudgetIntegration:

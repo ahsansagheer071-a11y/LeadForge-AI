@@ -17,7 +17,6 @@ import type {
   DashboardSummaryResponse,
   DistributionResponse,
   RecentLeadsResponse,
-  GenerateWebsiteResponse,
   GeneratedWebsiteResponse,
 } from '@/types';
 
@@ -154,16 +153,7 @@ export const outreachService = {
   },
 };
 
-/* ─── Deployment service ────────────────────────────────────── */
-import type { DeploymentInfo } from '@/types';
-
-export const deploymentsService = {
-  async list(): Promise<DeploymentInfo[]> {
-    const resp = await apiClient.get<{ success: boolean; data: DeploymentInfo[] }>('/deployments');
-    return unwrap(resp);
-  },
-};
-
+/* ─── Dashboard service ───────────────────────────────────── */
 export const dashboardService = {
   async summary(): Promise<DashboardSummaryResponse> {
     const resp = await apiClient.get<{ success: boolean; data: DashboardSummaryResponse }>('/dashboard/summary');
@@ -182,15 +172,6 @@ export const dashboardService = {
 };
 
 /* ─── Generation service ────────────────────────────────────── */
-export async function generateWebsite(leadId: string): Promise<GenerateWebsiteResponse> {
-  const resp = await apiClient.post<{ success: boolean; data: GenerateWebsiteResponse }>(
-    '/generation/generate',
-    { lead_id: leadId },
-    { timeout: 300_000 },
-  );
-  return unwrap(resp);
-}
-
 export type JobStatus = 'pending' | 'running' | 'succeeded' | 'failed';
 
 export interface GenerationJobResult {

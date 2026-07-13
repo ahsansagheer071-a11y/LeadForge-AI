@@ -13,16 +13,13 @@ The background task runs the full pipeline and writes the result into the
 persistent `generation_jobs` table. The frontend polls GET every 3 seconds.
 """
 
-import asyncio
 import base64
-import json
 import logging
-import time
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
 from io import BytesIO
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from fastapi import APIRouter, BackgroundTasks, Depends, status
@@ -39,13 +36,11 @@ from app.models.generation_job import GenerationJob as DBGenerationJob
 from app.models.user import User
 from app.repositories.generated_website import generated_website_repository
 from app.repositories.lead import lead_repository
-from app.schemas.generated_website import GeneratedWebsiteCreate, GeneratedWebsiteResponse
+from app.schemas.generated_website import GeneratedWebsiteResponse
 from app.schemas.response import StandardResponse
 from app.services.markdown_engine.builder import MarkdownBuilder
-from app.services.website_generator.build.schemas import BuildResult
 from app.services.website_generator.deployment.package_manager import PackageManager
-from app.services.website_generator.preview.schemas import PreviewResult
-from app.services.website_generator.static_html_generator import StaticHTMLGenerator
+from app.services.website_generator.design_provider import DesignProviderNotConfigured
 from app.services.website_intelligence import website_intelligence_service
 
 logger = logging.getLogger(__name__)
@@ -123,14 +118,18 @@ async def _run_generation_job(job_id: str, lead_id: uuid.UUID, user_id: str) -> 
             builder  = MarkdownBuilder(blueprint=profile)
             package  = builder.build_package()
 
-            # ── Step 3: AI generation ────────────────────────────────────── #
-            await _update_job_status(db, job_id, JobStatus.RUNNING, "Generating HTML with AI")
-            generator = StaticHTMLGenerator()
-            result    = await generator.generate(blueprint=profile, package=package)
+            # ── Step 3: Design generation ────────────────────────────────── #
+            await _update_job_status(db, job_id, JobStatus.RUNNING, "Generating design")
+            provider = DesignProviderNotConfigured()
+            result   = await provider.generate(blueprint=profile, package=package)
 
             if not result.success or not result.website_project:
-                error_msg = "; ".join(result.errors) if result.errors else "Unknown generation error"
-                await _update_job_status(db, job_id, JobStatus.FAILED, "Failed", error=error_msg)
+                error_msg = "; ".join(result.errors) if result.errors else "Design provider unavailable"
+                await _update_job_status(
+                    db, job_id, JobStatus.FAILED, "Failed",
+                    error=error_msg,
+                    provider_used=provider.provider_name(),
+                )
                 return
 
             # ── Step 4: Persist ──────────────────────────────────────────── #
@@ -158,9 +157,11 @@ async def _run_generation_job(job_id: str, lead_id: uuid.UUID, user_id: str) -> 
 
             preview_record.preview_path = f"/preview/{preview_record.id}"
 
+            from app.services.website_generator.build.schemas import BuildResult
+            from app.services.website_generator.preview.schemas import PreviewResult
             build_result = BuildResult(
                 success=True, build_success=True, npm_install_success=True,
-                logs=["Static HTML generated; no build step required."],
+                logs=["Design generated."],
             )
             preview_result = PreviewResult(
                 success=True, preview_url=preview_record.preview_path,
@@ -398,7 +399,7 @@ async def get_generation_job(
     summary="Generate a static HTML website for a lead (synchronous)",
     description=(
         "Fetches the lead's WebsiteProfile and builds a MarkdownPackage, "
-        "then runs the StaticHTMLGenerator to produce a single self-contained HTML file. "
+        "then delegates to the configured DesignProvider. "
         "Note: prefer POST /jobs for production use to avoid proxy timeouts."
     ),
     responses={
@@ -447,14 +448,14 @@ async def generate_website(
     builder = MarkdownBuilder(blueprint=profile)
     package = builder.build_package()
 
-    # 3. Generate HTML
-    generator = StaticHTMLGenerator(provider_name=payload.provider if hasattr(payload, 'provider') else None)
-    result = await generator.generate(blueprint=profile, package=package)
+    # 3. Generate design
+    provider = DesignProviderNotConfigured()
+    result = await provider.generate(blueprint=profile, package=package)
 
     if not result.success or not result.website_project:
         return StandardResponse(
             success=False,
-            message="Generation failed: " + "; ".join(result.errors) if result.errors else "Unknown error",
+            message="; ".join(result.errors) if result.errors else "Design provider unavailable",
             data=None,
         )
 
@@ -481,11 +482,13 @@ async def generate_website(
 
     preview_record.preview_path = f"/preview/{preview_record.id}"
 
+    from app.services.website_generator.build.schemas import BuildResult
+    from app.services.website_generator.preview.schemas import PreviewResult
     build_result = BuildResult(
         success=True,
         build_success=True,
         npm_install_success=True,
-        logs=["Static HTML generated; no Next.js build required for iframe preview."],
+        logs=["Design generated."],
     )
     preview_result = PreviewResult(
         success=True,

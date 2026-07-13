@@ -8,7 +8,6 @@ from app.services.ai.factory import AIFactory
 from app.services.ai.groq import GroqProvider
 from app.services.ai.pollinations import PollinationsProvider
 from app.services.ai.nvidia import NvidiaProvider
-from app.services.website_generator.providers.provider_factory import ProviderFactory
 
 
 class TestAIFactory:
@@ -42,34 +41,6 @@ class TestAIFactory:
     def test_fallback_chain_no_duplicates(self):
         chain = AIFactory.get_fallback_chain("groq")
         assert chain == ["groq", "pollinations", "nvidia"]
-
-
-class TestProviderFactoryB:
-    def test_get_provider_groq(self):
-        provider = ProviderFactory.get_provider("groq")
-        assert provider.provider_name() == "groq"
-
-    def test_get_provider_pollinations(self):
-        provider = ProviderFactory.get_provider("pollinations")
-        assert provider.provider_name() == "pollinations"
-
-    def test_get_provider_nvidia(self):
-        provider = ProviderFactory.get_provider("nvidia")
-        assert provider.provider_name() == "nvidia"
-
-    def test_get_provider_invalid(self):
-        with pytest.raises(ValueError, match="Unknown provider"):
-            ProviderFactory.get_provider("invalid_provider")
-
-    def test_fallback_chain_default(self):
-        chain = ProviderFactory.get_fallback_chain()
-        assert chain == ["groq", "pollinations", "nvidia"]
-
-    def test_fallback_chain_start_with(self):
-        chain = ProviderFactory.get_fallback_chain("nvidia")
-        assert chain[0] == "nvidia"
-        assert "groq" in chain
-        assert "pollinations" in chain
 
 
 class TestGroqSucceeds:
@@ -259,9 +230,18 @@ class TestFallbackChain:
         assert callable(service.generate_audit)
 
     @pytest.mark.asyncio
-    async def test_generation_creates_one_record(self):
-        """Mock test: generation creates a single website record."""
-        from app.services.website_generator.static_html_generator import StaticHTMLGenerator
-        gen = StaticHTMLGenerator()
-        assert hasattr(gen, "generate")
-        assert callable(gen.generate)
+    async def test_generation_provider_not_configured(self):
+        """DesignProviderNotConfigured fails gracefully — no dummy HTML."""
+        from app.services.website_generator.design_provider import DesignProviderNotConfigured
+        from app.services.website_intelligence.schemas import WebsiteProfile, BusinessInfo
+        from app.services.markdown_engine.schemas import MarkdownPackage
+
+        provider = DesignProviderNotConfigured()
+        assert provider.provider_name() == "not_configured"
+
+        profile = WebsiteProfile(business=BusinessInfo(name="Test"))
+        pkg = MarkdownPackage()
+        result = await provider.generate(profile, pkg)
+        assert result.success is False
+        assert result.website_project is None
+        assert "not configured" in result.errors[0].lower() or "upgraded" in result.errors[0].lower()
