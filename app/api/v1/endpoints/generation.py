@@ -94,8 +94,16 @@ async def _run_generation_job(job_id: str, lead_id: uuid.UUID, user_id: str) -> 
                 return
 
             # ── Step 1: Profile ──────────────────────────────────────────── #
-            await _update_job_status(db, job_id, JobStatus.RUNNING, "Crawling website")
+            await _update_job_status(db, job_id, JobStatus.RUNNING, "Loading lead data")
             response = await website_intelligence_service.load_profile(db, lead_id=lead_id)
+            needs_rebuild = (
+                response
+                and not (response.profile.products or [])
+                and not (response.profile.services or [])
+            )
+            if needs_rebuild:
+                logger.info("[GEN] Cached profile has 0 products and 0 services — re-crawling for %s", lead_id)
+                response = None
             if not response:
                 if not lead.website:
                     await _update_job_status(db, job_id, JobStatus.FAILED, "Failed", error="No website URL on this lead and no cached profile.")
@@ -413,6 +421,13 @@ async def generate_website(
     response = await website_intelligence_service.load_profile(
         db, lead_id=payload.lead_id
     )
+    needs_rebuild = (
+        response
+        and not (response.profile.products or [])
+        and not (response.profile.services or [])
+    )
+    if needs_rebuild:
+        response = None
     if not response:
         if not lead.website:
             raise NotFoundException(

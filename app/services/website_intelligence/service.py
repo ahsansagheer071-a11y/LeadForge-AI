@@ -3410,19 +3410,16 @@ class WebsiteIntelligenceService:
             try:
                 import urllib.request as _urllib_req
                 products_json_url = f"{base_url}/products.json?limit=50"
-                req = _urllib_req.Request(products_json_url, headers={
+                _req = _urllib_req.Request(products_json_url, headers={
                     "User-Agent": "Mozilla/5.0 (compatible; LeadForge/1.0)",
                     "Accept": "application/json",
                 })
-                resp = await asyncio.wait_for(
-                    asyncio.get_event_loop().run_in_executor(
-                        None, lambda: _urllib_req.urlopen(req, timeout=10)
-                    ), timeout=15,
-                )
-                raw = resp.read().decode("utf-8", errors="replace")
+                _resp = _urllib_req.urlopen(_req, timeout=15)
+                raw = _resp.read().decode("utf-8", errors="replace")
                 pdata = json.loads(raw)
                 products = pdata.get("products", []) if isinstance(pdata, dict) else []
-                for p in products[:20]:
+                logger.info("[SHOPIFY] /products.json returned %d products for %s", len(products), base_url)
+                for p in products[:30]:
                     name = (p.get("title") or "").strip()
                     if not name or name.lower() in seen_titles:
                         continue
@@ -3446,8 +3443,8 @@ class WebsiteIntelligenceService:
                         currency=currency or None,
                         source_url=f"{base_url}/products/{p.get('handle', '')}",
                     ))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.info("[SHOPIFY] /products.json failed for %s: %s", base_url, exc)
 
         # --- 3. JSON-LD Organization/LocalBusiness for services ---
         if not service_items:
