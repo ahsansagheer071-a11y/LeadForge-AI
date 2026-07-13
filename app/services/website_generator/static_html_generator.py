@@ -61,13 +61,18 @@ class StaticHTMLGenerator:
         provider_attempts = 0
         warnings: List[str] = []
 
+        t0 = time.monotonic()
+        deterministic_hero = self._build_deterministic_hero(blueprint)
+        logger.info("[GEN] step=deterministic_hero | len=%d | %.2fs",
+            len(deterministic_hero), time.monotonic() - t0)
+
         t1 = time.monotonic()
-        hero_about_html, prov1, att1 = await self._ai_generate_hero_about(blueprint, brand_css)
+        about_html, prov1, att1 = await self._ai_generate_about(blueprint, brand_css)
         if prov1:
             provider_used = prov1
         provider_attempts += att1
-        logger.info("[GEN] step=hero_about | len=%d | provider=%s | %.2fs",
-            len(hero_about_html) if hero_about_html else 0, prov1, time.monotonic() - t1)
+        logger.info("[GEN] step=about | len=%d | provider=%s | %.2fs",
+            len(about_html) if about_html else 0, prov1, time.monotonic() - t1)
 
         t2 = time.monotonic()
         products_services_html = self._build_products_services(blueprint)
@@ -89,14 +94,16 @@ class StaticHTMLGenerator:
 
         all_sections = []
 
-        for name, html_content in [
-            ("hero_about", hero_about_html),
-            ("testimonials_faq", testimonials_faq_html),
-        ]:
-            if html_content:
-                all_sections.append(html_content)
-            else:
-                warnings.append(f"AI section '{name}' returned empty HTML")
+        all_sections.append(deterministic_hero)
+        if about_html:
+            all_sections.append(about_html)
+        else:
+            warnings.append("AI section 'about' returned empty HTML")
+
+        if testimonials_faq_html:
+            all_sections.append(testimonials_faq_html)
+        else:
+            warnings.append("AI section 'testimonials_faq' returned empty HTML")
 
         all_sections.append(products_services_html)
         all_sections.append(contact_footer_html)
@@ -192,9 +199,46 @@ class StaticHTMLGenerator:
             provider_attempts=provider_attempts,
         )
 
-    async def _ai_generate_hero_about(self, blueprint: WebsiteProfile, brand_css: str) -> tuple:
-        prompt_text = self._build_hero_about_prompt(blueprint, brand_css)
-        html, prov, att = await self._call_ai(prompt_text, "hero_about")
+    def _build_deterministic_hero(self, bp: WebsiteProfile) -> str:
+        biz = bp.business
+        biz_name = biz.name or "Business"
+        hero = bp.hero_info or bp.hero
+
+        bg_style = ""
+        if hero:
+            for attr in ['hero_image', 'background_image_url', 'background_image']:
+                val = getattr(hero, attr, None)
+                if val:
+                    bg_style = f' background-image: url({val}); background-size: cover; background-position: center;'
+                    break
+
+        tagline = ""
+        if hero:
+            for attr in ['hero_subtitle', 'subtitle']:
+                val = getattr(hero, attr, None)
+                if val:
+                    tagline = val
+                    break
+        if not tagline:
+            tagline = biz.description[:120] if biz.description else ""
+
+        tagline_html = ""
+        if tagline:
+            safe_tagline = html_mod.escape(tagline)
+            tagline_html = f'\n  <p style="color:#ffffff;font-size:1.5rem;margin-top:1rem;opacity:0.9">{safe_tagline}</p>'
+
+        safe_name = html_mod.escape(biz_name)
+        return (
+            f'<header style="display:flex;flex-direction:column;align-items:center;'
+            f'justify-content:center;min-height:100vh;text-align:center;{bg_style}">\n'
+            f'  <h1 style="color:#ffffff;font-size:3rem;font-weight:700;">{safe_name}</h1>'
+            f'{tagline_html}\n'
+            f'</header>'
+        )
+
+    async def _ai_generate_about(self, blueprint: WebsiteProfile, brand_css: str) -> tuple:
+        prompt_text = self._build_about_prompt(blueprint, brand_css)
+        html, prov, att = await self._call_ai(prompt_text, "about")
         return html, prov, att
 
     async def _ai_generate_testimonials_faq(self, blueprint: WebsiteProfile, brand_css: str) -> tuple:
@@ -234,15 +278,15 @@ class StaticHTMLGenerator:
         body = self._recover_body_content(body)
         return body, chain_result.provider_used, len(chain_result.attempts)
 
-    def _build_hero_about_prompt(self, bp: WebsiteProfile, brand_css: str) -> str:
+    def _build_about_prompt(self, bp: WebsiteProfile, brand_css: str) -> str:
         lines = [
-            "Generate HTML for the HERO and ABOUT sections of a website.",
-            "Use inline styles. The hero MUST be a <header> tag (NOT <section>).",
-            "The about section should be a <section> tag.",
+            "Generate HTML for the ABOUT section of a website.",
+            "Use inline styles. Start with <section>.",
+            "Do NOT generate a hero/header section — the hero is already handled.",
             "",
             brand_css,
             "",
-            "## CONTENT",
+            "## BUSINESS INFO",
         ]
         biz = bp.business
         if biz.name:
@@ -255,36 +299,6 @@ class StaticHTMLGenerator:
         brand = bp.brand
         if brand.tagline:
             lines.append(f"Tagline: {brand.tagline}")
-
-        hero = bp.hero_info or bp.hero
-        if hero:
-            for attr in ['hero_title', 'title']:
-                val = getattr(hero, attr, None)
-                if val:
-                    lines.append(f"Hero Title: {val}")
-                    break
-            for attr in ['hero_subtitle', 'subtitle']:
-                val = getattr(hero, attr, None)
-                if val:
-                    lines.append(f"Hero Subtitle: {val}")
-                    break
-            for attr in ['hero_description', 'description']:
-                val = getattr(hero, attr, None)
-                if val:
-                    lines.append(f"Hero Description: {val[:300]}")
-                    break
-            for attr in ['hero_image', 'background_image_url', 'background_image']:
-                val = getattr(hero, attr, None)
-                if val:
-                    lines.append(f"Hero Image URL: {val}")
-                    lines.append(f"USE THIS EXACT URL as background-image. Do NOT invent other image URLs.")
-                    break
-            ctas = getattr(hero, 'ctas', None) or []
-            if ctas:
-                for cta in ctas[:3]:
-                    cta_text = getattr(cta, 'text', None) or getattr(cta, 'label', None) or "Learn More"
-                    cta_url = getattr(cta, 'url', None) or "#"
-                    lines.append(f"CTA Button: {cta_text} -> {cta_url}")
 
         company = bp.company
         if company:
@@ -329,11 +343,11 @@ class StaticHTMLGenerator:
         lines.extend([
             "",
             "RULES:",
-            "- The hero MUST use a <header> tag as the outermost element",
-            "- Include the hero image as background-image on the hero section if a Hero Image URL is provided",
-            "- Use ONLY image URLs listed in AVAILABLE SOURCE IMAGES above — never use via.placeholder.com, example.com, or any invented URLs",
+            "- Start with a <section> tag (NOT <header> or hero)",
+            "- Do NOT include a hero/header section — only the about section",
+            "- Use ONLY image URLs listed in AVAILABLE SOURCE IMAGES above",
             "- Include ALL team members listed above with their avatars if available",
-            "- Include social links in the about section if available",
+            "- Include social links if available",
             "- Output ONLY HTML tags, no text commentary",
         ])
         return "\n".join(lines)
@@ -380,6 +394,8 @@ class StaticHTMLGenerator:
 
     def _build_products_services(self, bp: WebsiteProfile) -> str:
         parts = []
+        used_images: set = set()
+
         products = bp.products or []
         if products:
             items_html = []
@@ -388,7 +404,6 @@ class StaticHTMLGenerator:
                 desc = html_mod.escape(p.short_description or p.full_description or "")[:150]
                 price = html_mod.escape(p.price or "")
                 currency = html_mod.escape(p.currency or "")
-                image_url = p.image or ""
                 badge = html_mod.escape(p.badge or "")
 
                 card_content = f'<h3>{title}</h3>'
@@ -401,6 +416,12 @@ class StaticHTMLGenerator:
                     card_content += '</p>'
                 if badge:
                     card_content += f'<span style="background:var(--accent);color:#fff;padding:2px 8px;border-radius:4px;font-size:12px">{badge}</span>'
+
+                image_url = ""
+                raw_img = p.image or ""
+                if raw_img and raw_img not in used_images and "example.com" not in raw_img and "placeholder" not in raw_img.lower():
+                    image_url = raw_img
+                    used_images.add(raw_img)
 
                 if image_url:
                     item_html = f'<div class="card"><img src="{html_mod.escape(image_url)}" alt="{title}" style="width:100%;height:200px;object-fit:cover;border-radius:8px;margin-bottom:1rem">{card_content}</div>'
@@ -424,7 +445,6 @@ class StaticHTMLGenerator:
                 name = html_mod.escape(s.name or "Service")
                 desc = html_mod.escape(s.description or s.short_description or "")[:150]
                 features = s.features or []
-                image_url = s.image or ""
 
                 card_content = f'<h3>{name}</h3>'
                 if desc:
@@ -432,6 +452,12 @@ class StaticHTMLGenerator:
                 if features:
                     features_html = "".join(f'<li>{html_mod.escape(f)}</li>' for f in features[:5])
                     card_content += f'<ul style="list-style:disc;padding-left:1.5rem;margin-top:0.5rem">{features_html}</ul>'
+
+                image_url = ""
+                raw_img = s.image or ""
+                if raw_img and raw_img not in used_images and "example.com" not in raw_img and "placeholder" not in raw_img.lower():
+                    image_url = raw_img
+                    used_images.add(raw_img)
 
                 if image_url:
                     item_html = f'<div class="card"><img src="{html_mod.escape(image_url)}" alt="{name}" style="width:100%;height:200px;object-fit:cover;border-radius:8px;margin-bottom:1rem">{card_content}</div>'

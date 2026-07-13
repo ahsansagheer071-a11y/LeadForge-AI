@@ -306,6 +306,55 @@ class FidelityValidator:
 
         result.valid = len(result.issues) == 0
 
+        # --- H1 must contain business name ---
+        h1_match = re.search(r'<h1[^>]*>(.*?)</h1>', html, re.DOTALL | re.IGNORECASE)
+        if biz_name:
+            if h1_match:
+                h1_text = re.sub(r'<[^>]+>', '', h1_match.group(1)).strip()
+                if biz_name.lower() not in h1_text.lower():
+                    result.issues.append(FidelityIssue(
+                        category="wrong_h1",
+                        detail=f"H1 '{h1_text}' does not contain business name '{biz_name}'",
+                    ))
+            else:
+                result.issues.append(FidelityIssue(
+                    category="missing_h1",
+                    detail="Generated HTML has no <h1> tag",
+                ))
+
+        # --- Products/services exist in source but zero in output ---
+        if result.source_product_count > 0:
+            cards_in_html = len(re.findall(r'class="card"', html, re.IGNORECASE))
+            if cards_in_html == 0 and result.preserved_product_count == 0:
+                result.issues.append(FidelityIssue(
+                    category="zero_generated_products",
+                    detail=f"Source has {result.source_product_count} products but 0 product cards in HTML",
+                ))
+
+        if result.source_service_count > 0:
+            cards_in_html = len(re.findall(r'class="card"', html, re.IGNORECASE))
+            if cards_in_html == 0 and result.preserved_service_count == 0:
+                result.issues.append(FidelityIssue(
+                    category="zero_generated_services",
+                    detail=f"Source has {result.source_service_count} services but 0 service cards in HTML",
+                ))
+
+        # --- Duplicate image detection ---
+        img_refs = re.findall(r'<img[^>]+src\s*=\s*["\']([^"\']+)["\']', html, re.IGNORECASE)
+        if img_refs:
+            img_counter = {}
+            for ref in img_refs:
+                img_counter[ref] = img_counter.get(ref, 0) + 1
+            dupes = {k: v for k, v in img_counter.items() if v > 2}
+            if dupes:
+                total_dupes = sum(v - 1 for v in dupes.values())
+                result.issues.append(FidelityIssue(
+                    category="duplicate_images",
+                    detail=f"{total_dupes} duplicate image references across {len(dupes)} images: {list(dupes.keys())[:3]}",
+                ))
+
+        result.valid = len(result.issues) == 0
+
         logger.info(
             "FidelityValidator: %s | products=%d/%d services=%d/%d "
             "testimonials=%d/%d faqs=%d/%d completeness=%.0f%%",

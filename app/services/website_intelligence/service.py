@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 
 import colorsys
@@ -982,6 +983,15 @@ class WebsiteIntelligenceService:
             service_items, product_items = await self.extract_services_and_products(None, html, url)
         except Exception:
             service_items, product_items = [], []
+
+        try:
+            shopify_services, shopify_products = await self.extract_shopify_products(None, html, url)
+            if shopify_products and len(shopify_products) > len(product_items):
+                product_items = shopify_products
+            if shopify_services and len(shopify_services) > len(service_items):
+                service_items = shopify_services
+        except Exception:
+            pass
     
         try:
             testimonials = await self.extract_testimonials(None, html, url)
@@ -3338,6 +3348,162 @@ class WebsiteIntelligenceService:
                 break
 
         return service_items[:30], product_items[:20]
+
+    async def extract_shopify_products(
+        self,
+        page,
+        html: str,
+        url: str,
+    ) -> Tuple[List[ServiceCard], List[ProductItem]]:
+        """Extract products/services from Shopify stores using JSON-LD,
+        /products.json endpoint, and product card links."""
+        soup = BeautifulSoup(html, "html.parser")
+        base_url = f"{urlparse(url).scheme}://{urlparse(url).netloc}"
+        service_items: List[ServiceCard] = []
+        product_items: List[ProductItem] = []
+        seen_titles: set = set()
+
+        # --- 1. JSON-LD Product extraction ---
+        for script in soup.find_all("script", type="application/ld+json"):
+            try:
+                data = json.loads(script.string or "")
+                items = data if isinstance(data, list) else [data]
+                for item in items:
+                    if isinstance(item, dict):
+                        if item.get("@type") == "ItemList":
+                            items.extend(item.get("itemListElement", []))
+                            continue
+                        item_type = item.get("@type", "")
+                        if item_type not in ("Product", "IndividualProduct"):
+                            continue
+                        name = (item.get("name") or "").strip()
+                        if not name or len(name) > 200 or name.lower() in seen_titles:
+                            continue
+                        seen_titles.add(name.lower())
+                        desc = (item.get("description") or "")[:300]
+                        offers = item.get("offers", {})
+                        if isinstance(offers, list):
+                            offers = offers[0] if offers else {}
+                        price_val = str(offers.get("price", "")) if isinstance(offers, dict) else ""
+                        currency = offers.get("priceCurrency", "") if isinstance(offers, dict) else ""
+                        img = ""
+                        img_data = item.get("image", "")
+                        if isinstance(img_data, str):
+                            img = img_data
+                        elif isinstance(img_data, list) and img_data:
+                            img = img_data[0]
+                        product_items.append(ProductItem(
+                            title=name[:200],
+                            short_description=desc[:300],
+                            image=img or None,
+                            price=price_val or None,
+                            currency=currency or None,
+                            source_url=item.get("url") or url,
+                        ))
+                        if len(product_items) >= 20:
+                            break
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+        # --- 2. Shopify /products.json endpoint ---
+        if not product_items:
+            try:
+                import urllib.request as _urllib_req
+                products_json_url = f"{base_url}/products.json?limit=50"
+                req = _urllib_req.Request(products_json_url, headers={
+                    "User-Agent": "Mozilla/5.0 (compatible; LeadForge/1.0)",
+                    "Accept": "application/json",
+                })
+                resp = await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(
+                        None, lambda: _urllib_req.urlopen(req, timeout=10)
+                    ), timeout=15,
+                )
+                raw = resp.read().decode("utf-8", errors="replace")
+                pdata = json.loads(raw)
+                products = pdata.get("products", []) if isinstance(pdata, dict) else []
+                for p in products[:20]:
+                    name = (p.get("title") or "").strip()
+                    if not name or name.lower() in seen_titles:
+                        continue
+                    seen_titles.add(name.lower())
+                    body_html = (p.get("body_html") or "")[:500]
+                    desc_clean = BeautifulSoup(body_html, "html.parser").get_text(strip=True)[:300]
+                    img = ""
+                    images = p.get("images", [])
+                    if images and isinstance(images, list):
+                        img = images[0].get("src", "")
+                    variants = p.get("variants", [])
+                    price_val = ""
+                    currency = ""
+                    if variants and isinstance(variants, list):
+                        price_val = str(variants[0].get("price", ""))
+                    product_items.append(ProductItem(
+                        title=name[:200],
+                        short_description=desc_clean,
+                        image=img or None,
+                        price=price_val or None,
+                        currency=currency or None,
+                        source_url=f"{base_url}/products/{p.get('handle', '')}",
+                    ))
+            except Exception:
+                pass
+
+        # --- 3. JSON-LD Organization/LocalBusiness for services ---
+        if not service_items:
+            for script in soup.find_all("script", type="application/ld+json"):
+                try:
+                    data = json.loads(script.string or "")
+                    items = data if isinstance(data, list) else [data]
+                    for item in items:
+                        if not isinstance(item, dict):
+                            continue
+                        item_type = item.get("@type", "")
+                        if item_type in ("Organization", "LocalBusiness", "Restaurant", "Store"):
+                            name_val = item.get("name", "")
+                            desc_val = (item.get("description") or "")[:300]
+                            if name_val and name_val.lower() not in seen_titles:
+                                seen_titles.add(name_val.lower())
+                                service_items.append(ServiceCard(
+                                    name=name_val[:200],
+                                    description=desc_val,
+                                ))
+                                break
+                except (json.JSONDecodeError, TypeError):
+                    continue
+
+        # --- 4. Product card links from HTML (Shopify /products/ and /collections/ patterns) ---
+        if not product_items:
+            product_links = []
+            for a_tag in soup.find_all("a", href=True):
+                href = a_tag["href"]
+                if "/products/" in href or "/collections/" in href:
+                    card_el = a_tag.find_parent(["div", "article", "li"])
+                    if not card_el:
+                        continue
+                    h_el = card_el.find(["h2", "h3", "h4", "strong", "span"])
+                    title = h_el.get_text(strip=True) if h_el else a_tag.get_text(strip=True)
+                    if not title or len(title) > 200 or len(title) < 3:
+                        continue
+                    if title.lower() in seen_titles:
+                        continue
+                    seen_titles.add(title.lower())
+                    img = ""
+                    img_el = card_el.find("img")
+                    if img_el and img_el.get("src"):
+                        img = str(img_el["src"])
+                        if img.startswith("/"):
+                            img = base_url + img
+                    full_href = href if href.startswith("http") else base_url + href
+                    product_items.append(ProductItem(
+                        title=title[:200],
+                        image=img or None,
+                        source_url=full_href,
+                    ))
+                    if len(product_items) >= 20:
+                        break
+
+        return service_items[:10], product_items[:20]
 
     def _extract_services(self, soup: BeautifulSoup) -> List[ServiceCard]:
         section = self._find_section(soup, SECTION_KEYWORDS["services"])
