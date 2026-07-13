@@ -3600,10 +3600,10 @@ class WebsiteIntelligenceService:
         )
 
     _UI_ICON_RE = re.compile(
-        r"(?:Horseshoe_Icon|French_Press_Icon|/arrow|/close|/minus|/plus|/chevron"
+        r"(?:Horseshoe_Icon|French_Press_Icon|gift-icon|/arrow|/close|/minus|/plus|/chevron"
         r"|/cart|/search|/menu|/filter|/sort|/spinner|/loading"
         r"|bean-icon|Layer_1\.svg|Icon_1\.svg"
-        r"|cdn\.builder\.io.*?width=(?:[0-9]|[1-4][0-9]|100)[&\s]"
+        r"|cdn\.builder\.io"
         r"|width=24[&\s]|width=32[&\s]|width=48[&\s])",
         re.IGNORECASE,
     )
