@@ -43,6 +43,23 @@ SECTION_SYSTEM_PROMPT = (
 )
 
 
+_SHOPIFY_UI_PATTERNS = re.compile(
+    r"(?:width=24[&\s]|width=32[&\s]|width=48[&\s]"
+    r"|/icon[s]?/|/arrow|/close|/minus|/plus|/chevron|/cart|/search|/menu"
+    r"|/filter|/sort|/spinner|/loading"
+    r"|bean-icon|/Layer_1\.svg|/Icon_1\.svg"
+    r"|quantity|variant-select)",
+    re.IGNORECASE,
+)
+
+
+def _is_ui_icon(url: str) -> bool:
+    """Return True if URL is a tiny Shopify UI icon, not a real content image."""
+    if not url:
+        return False
+    return bool(_SHOPIFY_UI_PATTERNS.search(url))
+
+
 class StaticHTMLGenerator:
     def __init__(self, provider_name: Optional[str] = None):
         self.provider_name = provider_name
@@ -321,10 +338,10 @@ class StaticHTMLGenerator:
         images = bp.images or []
         if images:
             real_images = []
-            for img in images[:15]:
+            for img in images:
                 url = img.url if hasattr(img, 'url') else str(img)
                 alt = img.alt if hasattr(img, 'alt') else ""
-                if url and "example.com" not in url and "placeholder" not in url.lower():
+                if url and "example.com" not in url and "placeholder" not in url.lower() and not _is_ui_icon(url):
                     real_images.append((url, alt))
             if real_images:
                 lines.append(f"\n## AVAILABLE SOURCE IMAGES (use these, never invent new URLs):")
@@ -419,7 +436,7 @@ class StaticHTMLGenerator:
 
                 image_url = ""
                 raw_img = p.image or ""
-                if raw_img and raw_img not in used_images and "example.com" not in raw_img and "placeholder" not in raw_img.lower():
+                if raw_img and raw_img not in used_images and "example.com" not in raw_img and "placeholder" not in raw_img.lower() and not _is_ui_icon(raw_img):
                     image_url = raw_img
                     used_images.add(raw_img)
 
@@ -455,7 +472,7 @@ class StaticHTMLGenerator:
 
                 image_url = ""
                 raw_img = s.image or ""
-                if raw_img and raw_img not in used_images and "example.com" not in raw_img and "placeholder" not in raw_img.lower():
+                if raw_img and raw_img not in used_images and "example.com" not in raw_img and "placeholder" not in raw_img.lower() and not _is_ui_icon(raw_img):
                     image_url = raw_img
                     used_images.add(raw_img)
 
