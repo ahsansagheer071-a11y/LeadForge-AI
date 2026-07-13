@@ -47,6 +47,7 @@ _SHOPIFY_UI_PATTERNS = re.compile(
     r"(?:Horseshoe_Icon|French_Press_Icon|/arrow|/close|/minus|/plus|/"
     r"chevron|/cart|/search|/menu|/filter|/sort|/spinner|/loading"
     r"|bean-icon|/Layer_1\.svg|/Icon_1\.svg"
+    r"|cdn\.builder\.io.*?width=(?:[0-9]|[1-4][0-9]|100)[&\s$]"
     r"|width=24[&\s]|width=32[&\s]|width=48[&\s]"
     r"|quantity|variant-select)",
     re.IGNORECASE,
@@ -341,6 +342,12 @@ class StaticHTMLGenerator:
             for img in images:
                 url = img.url if hasattr(img, 'url') else str(img)
                 alt = img.alt if hasattr(img, 'alt') else ""
+                w = getattr(img, 'width', None)
+                h = getattr(img, 'height', None)
+                if w and isinstance(w, int) and w < 100:
+                    continue
+                if h and isinstance(h, int) and h < 100:
+                    continue
                 if url and "example.com" not in url and "placeholder" not in url.lower() and not _is_ui_icon(url):
                     real_images.append((url, alt))
             if real_images:

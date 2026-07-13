@@ -1,0 +1,43 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Company</title>
+<style>
+html{box-sizing:border-box;}
+*,*::before,*::after{box-sizing:inherit;}
+body{margin:0;font-family:system-ui,Segoe UI,Arial,sans-serif;color:#111;background:#f9f9f9;}
+header{background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.1);position:sticky;top:0;z-index:100;}
+header .container{display:flex;align-items:center;padding:1rem 2rem;max-width:1200px;margin:0 auto;}
+header img{height:40px;}
+nav{margin-left:auto;}
+nav a{margin-left:1rem;color:#333;text-decoration:none;font-weight:500;}
+nav a:hover{text-decoration:underline;}
+section{padding:4rem 2rem;max-width:1200px;margin:0 auto;}
+#hero{position:relative;overflow:hidden;}
+#hero img{width:100%;height:auto;display:block;}
+#hero h1{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;background:rgba(0,0,0,.5);padding:1rem;white-space:nowrap;}
+footer{background:#fff;text-align:center;padding:2rem;font-size:.9rem;color:#777;}
+@media (max-width:768px){
+header .container{padding:0.5rem 1rem;}
+nav a{margin-left:.5rem;}
+}
+</style>
+</head>
+<body>
+<header>
+<div class="container">
+<img src="images/logo.png" alt="Company Logo">
+<nav>
+<a href="/about">About</a>
+<a href="/services">Services</a>
+<a href="/contact">Contact</a>
+</nav>
+</div>
+</header>
+<section id="hero">
+<img src="images/hero-bg.jpg" alt="Hero Background">
+<h1>Welcome</h1>
+</section>
+<section>
