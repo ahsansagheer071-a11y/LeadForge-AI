@@ -3599,6 +3599,14 @@ class WebsiteIntelligenceService:
             contact_form_fields=form_fields[:20],
         )
 
+    _UI_ICON_RE = re.compile(
+        r"(?:Horseshoe_Icon|French_Press_Icon|/arrow|/close|/minus|/plus|/chevron"
+        r"|/cart|/search|/menu|/filter|/sort|/spinner|/loading"
+        r"|bean-icon|Layer_1\.svg|Icon_1\.svg"
+        r"|width=24[&\s]|width=32[&\s]|width=48[&\s])",
+        re.IGNORECASE,
+    )
+
     def _extract_images(self, soup: BeautifulSoup, base_url: str) -> List[ImageAsset]:
         images: List[ImageAsset] = []
         seen_urls = set()
@@ -3610,6 +3618,17 @@ class WebsiteIntelligenceService:
             full_url = urljoin(base_url, str(src))
             if full_url in seen_urls:
                 continue
+
+            # Skip tiny UI icons and Shopify variant selector icons
+            width_attr = img.get("width")
+            height_attr = img.get("height")
+            if width_attr and str(width_attr).isdigit() and int(width_attr) < 100:
+                continue
+            if height_attr and str(height_attr).isdigit() and int(height_attr) < 100:
+                continue
+            if self._UI_ICON_RE.search(full_url):
+                continue
+
             seen_urls.add(full_url)
 
             alt = img.get("alt", "")

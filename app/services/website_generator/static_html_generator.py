@@ -44,10 +44,10 @@ SECTION_SYSTEM_PROMPT = (
 
 
 _SHOPIFY_UI_PATTERNS = re.compile(
-    r"(?:width=24[&\s]|width=32[&\s]|width=48[&\s]"
-    r"|/icon[s]?/|/arrow|/close|/minus|/plus|/chevron|/cart|/search|/menu"
-    r"|/filter|/sort|/spinner|/loading"
+    r"(?:Horseshoe_Icon|French_Press_Icon|/arrow|/close|/minus|/plus|/"
+    r"chevron|/cart|/search|/menu|/filter|/sort|/spinner|/loading"
     r"|bean-icon|/Layer_1\.svg|/Icon_1\.svg"
+    r"|width=24[&\s]|width=32[&\s]|width=48[&\s]"
     r"|quantity|variant-select)",
     re.IGNORECASE,
 )
