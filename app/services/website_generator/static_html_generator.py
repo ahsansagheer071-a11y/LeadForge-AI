@@ -337,6 +337,10 @@ class StaticHTMLGenerator:
                 lines.append(f"  - {name}, {role}" + (f" [avatar: {avatar}]" if avatar else ""))
 
         images = bp.images or []
+        product_image_urls = set()
+        for p in (bp.products or []):
+            if p.image:
+                product_image_urls.add(p.image)
         if images:
             real_images = []
             for img in images:
@@ -348,11 +352,13 @@ class StaticHTMLGenerator:
                     continue
                 if h and isinstance(h, int) and h < 100:
                     continue
+                if url in product_image_urls:
+                    continue
                 if url and "example.com" not in url and "placeholder" not in url.lower() and not _is_ui_icon(url):
                     real_images.append((url, alt))
             if real_images:
-                lines.append(f"\n## AVAILABLE SOURCE IMAGES (use these, never invent new URLs):")
-                for url, alt in real_images[:10]:
+                lines.append(f"\n## AVAILABLE SOURCE IMAGES (use for hero/lifestyle images, NOT product grid):")
+                for url, alt in real_images[:5]:
                     lines.append(f"  - {url}" + (f" (alt: {alt})" if alt else ""))
 
         social = bp.social_links or []
@@ -369,7 +375,8 @@ class StaticHTMLGenerator:
             "RULES:",
             "- Start with a <section> tag (NOT <header> or hero)",
             "- Do NOT include a hero/header section — only the about section",
-            "- Use ONLY image URLs listed in AVAILABLE SOURCE IMAGES above",
+            "- Do NOT create a grid of product images or product cards — products are rendered separately",
+            "- Use ONLY image URLs listed in AVAILABLE SOURCE IMAGES above for lifestyle/team imagery",
             "- Include ALL team members listed above with their avatars if available",
             "- Include social links if available",
             "- Output ONLY HTML tags, no text commentary",
