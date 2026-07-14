@@ -41,8 +41,10 @@ from app.schemas.response import StandardResponse
 from app.services.markdown_engine.builder import MarkdownBuilder
 from app.services.website_generator.deployment.package_manager import PackageManager
 from app.services.website_generator.design_provider import DesignProviderNotConfigured
+from app.services.website_generator.stitch.design_provider import StitchDesignProvider
 from app.services.website_generator.stitch.import_provider import StitchImportProvider
 from app.services.website_generator.stitch.brief import BriefGenerator
+from app.services.website_generator.fidelity_validator import FidelityValidator
 from app.services.website_intelligence import website_intelligence_service
 from app.services.website_intelligence.schemas import WebsiteProfile
 
@@ -121,13 +123,18 @@ async def _run_generation_job(job_id: str, lead_id: uuid.UUID, user_id: str) -> 
             builder  = MarkdownBuilder(blueprint=profile)
             package  = builder.build_package()
 
-            # ── Step 3: Design generation ────────────────────────────────── #
-            await _update_job_status(db, job_id, JobStatus.RUNNING, "Generating design")
-            provider = StitchImportProvider()
+            # ── Step 3: Prepare redesign brief ───────────────────────────── #
+            await _update_job_status(db, job_id, JobStatus.RUNNING, "Preparing redesign brief")
+            brief_gen = BriefGenerator()
+            brief = brief_gen.generate(profile, package)
+
+            # ── Step 4: Design generation (automated Stitch) ────────────── #
+            await _update_job_status(db, job_id, JobStatus.RUNNING, "Generating design with Stitch")
+            provider = StitchDesignProvider()
             result   = await provider.generate(profile, package)
 
             if not result.success or not result.website_project:
-                error_msg = "; ".join(result.errors) if result.errors else "Design provider unavailable"
+                error_msg = "; ".join(result.errors) if result.errors else "Stitch generation failed"
                 await _update_job_status(
                     db, job_id, JobStatus.FAILED, "Failed",
                     error=error_msg,
@@ -135,17 +142,34 @@ async def _run_generation_job(job_id: str, lead_id: uuid.UUID, user_id: str) -> 
                 )
                 return
 
-            # ── Step 4: Persist ──────────────────────────────────────────── #
+            # ── Step 5: Fidelity validation ─────────────────────────────── #
+            await _update_job_status(db, job_id, JobStatus.RUNNING, "Validating content fidelity")
+            preview_html_raw = result.website_project.preview_html or ""
+            fidelity_validator = FidelityValidator(profile)
+            fidelity_result = fidelity_validator.validate(preview_html_raw)
+
+            if not fidelity_result.valid:
+                critical_issues = [i for i in fidelity_result.issues
+                                   if i.category not in ("duplicate_images",)]
+                if critical_issues:
+                    issue_summary = "; ".join(f"{i.category}: {i.detail}" for i in critical_issues[:3])
+                    await _update_job_status(
+                        db, job_id, JobStatus.FAILED, "Failed",
+                        error=f"Fidelity validation failed: {issue_summary}",
+                        provider_used=provider.provider_name(),
+                    )
+                    return
+
+            # ── Step 6: Persist ──────────────────────────────────────────── #
             await _update_job_status(db, job_id, JobStatus.RUNNING, "Saving result")
-            preview_html = getattr(result.website_project, 'preview_html', None)
-            html_content  = result.website_project.files[0].content if result.website_project.files else ""
+            html_content = result.website_project.files[0].content if result.website_project.files else ""
             preview_record = GeneratedWebsite(
                 lead_id      = lead_id,
                 generation_id= result.website_project.generation_id,
                 project_name = result.website_project.project_name,
                 framework    = result.website_project.framework,
                 status       = "generated",
-                html         = preview_html or html_content,
+                html         = preview_html_raw or html_content,
                 preview_path = "",
                 build_metadata={
                     "generation_time":   result.generation_time,
@@ -153,6 +177,11 @@ async def _run_generation_job(job_id: str, lead_id: uuid.UUID, user_id: str) -> 
                     "file_count":        len(result.website_project.files),
                     "provider_used":     result.provider_used,
                     "provider_attempts": result.provider_attempts,
+                    "fidelity_valid":    fidelity_result.valid,
+                    "fidelity_issues":   len(fidelity_result.issues),
+                    "completeness":      fidelity_result.completeness_score,
+                    "stitch_project_id": result.website_project.metadata.get("stitch_project_id"),
+                    "stitch_screen_id":  result.website_project.metadata.get("stitch_screen_id"),
                 },
             )
             db.add(preview_record)
@@ -164,7 +193,7 @@ async def _run_generation_job(job_id: str, lead_id: uuid.UUID, user_id: str) -> 
             from app.services.website_generator.preview.schemas import PreviewResult
             build_result = BuildResult(
                 success=True, build_success=True, npm_install_success=True,
-                logs=["Design generated."],
+                logs=["Stitch generation complete.", f"Fidelity: {'PASS' if fidelity_result.valid else 'WARN'}"],
             )
             preview_result = PreviewResult(
                 success=True, preview_url=preview_record.preview_path,
@@ -182,7 +211,7 @@ async def _run_generation_job(job_id: str, lead_id: uuid.UUID, user_id: str) -> 
                 db, job_id, JobStatus.SUCCEEDED, "Complete",
                 website_id      = str(preview_record.id),
                 generation_id   = result.website_project.generation_id,
-                html            = preview_html or html_content,
+                html            = preview_html_raw or html_content,
                 preview_path    = preview_record.preview_path,
                 package_id      = preview_record.package_id,
                 project_name    = result.website_project.project_name,

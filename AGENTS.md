@@ -53,12 +53,12 @@ GET  /health                    — Health check
 - `design_provider.py` — `DesignProvider` ABC + `DesignProviderNotConfigured` stub
 - `schemas.py` — `GenerationResult`, `WebsiteProject`, `GeneratedFile`
 - `prompt_budget.py` — `PromptBudgetController` (used by future DesignProvider implementations)
-- `fidelity_validator.py` — `FidelityValidator` (used by future DesignProvider implementations)
+- `fidelity_validator.py` — `FidelityValidator` (validates generated HTML fidelity against source profile)
 - `asset_packager.py` — `AssetPackager` for ZIP packaging
 - `build/schemas.py` — `BuildResult`, `ValidationReport` (local imports from generation.py)
 - `preview/schemas.py` — `PreviewResult`, `InstanceInfo` (local imports from generation.py)
 - `parsers/schemas.py` — `GeneratedAsset`, `ProjectMetadata`, `ProjectStatistics` (used by PackageManager)
-- `deployment/package_manager.py` — ZIP packaging for future Stitch integration
+- `deployment/package_manager.py` — ZIP packaging for Stitch integration
 
 #### `app/services/markdown_engine/` — Content Extraction
 - `builder.py` — `MarkdownBuilder` assembles `MarkdownPackage` (rules, profile, screenshots, assets)
@@ -86,11 +86,8 @@ GET  /health                    — Health check
 - `src/types/index.ts` — No `GenerateWebsiteResponse`
 - Theme: dark-only, no toggle
 
-### Preserved for Future Stitch Integration
+### Preserved for Stitch Integration
 - `PromptBudgetController` — Caps prompt tokens for free-tier LLMs
-- `FidelityValidator` — Validates generated HTML against source website
-- `AssetPackager` — Packages generated site into ZIP
-- `PackageManager` — Handles asset bundling
 - All schema files (`build/schemas.py`, `preview/schemas.py`, `parsers/schemas.py`)
 
 ## Constraints
@@ -120,8 +117,38 @@ GET  /health                    — Health check
 - **Export format**: HTML/CSS (self-contained), React/JSX, Vue, Tailwind
 - **Manual import required**: yes (Phase 1)
 
+## Stitch Integration (Phase 2 — Automated Generation)
+
+### Architecture
+- `app/services/website_generator/stitch/design_provider.py` — `StitchDesignProvider` calls TypeScript stitch-service
+- `stitch-service/src/server.ts` — TypeScript HTTP server wrapping `@google/stitch-sdk`
+- `stitch-service/package.json` — `@google/stitch-sdk@0.3.5`, TypeScript, Vitest, OxLint
+
+### Automated Workflow
+1. `POST /generation/jobs` → async pipeline kicks off
+2. `WebsiteIntelligenceService` crawls/analyzes the lead URL → `WebsiteProfile`
+3. `MarkdownBuilder` extracts content → `MarkdownPackage`
+4. `BriefGenerator` builds `PremiumRedesignBrief` with full instruction text
+5. `StitchDesignProvider` POSTs brief to TypeScript stitch-service → real HTML
+6. `FidelityValidator` validates content fidelity (business name, contacts, services, images)
+7. Result persisted to `GeneratedWebsite` DB, `PackageManager` creates ZIP
+
+### Stitch Service (TypeScript)
+- **Port**: 3100 (configurable via `STITCH_SERVICE_PORT`)
+- **Auth**: Internal shared secret via `X-Internal-Secret` header
+- **Env vars**: `STITCH_API_KEY`, `STITCH_SERVICE_SECRET`, `STITCH_SERVICE_PORT`, `STITCH_TIMEOUT_MS`
+- **Routes**: `GET /health`, `POST /generate`
+- **Retry logic**: 3 attempts with exponential backoff on rate limits
+- **SDK**: `@google/stitch-sdk` v0.3.5 (TypeScript only, no Python SDK)
+
+### Fidelity Validation
+- `FidelityValidator` checks: business name, contact info, services/products, testimonials, FAQs, images
+- Critical issues (missing business name, lorem ipsum, dummy email/phone) fail the job
+- Non-critical issues (duplicate images) are warnings only
+- Completeness score tracks % of source content preserved
+
 ## Testing
-- `python -m pytest tests/` — Backend tests (230 pass, 9 network-dependent kissthehippo tests expected to fail without internet)
+- `python -m pytest tests/` — Backend tests (263 pass)
 - `npx tsc --noEmit` — TypeScript check (0 errors)
 - `npm run lint` — Lint (0 warnings)
 - `npm run build` — Vite production build
