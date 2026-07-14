@@ -1,9 +1,25 @@
 import http from "node:http";
 
-const PORT = parseInt(process.env.STITCH_SERVICE_PORT || "3100", 10);
+// ── Environment ────────────────────────────────────────────────────────────
+// Railway sets PORT; STITCH_SERVICE_PORT is the fallback for local dev.
+const PORT = parseInt(
+  process.env.PORT || process.env.STITCH_SERVICE_PORT || "3100",
+  10,
+);
 const SECRET = process.env.STITCH_SERVICE_SECRET || "";
-const TIMEOUT = parseInt(process.env.STITCH_TIMEOUT_MS || "300000", 10);
+const TIMEOUT_MS = parseInt(process.env.STITCH_TIMEOUT_MS || "300000", 10);
 
+// ── Startup guard ──────────────────────────────────────────────────────────
+// Fail immediately with a clear message if the API key is missing.
+if (!process.env.STITCH_API_KEY) {
+  console.error(
+    "[stitch-service] FATAL: STITCH_API_KEY environment variable is not set. " +
+      "The service cannot function without it. Exiting.",
+  );
+  process.exit(1);
+}
+
+// ── Types ──────────────────────────────────────────────────────────────────
 interface GenerateRequest {
   brief_instruction: string;
   business_name: string;
@@ -22,6 +38,7 @@ interface GenerateResponse {
   attempts?: number;
 }
 
+// ── Helpers ────────────────────────────────────────────────────────────────
 function unauthorized(res: http.ServerResponse) {
   res.writeHead(401, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ error: "Unauthorized" }));
@@ -53,21 +70,13 @@ async function fetchUrlAsText(url: string, timeoutMs: number): Promise<string> {
   }
 }
 
+// ── POST /generate handler ────────────────────────────────────────────────
 async function handleGenerate(
   body: GenerateRequest,
-  res: http.ServerResponse
+  res: http.ServerResponse,
 ): Promise<void> {
-  const { stitch: stitchModule } = await import("@google/stitch-sdk");
-  const stitch = stitchModule;
-
-  if (!process.env.STITCH_API_KEY) {
-    jsonResponse(res, 500, {
-      success: false,
-      error: "STITCH_API_KEY not configured",
-      provider_used: "stitch",
-    } satisfies GenerateResponse);
-    return;
-  }
+  // Dynamic import — the SDK reads STITCH_API_KEY at import time
+  const { stitch } = await import("@google/stitch-sdk");
 
   let attempts = 0;
   const maxAttempts = 3;
@@ -76,42 +85,40 @@ async function handleGenerate(
     attempts++;
     try {
       const projectTitle = `${body.business_name} — LeadForge Redesign`;
-      let projectId = body.stitch_project_id;
 
-      if (!projectId) {
-        const project = await stitch.createProject(projectTitle);
-        projectId = (project as any).projectId || (project as any).id;
-        if (!projectId) {
-          throw new Error("Failed to get project ID from Stitch response");
-        }
+      // Get or create project
+      let project;
+      if (body.stitch_project_id) {
+        project = stitch.project(body.stitch_project_id);
+      } else {
+        project = await stitch.createProject(projectTitle);
       }
 
-      const project = await stitch.getProject(projectId);
+      const projectId = project.projectId;
 
+      // Generate screen from brief instruction
       const screen = await project.generate(body.brief_instruction);
+      const screenId = screen.screenId;
 
-      const screenId =
-        (screen as any).screenId ||
-        (screen as any).id ||
-        "";
-
+      // Retrieve HTML (may be a URL or inline)
       const htmlUrl = await screen.getHtml();
       let htmlContent: string;
 
       if (htmlUrl && htmlUrl.startsWith("http")) {
-        htmlContent = await fetchUrlAsText(htmlUrl, TIMEOUT);
+        htmlContent = await fetchUrlAsText(htmlUrl, TIMEOUT_MS);
       } else {
         htmlContent = htmlUrl as string;
       }
 
+      // Screenshot is optional
       let screenshotUrl: string | undefined;
       try {
         screenshotUrl = await screen.getImage();
       } catch {
-        // Screenshot is optional
+        // ignored
       }
 
-      const result: GenerateResponse = {
+      jsonResponse(res, 200, {
         success: true,
         stitch_project_id: projectId,
         stitch_screen_id: screenId,
@@ -120,9 +127,7 @@ async function handleGenerate(
         screenshot_url: screenshotUrl,
         provider_used: "stitch",
         attempts,
-      };
-
-      jsonResponse(res, 200, result);
+      } satisfies GenerateResponse);
       return;
     } catch (err: any) {
       const msg = String(err?.message || err);
@@ -131,7 +136,7 @@ async function handleGenerate(
         if (attempts < maxAttempts) {
           const backoff = attempts * 5000;
           console.warn(
-            `[stitch-service] Rate limited, retrying in ${backoff}ms (attempt ${attempts}/${maxAttempts})`
+            `[stitch-service] Rate limited, retrying in ${backoff}ms (attempt ${attempts}/${maxAttempts})`,
           );
           await new Promise((r) => setTimeout(r, backoff));
           continue;
@@ -156,25 +161,42 @@ async function handleGenerate(
   } satisfies GenerateResponse);
 }
 
+// ── HTTP server ────────────────────────────────────────────────────────────
 const server = http.createServer(async (req, res) => {
+  // GET /health — used by Railway probes and Python StitchDesignProvider
   if (req.method === "GET" && req.url === "/health") {
     jsonResponse(res, 200, {
       status: "ok",
       service: "leadforge-stitch-service",
-      stitch_api_key_set: !!process.env.STITCH_API_KEY,
+      stitch_api_key_set: true, // always true — process exits if not set
     });
     return;
   }
 
+  // 404 for unknown routes
   if (req.method !== "POST" || req.url !== "/generate") {
     jsonResponse(res, 404, { error: "Not found" });
     return;
   }
 
+  // Internal shared-secret gate on /generate
   if (SECRET && req.headers["x-internal-secret"] !== SECRET) {
     unauthorized(res);
     return;
   }
+
+  // Enforce a hard request-level timeout so a hung Stitch call never
+  // blocks the worker forever.
+  const requestTimer = setTimeout(() => {
+    if (!res.headersSent) {
+      jsonResponse(res, 504, {
+        success: false,
+        error: `Request timed out after ${Math.round(TIMEOUT_MS / 1000)}s`,
+        provider_used: "stitch",
+        attempts: 0,
+      } satisfies GenerateResponse);
+    }
+  }, TIMEOUT_MS + 30_000);
 
   try {
     const raw = await readBody(req);
@@ -200,17 +222,24 @@ const server = http.createServer(async (req, res) => {
 
     await handleGenerate(body, res);
   } catch (err: any) {
-    console.error("[stitch-service] Unhandled error:", err);
-    jsonResponse(res, 500, {
-      success: false,
-      error: `Internal error: ${String(err?.message || err)}`,
-      provider_used: "stitch",
-    } satisfies GenerateResponse);
+    // Log the error type, never the request body or secrets
+    console.error(
+      "[stitch-service] Unhandled error:",
+      err?.name || String(err?.message || err),
+    );
+    if (!res.headersSent) {
+      jsonResponse(res, 500, {
+        success: false,
+        error: "Internal service error",
+        provider_used: "stitch",
+      } satisfies GenerateResponse);
+    }
+  } finally {
+    clearTimeout(requestTimer);
   }
 });
 
+// ── Start ──────────────────────────────────────────────────────────────────
 server.listen(PORT, () => {
-  console.log(
-    `[stitch-service] Listening on port ${PORT} (API key: ${process.env.STITCH_API_KEY ? "set" : "NOT SET"})`
-  );
+  console.log(`[stitch-service] Listening on port ${PORT}`);
 });

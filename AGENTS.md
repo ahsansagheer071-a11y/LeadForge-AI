@@ -134,12 +134,42 @@ GET  /health                    — Health check
 7. Result persisted to `GeneratedWebsite` DB, `PackageManager` creates ZIP
 
 ### Stitch Service (TypeScript)
-- **Port**: 3100 (configurable via `STITCH_SERVICE_PORT`)
+- **Port**: Railway sets `PORT` env var; falls back to `STITCH_SERVICE_PORT` (default 3100)
 - **Auth**: Internal shared secret via `X-Internal-Secret` header
-- **Env vars**: `STITCH_API_KEY`, `STITCH_SERVICE_SECRET`, `STITCH_SERVICE_PORT`, `STITCH_TIMEOUT_MS`
+- **Env vars**: `STITCH_API_KEY` (required, exits if unset), `STITCH_SERVICE_SECRET`, `STITCH_TIMEOUT_MS`
 - **Routes**: `GET /health`, `POST /generate`
 - **Retry logic**: 3 attempts with exponential backoff on rate limits
+- **Request timeout**: `TIMEOUT_MS + 30s` hard abort on hung Stitch calls
 - **SDK**: `@google/stitch-sdk` v0.3.5 (TypeScript only, no Python SDK)
+- **Startup**: Exits immediately with clear error if `STITCH_API_KEY` is missing
+
+### Railway Deployment (stitch-service)
+- **Deployment method**: Dockerfile (multi-stage: build + production)
+- **Root directory**: `stitch-service/`
+- **Build command**: `npm ci && npm run build`
+- **Start command**: `node dist/server.js`
+- **Health check path**: `GET /health` → `{ status: "ok" }`
+
+### Railway Deployment (Python backend)
+- **Deployment method**: Dockerfile (existing, no changes needed)
+- **Root directory**: `/` (project root)
+- **Start command**: gunicorn (existing)
+
+### Required Environment Variables
+**stitch-service (Railway service variables):**
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `PORT` | Auto (Railway) | 3100 | HTTP listen port |
+| `STITCH_API_KEY` | Yes | — | Google Stitch API key (service exits if unset) |
+| `STITCH_SERVICE_SECRET` | Yes | — | Internal shared secret for Python→TS auth |
+| `STITCH_TIMEOUT_MS` | No | 300000 | Timeout per Stitch generation (ms) |
+
+**Python backend (Railway service variables):**
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `STITCH_SERVICE_URL` | Yes | http://127.0.0.1:3100 | Stitch service internal URL |
+| `STITCH_SERVICE_SECRET` | Yes | — | Must match stitch-service's `STITCH_SERVICE_SECRET` |
+| `STITCH_GENERATE_TIMEOUT` | No | 360 | HTTP timeout for stitch-service calls (seconds) |
 
 ### Fidelity Validation
 - `FidelityValidator` checks: business name, contact info, services/products, testimonials, FAQs, images
@@ -148,10 +178,11 @@ GET  /health                    — Health check
 - Completeness score tracks % of source content preserved
 
 ## Testing
-- `python -m pytest tests/` — Backend tests (263 pass)
-- `npx tsc --noEmit` — TypeScript check (0 errors)
-- `npm run lint` — Lint (0 warnings)
-- `npm run build` — Vite production build
+- `python -m pytest tests/` — Backend tests (269 pass)
+- `cd stitch-service && npm run typecheck` — TypeScript check (0 errors)
+- `cd stitch-service && npm run lint` — OxLint (0 warnings)
+- `cd stitch-service && npm run test` — Vitest (10 pass)
+- `cd stitch-service && npm run build` — Production build
 
 ## Git Workflow
 - `main` branch auto-deploys to Railway (backend) and Vercel (frontend)
