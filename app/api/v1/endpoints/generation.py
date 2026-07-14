@@ -41,7 +41,10 @@ from app.schemas.response import StandardResponse
 from app.services.markdown_engine.builder import MarkdownBuilder
 from app.services.website_generator.deployment.package_manager import PackageManager
 from app.services.website_generator.design_provider import DesignProviderNotConfigured
+from app.services.website_generator.stitch.import_provider import StitchImportProvider
+from app.services.website_generator.stitch.brief import BriefGenerator
 from app.services.website_intelligence import website_intelligence_service
+from app.services.website_intelligence.schemas import WebsiteProfile
 
 logger = logging.getLogger(__name__)
 
@@ -120,8 +123,8 @@ async def _run_generation_job(job_id: str, lead_id: uuid.UUID, user_id: str) -> 
 
             # ── Step 3: Design generation ────────────────────────────────── #
             await _update_job_status(db, job_id, JobStatus.RUNNING, "Generating design")
-            provider = DesignProviderNotConfigured()
-            result   = await provider.generate(blueprint=profile, package=package)
+            provider = StitchImportProvider()
+            result   = await provider.generate(profile, package)
 
             if not result.success or not result.website_project:
                 error_msg = "; ".join(result.errors) if result.errors else "Design provider unavailable"
@@ -449,8 +452,8 @@ async def generate_website(
     package = builder.build_package()
 
     # 3. Generate design
-    provider = DesignProviderNotConfigured()
-    result = await provider.generate(blueprint=profile, package=package)
+    provider = StitchImportProvider()
+    result = await provider.generate(profile, package)
 
     if not result.success or not result.website_project:
         return StandardResponse(
@@ -629,4 +632,201 @@ async def download_generated_website_package(
         buffer,
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Stitch import endpoints
+# ---------------------------------------------------------------------------
+
+class StitchImportRequest(BaseModel):
+    lead_id: uuid.UUID = Field(..., description="UUID of the lead.")
+    html_content: str = Field(..., min_length=100, description="Full HTML exported from Google Stitch.")
+    stitch_project_id: Optional[str] = Field(None, description="Stitch project ID if available.")
+    stitch_screen_id: Optional[str] = Field(None, description="Stitch screen ID if available.")
+
+
+class StitchBriefRequest(BaseModel):
+    lead_id: uuid.UUID = Field(..., description="UUID of the lead to generate a brief for.")
+    weaknesses: Optional[list[str]] = Field(None, description="Audit weaknesses to address.")
+    recommendations: Optional[list[str]] = Field(None, description="Audit recommendations to implement.")
+
+
+@router.post(
+    "/stitch/import",
+    response_model=StandardResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Import a Stitch HTML export into LeadForge",
+    description=(
+        "Accepts HTML exported from Google Stitch, validates it, "
+        "and persists it as a GeneratedWebsite with preview and ZIP package."
+    ),
+)
+async def import_stitch_export(
+    payload: StitchImportRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    lead = await lead_repository.get(db, id=payload.lead_id)
+    if not lead or lead.user_id != current_user.id:
+        raise NotFoundException(f"Lead '{payload.lead_id}' not found.")
+
+    validation_issues = StitchImportProvider.validate_export(payload.html_content)
+    critical = [i for i in validation_issues if "empty" in i.lower() or "too short" in i.lower()]
+    if critical:
+        return StandardResponse(
+            success=False,
+            message="Stitch export validation failed.",
+            data={"issues": critical},
+        )
+
+    response = await website_intelligence_service.load_profile(db, lead_id=payload.lead_id)
+    profile = response.profile if response else WebsiteProfile(
+        business={"name": lead.company or "", "website_url": lead.website or ""},
+    )
+
+    builder = MarkdownBuilder(blueprint=profile)
+    package = builder.build_package()
+
+    provider = StitchImportProvider()
+    result = await provider.generate(
+        profile, package,
+        html_content=payload.html_content,
+        stitch_project_id=payload.stitch_project_id,
+        stitch_screen_id=payload.stitch_screen_id,
+    )
+
+    if not result.success or not result.website_project:
+        error_msg = "; ".join(result.errors) if result.errors else "Import failed"
+        return StandardResponse(success=False, message=error_msg, data=None)
+
+    preview_html = result.website_project.preview_html or ""
+    html_content = result.website_project.files[0].content if result.website_project.files else ""
+
+    preview_record = GeneratedWebsite(
+        lead_id=payload.lead_id,
+        generation_id=result.website_project.generation_id,
+        project_name=result.website_project.project_name,
+        framework=result.website_project.framework,
+        status="generated",
+        html=preview_html or html_content,
+        preview_path="",
+        build_metadata={
+            "generation_time": result.generation_time,
+            "warnings": result.warnings,
+            "file_count": len(result.website_project.files),
+            "provider_used": result.provider_used,
+            "stitch_project_id": payload.stitch_project_id,
+            "stitch_screen_id": payload.stitch_screen_id,
+        },
+    )
+    db.add(preview_record)
+    await db.flush()
+
+    preview_record.preview_path = f"/preview/{preview_record.id}"
+
+    from app.services.website_generator.build.schemas import BuildResult
+    from app.services.website_generator.preview.schemas import PreviewResult
+    build_result = BuildResult(
+        success=True, build_success=True, npm_install_success=True,
+        logs=["Stitch export imported."],
+    )
+    preview_result = PreviewResult(
+        success=True, preview_url=preview_record.preview_path,
+        status="ready", health_check=True,
+    )
+    pkg = PackageManager().create_package(result.website_project, build_result, preview_result)
+    preview_record.package_id = pkg.package_id
+    preview_record.package_metadata = pkg.model_dump(mode="json")
+    db.add(preview_record)
+    await db.commit()
+    await db.refresh(preview_record)
+
+    warnings = []
+    if validation_issues:
+        warnings = validation_issues
+
+    return StandardResponse(
+        success=True,
+        message="Stitch export imported successfully.",
+        data={
+            "website_id": str(preview_record.id),
+            "lead_id": str(payload.lead_id),
+            "generation_id": result.website_project.generation_id,
+            "preview_path": preview_record.preview_path,
+            "package_id": preview_record.package_id,
+            "provider_used": result.provider_used,
+            "warnings": warnings,
+        },
+    )
+
+
+@router.post(
+    "/stitch/brief",
+    response_model=StandardResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Generate a PremiumRedesignBrief for Google Stitch",
+    description=(
+        "Builds a complete redesign instruction from the lead's WebsiteProfile. "
+        "Copy this brief into Google Stitch to generate a premium redesign."
+    ),
+)
+async def generate_stitch_brief(
+    payload: StitchBriefRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    lead = await lead_repository.get(db, id=payload.lead_id)
+    if not lead or lead.user_id != current_user.id:
+        raise NotFoundException(f"Lead '{payload.lead_id}' not found.")
+
+    response = await website_intelligence_service.load_profile(db, lead_id=payload.lead_id)
+    if not response:
+        if not lead.website:
+            raise NotFoundException(f"No website intelligence for lead '{payload.lead_id}'.")
+        profile = await website_intelligence_service.build_profile(db, lead=lead, url=lead.website)
+        if not profile:
+            raise ServiceUnavailableException("Website crawl failed.")
+    else:
+        profile = response.profile
+
+    builder = MarkdownBuilder(blueprint=profile)
+    package = builder.build_package()
+
+    gen = BriefGenerator()
+    brief = gen.generate(
+        profile, package,
+        weaknesses=payload.weaknesses,
+        recommendations=payload.recommendations,
+    )
+
+    return StandardResponse(
+        success=True,
+        message="PremiumRedesignBrief generated.",
+        data={
+            "business_name": brief.business_name,
+            "brief_hash": gen.brief_hash(brief),
+            "full_instruction": brief.full_instruction,
+            "sections_count": len(brief.sections),
+            "images_count": len(brief.original_images),
+            "rules_count": len(brief.content_rules) + len(brief.design_rules),
+        },
+    )
+
+
+@router.post(
+    "/stitch/validate",
+    response_model=StandardResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Validate a Stitch HTML export without importing",
+)
+async def validate_stitch_export(
+    html_content: str,
+    current_user: User = Depends(get_current_user),
+):
+    issues = StitchImportProvider.validate_export(html_content)
+    return StandardResponse(
+        success=len(issues) == 0,
+        message="Export is valid." if not issues else f"{len(issues)} issue(s) found.",
+        data={"issues": issues, "valid": len(issues) == 0},
     )

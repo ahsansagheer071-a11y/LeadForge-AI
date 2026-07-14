@@ -97,10 +97,31 @@ GET  /health                    — Health check
 - No direct Railway/Vercel console access; debugging via HTTP response analysis
 - Windows local dev environment with Python 3.14 and PowerShell
 - Groq must NOT be removed from AI Audit or Outreach (uses `app/services/ai/`)
-- Google Stitch integration is future work — do NOT integrate yet
+- Google Stitch: Phase 1 = manual import POC (no Python SDK exists, TypeScript SDK only)
+
+## Stitch Integration (Phase 1 — Manual Import POC)
+
+### Architecture
+- `app/services/website_generator/stitch/brief.py` — `BriefGenerator` builds `PremiumRedesignBrief` from lead data
+- `app/services/website_generator/stitch/import_provider.py` — `StitchImportProvider` imports Stitch HTML exports
+- `app/services/website_generator/stitch/schemas.py` — Stitch-specific schemas
+
+### Workflow
+1. `POST /stitch/brief` → generates `PremiumRedesignBrief` with full instruction text
+2. User copies brief into Google Stitch → Stitch generates design
+3. User exports HTML from Stitch
+4. `POST /stitch/import` → imports HTML, validates, stores, previews, packages
+
+### Stitch MCP Availability
+- **MCP available**: yes (remote endpoint at `stitch.googleapis.com/mcp`)
+- **TypeScript SDK**: `@google/stitch-sdk` v0.3.5
+- **Python SDK**: none (Phase 2 would need Node.js sidecar or direct MCP calls)
+- **Authentication**: `STITCH_API_KEY` env var or OAuth
+- **Export format**: HTML/CSS (self-contained), React/JSX, Vue, Tailwind
+- **Manual import required**: yes (Phase 1)
 
 ## Testing
-- `python -m pytest tests/` — Backend tests (181 pass, 9 network-dependent kissthehippo tests expected to fail without internet)
+- `python -m pytest tests/` — Backend tests (230 pass, 9 network-dependent kissthehippo tests expected to fail without internet)
 - `npx tsc --noEmit` — TypeScript check (0 errors)
 - `npm run lint` — Lint (0 warnings)
 - `npm run build` — Vite production build
