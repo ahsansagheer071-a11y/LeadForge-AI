@@ -1,15 +1,17 @@
 """PremiumRedesignBrief generator.
 
-Takes a WebsiteProfile + MarkdownPackage + optional audit weaknesses
-and produces a complete Stitch redesign instruction that preserves
-all original content, images, and business identity.
+Takes a WebsiteProfile + optional audit weaknesses
+and produces a world-class UX agency redesign instruction
+that lets Stitch understand and redesign the source website.
+
+The brief tells Stitch WHAT to redesign, not HOW to reconstruct.
+Stitch crawls the URL itself — we don't dump extracted content.
 """
 
 import hashlib
 import logging
 from typing import Any, Dict, List, Optional
 
-from app.services.markdown_engine.schemas import MarkdownPackage
 from app.services.website_intelligence.schemas import WebsiteProfile
 from app.services.website_generator.stitch.schemas import (
     PremiumRedesignBrief,
@@ -21,12 +23,17 @@ logger = logging.getLogger(__name__)
 
 
 class BriefGenerator:
-    """Generates a PremiumRedesignBrief from lead intelligence data."""
+    """Generates a PremiumRedesignBrief from lead intelligence data.
+
+    The brief is a concise, world-class UX agency instruction.
+    It gives Stitch the URL, the business context, audit weaknesses,
+    and design direction — then lets Stitch do what it does best.
+    """
 
     def generate(
         self,
         profile: WebsiteProfile,
-        package: Optional[MarkdownPackage] = None,
+        package: Any = None,
         weaknesses: Optional[List[str]] = None,
         recommendations: Optional[List[str]] = None,
     ) -> PremiumRedesignBrief:
@@ -42,9 +49,6 @@ class BriefGenerator:
         contact = self._build_contact_info(profile)
         social = self._build_social_links(profile)
         images = self._collect_original_images(profile)
-        content_rules = self._build_content_rules(profile)
-        design_rules = self._build_design_rules(profile, weaknesses, recommendations)
-        source_summary = self._build_source_summary(profile, package)
 
         brief = PremiumRedesignBrief(
             business_name=profile.business.name or "Unknown Business",
@@ -60,18 +64,16 @@ class BriefGenerator:
             social_links=social,
             original_images=images,
             logo_url=profile.brand.logo_info.logo_url if profile.brand and profile.brand.logo_info else "",
-            content_rules=content_rules,
-            design_rules=design_rules,
-            source_content_summary=source_summary,
+            content_rules=self._build_content_rules(profile),
+            design_rules=self._build_design_rules(profile, weaknesses, recommendations),
+            source_content_summary=self._build_source_summary(profile),
         )
 
-        brief.full_instruction = self._compile_instruction(brief)
+        brief.full_instruction = self._compile_instruction(brief, weaknesses, recommendations)
 
         logger.info(
-            "[BriefGenerator] Brief generated: %d sections, %d images, %d rules",
-            len(brief.sections),
-            len(brief.original_images),
-            len(brief.content_rules) + len(brief.design_rules),
+            "[BriefGenerator] Brief generated: %d chars instruction",
+            len(brief.full_instruction),
         )
 
         return brief
@@ -149,95 +151,41 @@ class BriefGenerator:
         sections = []
 
         if profile.services:
-            svc_items = []
-            svc_images = []
-            for svc in profile.services:
-                parts = [f"**{svc.name}**"]
-                if svc.description:
-                    parts.append(svc.description)
-                if svc.features:
-                    parts.extend([f"- {f}" for f in svc.features[:5]])
-                svc_items.append("\n".join(parts))
-                if svc.image:
-                    svc_images.append(svc.image)
+            svc_names = [s.name for s in profile.services if s.name]
             sections.append(StitchBriefSection(
                 section_type="services",
                 title="Services",
-                content_instructions="\n\n".join(svc_items),
-                source_content=svc_items,
-                source_images=svc_images,
+                content_instructions=f"Services offered: {', '.join(svc_names)}",
+                source_content=svc_names,
                 design_notes="Card-based layout with icon/image, title, and description for each service.",
             ))
 
         if profile.products:
-            prod_items = []
-            prod_images = []
-            for prod in profile.products:
-                parts = [f"**{prod.title or 'Product'}**"]
-                if prod.short_description:
-                    parts.append(prod.short_description)
-                if prod.price:
-                    parts.append(f"Price: {prod.price}")
-                prod_items.append("\n".join(parts))
-                if prod.image:
-                    prod_images.append(prod.image)
+            prod_names = [p.title for p in profile.products if p.title]
             sections.append(StitchBriefSection(
                 section_type="products",
                 title="Products",
-                content_instructions="\n\n".join(prod_items),
-                source_content=prod_items,
-                source_images=prod_images,
+                content_instructions=f"Products offered: {', '.join(prod_names)}",
+                source_content=prod_names,
                 design_notes="Grid layout with product cards, images, and pricing.",
             ))
 
         if profile.testimonials:
-            test_items = []
-            for t in profile.testimonials[:6]:
-                author = t.author_name or t.author or "Customer"
-                content = t.review_text or t.content or ""
-                rating = f" ({t.star_count}/5)" if t.star_count else ""
-                test_items.append(f'"{content}" — {author}{rating}')
             sections.append(StitchBriefSection(
                 section_type="testimonials",
                 title="Testimonials",
-                content_instructions="\n\n".join(test_items),
-                source_content=test_items,
+                content_instructions=f"{len(profile.testimonials)} customer testimonials available on the source website.",
+                source_content=[],
                 design_notes="Carousel or grid of testimonial cards with quote, author, and rating.",
             ))
 
         if profile.faqs:
-            faq_items = []
-            for faq in profile.faqs[:10]:
-                faq_items.append(f"**Q: {faq.question}**\nA: {faq.answer}")
             sections.append(StitchBriefSection(
                 section_type="faq",
                 title="FAQ",
-                content_instructions="\n\n".join(faq_items),
-                source_content=faq_items,
+                content_instructions=f"{len(profile.faqs)} FAQs available on the source website.",
+                source_content=[],
                 design_notes="Accordion-style FAQ with expandable questions and answers.",
-            ))
-
-        if profile.team:
-            team_items = []
-            team_images = []
-            for member in profile.team[:8]:
-                name = member.full_name or member.name
-                parts = [f"**{name}**"]
-                if member.role or member.job_title:
-                    parts.append(member.role or member.job_title)
-                if member.bio:
-                    parts.append(member.bio)
-                team_items.append("\n".join(parts))
-                img = member.photo_url or member.image
-                if img:
-                    team_images.append(img)
-            sections.append(StitchBriefSection(
-                section_type="team",
-                title="Team",
-                content_instructions="\n\n".join(team_items),
-                source_content=team_items,
-                source_images=team_images,
-                design_notes="Team member cards with photo, name, role, and bio.",
             ))
 
         if profile.company:
@@ -247,10 +195,6 @@ class BriefGenerator:
                 about_parts.append(company.description)
             if company.mission:
                 about_parts.append(f"Our Mission: {company.mission}")
-            if company.vision:
-                about_parts.append(f"Our Vision: {company.vision}")
-            if company.core_values:
-                about_parts.append(f"Core Values: {', '.join(company.core_values)}")
             if about_parts:
                 sections.append(StitchBriefSection(
                     section_type="about",
@@ -259,16 +203,6 @@ class BriefGenerator:
                     source_content=about_parts,
                     design_notes="About section with company story, mission, and values.",
                 ))
-
-        if profile.trust_signals:
-            trust_items = [f"- {ts.value}" for ts in profile.trust_signals[:6]]
-            sections.append(StitchBriefSection(
-                section_type="trust",
-                title="Trust Signals",
-                content_instructions="\n".join(trust_items),
-                source_content=trust_items,
-                design_notes="Trust badges or awards section.",
-            ))
 
         return sections
 
@@ -336,21 +270,13 @@ class BriefGenerator:
         if profile.hero_info:
             add(profile.hero_info.hero_image, "hero")
             add(profile.hero_info.background_image_url, "hero-bg")
-        for svc in (profile.services or []):
-            add(svc.image, "service")
-        for prod in (profile.products or []):
-            add(prod.image, "product")
-        for t in (profile.testimonials or []):
-            add(t.avatar or t.avatar_url, "testimonial")
-        for m in (profile.team or []):
-            add(m.photo_url or m.image, "team")
         for img in (profile.images or []):
             add(img.url, "source")
 
         return images
 
     def _build_content_rules(self, profile: WebsiteProfile) -> List[str]:
-        rules = [
+        return [
             "PRESERVE all original business content exactly as written",
             "PRESERVE the original logo and all source images",
             "DO NOT invent services, products, testimonials, or claims",
@@ -358,9 +284,7 @@ class BriefGenerator:
             "DO NOT add LeadForge branding or references",
             "DO NOT add fake contact details, dummy emails, or example addresses",
             "DO NOT fabricate team members, awards, or certifications",
-            "Use ONLY the source content, images, and business data provided",
         ]
-        return rules
 
     def _build_design_rules(
         self,
@@ -370,23 +294,15 @@ class BriefGenerator:
     ) -> List[str]:
         rules = [
             "Create a premium, modern, production-ready responsive website",
-            "Ensure mobile-first responsive design (works on all screen sizes)",
-            "Use clean typography with clear visual hierarchy (H1 > H2 > H3)",
-            "Use adequate white space and padding for readability",
-            "Ensure color contrast meets WCAG AA accessibility standards",
-            "Include smooth scroll behavior and subtle hover effects",
-            "Use CSS Grid or Flexbox for responsive layouts",
-            "Include a sticky/fixed navigation bar",
-            "Include a hero section with prominent call-to-action",
-            "Include a footer with contact info, social links, and copyright",
-            "Optimize for performance (no heavy frameworks, minimal JS)",
+            "Ensure mobile-first responsive design",
+            "Use clean typography with clear visual hierarchy",
+            "Ensure color contrast meets WCAG AA accessibility",
+            "Include smooth scroll and subtle hover effects",
+            "Include a sticky navigation bar",
+            "Include a hero section with prominent CTA",
+            "Include a footer with contact info and social links",
+            "Optimize for performance — no heavy frameworks, minimal JS",
         ]
-        if weaknesses:
-            for w in weaknesses[:5]:
-                rules.append(f"ADDRESS weakness: {w}")
-        if recommendations:
-            for r in recommendations[:5]:
-                rules.append(f"IMPLEMENT recommendation: {r}")
 
         typo = profile.typography or (profile.brand.brand_typography if profile.brand else None)
         if typo and typo.heading_font:
@@ -402,123 +318,169 @@ class BriefGenerator:
 
         return rules
 
-    def _build_source_summary(self, profile: WebsiteProfile, package: Optional[MarkdownPackage]) -> str:
+    def _build_source_summary(self, profile: WebsiteProfile) -> str:
         parts = []
         if profile.business.name:
             parts.append(f"Business: {profile.business.name}")
         if profile.business.category:
             parts.append(f"Category: {profile.business.category}")
-        if profile.services:
-            parts.append(f"Services: {', '.join(s.name for s in profile.services[:10])}")
-        if profile.products:
-            parts.append(f"Products: {', '.join(p.title for p in profile.products[:10] if p.title)}")
-        if profile.testimonials:
-            parts.append(f"Testimonials: {len(profile.testimonials)} found")
-        if profile.faqs:
-            parts.append(f"FAQs: {len(profile.faqs)} found")
-        if profile.images:
-            parts.append(f"Source images: {len(profile.images)} found")
-        if profile.contact:
-            if profile.contact.emails:
-                parts.append(f"Contact: {', '.join(profile.contact.emails[:3])}")
         return "\n".join(parts)
 
-    def _compile_instruction(self, brief: PremiumRedesignBrief) -> str:
+    def _compile_instruction(
+        self,
+        brief: PremiumRedesignBrief,
+        weaknesses: Optional[List[str]] = None,
+        recommendations: Optional[List[str]] = None,
+    ) -> str:
         parts = []
 
-        parts.append(f"# Premium Website Redesign Brief for {brief.business_name}")
+        # ── ROLE ──────────────────────────────────────────────────────────
+        parts.append("# ROLE")
         parts.append("")
-        parts.append(f"**Source URL:** {brief.business_url}")
+        parts.append("You are an award-winning senior UI/UX designer.")
+        parts.append("You specialize in premium business website redesigns.")
+        parts.append("Your task is NOT to create a new business.")
+        parts.append("Your task is to redesign the existing website.")
+        parts.append("")
+
+        # ── SOURCE WEBSITE ────────────────────────────────────────────────
+        parts.append("# SOURCE WEBSITE")
+        parts.append("")
+        parts.append(f"Website URL: {brief.business_url}")
+        parts.append(f"Business Name: {brief.business_name}")
         if brief.business_category:
-            parts.append(f"**Category:** {brief.business_category}")
+            parts.append(f"Category: {brief.business_category}")
         if brief.business_description:
-            parts.append(f"**Description:** {brief.business_description}")
+            parts.append(f"Description: {brief.business_description}")
+        parts.append("")
+        parts.append("Visit and study the website above before redesigning.")
         parts.append("")
 
-        parts.append("## Design Direction")
-        parts.append(brief.design_direction)
+        # ── BUSINESS RULES ────────────────────────────────────────────────
+        parts.append("# BUSINESS RULES")
+        parts.append("")
+        parts.append("Use the existing website as the source of truth.")
+        parts.append("")
+        parts.append("PRESERVE:")
+        parts.append("- business identity")
+        parts.append("- products")
+        parts.append("- services")
+        parts.append("- contact information")
+        parts.append("- branding")
+        parts.append("- messaging")
+        parts.append("- images whenever appropriate")
+        parts.append("")
+        parts.append("NEVER INVENT:")
+        parts.append("- companies")
+        parts.append("- products")
+        parts.append("- testimonials")
+        parts.append("- addresses")
+        parts.append("- emails")
+        parts.append("- phone numbers")
+        parts.append("- fake reviews")
+        parts.append("- fake awards")
         parts.append("")
 
+        # ── OBJECTIVE ─────────────────────────────────────────────────────
+        parts.append("# OBJECTIVE")
+        parts.append("")
+        parts.append("Create a premium redesign of the existing website.")
+        parts.append("")
+        parts.append("IMPROVE ONLY:")
+        parts.append("- UI")
+        parts.append("- UX")
+        parts.append("- layout")
+        parts.append("- hierarchy")
+        parts.append("- typography")
+        parts.append("- spacing")
+        parts.append("- responsiveness")
+        parts.append("- accessibility")
+        parts.append("- trust")
+        parts.append("- conversion")
+        parts.append("- interactions")
+        parts.append("- animations")
+        parts.append("")
+        parts.append("Keep the same business. Do not change what the company does.")
+        parts.append("")
+
+        # ── BRAND IDENTITY ────────────────────────────────────────────────
         tokens = brief.design_tokens
-        token_parts = []
-        if tokens.primary_color:
-            token_parts.append(f"Primary: {tokens.primary_color}")
-        if tokens.secondary_color:
-            token_parts.append(f"Secondary: {tokens.secondary_color}")
-        if tokens.accent_color:
-            token_parts.append(f"Accent: {tokens.accent_color}")
-        if tokens.heading_font:
-            token_parts.append(f"Heading font: {tokens.heading_font}")
-        if tokens.body_font:
-            token_parts.append(f"Body font: {tokens.body_font}")
-        if token_parts:
-            parts.append("**Brand Colors & Typography:** " + " | ".join(token_parts))
+        has_brand = any([tokens.primary_color, tokens.secondary_color, tokens.heading_font, tokens.body_font])
+        if has_brand:
+            parts.append("# BRAND IDENTITY")
+            parts.append("")
+            if tokens.primary_color:
+                parts.append(f"Primary color: {tokens.primary_color}")
+            if tokens.secondary_color:
+                parts.append(f"Secondary color: {tokens.secondary_color}")
+            if tokens.accent_color:
+                parts.append(f"Accent color: {tokens.accent_color}")
+            if tokens.heading_font:
+                parts.append(f"Heading font: {tokens.heading_font}")
+            if tokens.body_font:
+                parts.append(f"Body font: {tokens.body_font}")
+            if brief.logo_url:
+                parts.append(f"Logo: {brief.logo_url}")
+            parts.append("")
+            parts.append("Respect and enhance the existing brand identity.")
             parts.append("")
 
-        if brief.logo_url:
-            parts.append(f"**Logo URL:** {brief.logo_url}")
+        # ── AUDIT IMPROVEMENTS ────────────────────────────────────────────
+        all_weaknesses = list(weaknesses or [])
+        if recommendations:
+            all_weaknesses.extend(recommendations)
+
+        if all_weaknesses:
+            parts.append("# AUDIT IMPROVEMENTS")
+            parts.append("")
+            parts.append("The following issues were identified in the current website.")
+            parts.append("Address each one in your redesign:")
+            parts.append("")
+            for w in all_weaknesses[:10]:
+                parts.append(f"- {w}")
             parts.append("")
 
-        parts.append("## Content Rules (MANDATORY)")
-        for rule in brief.content_rules:
-            parts.append(f"- {rule}")
+        # ── DESIGN DIRECTION ──────────────────────────────────────────────
+        parts.append("# DESIGN DIRECTION")
+        parts.append("")
+        parts.append("Think:")
+        parts.append("- Apple")
+        parts.append("- Stripe")
+        parts.append("- Linear")
+        parts.append("- Framer")
+        parts.append("- Webflow Enterprise")
+        parts.append("- Awwwards")
+        parts.append("")
+        parts.append("Minimal. Elegant. Premium. Fast. Modern. Clean. Accessible.")
+        parts.append("Premium SaaS quality applied to this business.")
         parts.append("")
 
-        parts.append("## Design Rules (MANDATORY)")
-        for rule in brief.design_rules:
-            parts.append(f"- {rule}")
-        parts.append("")
-
-        parts.append("## Navigation")
-        for item in brief.navigation_items:
-            parts.append(f"- [{item.get('label', '')}]({item.get('url', '')})")
-        parts.append("")
-
-        parts.append("## Hero Section")
-        parts.append(brief.hero_section.content_instructions)
-        if brief.hero_section.source_images:
-            parts.append("**Hero images:**")
-            for img in brief.hero_section.source_images:
-                parts.append(f"  - {img}")
-        parts.append("")
-
-        for section in brief.sections:
-            parts.append(f"## {section.title}")
-            parts.append(section.content_instructions)
-            if section.source_images:
-                parts.append("**Images for this section:**")
-                for img in section.source_images[:5]:
-                    parts.append(f"  - {img}")
-            if section.design_notes:
-                parts.append(f"*Design note: {section.design_notes}*")
+        # ── CONTENT HIGHLIGHTS ────────────────────────────────────────────
+        if brief.sections:
+            parts.append("# CONTENT HIGHLIGHTS")
             parts.append("")
-
-        if brief.original_images:
-            parts.append("## Original Images (USE THESE)")
-            parts.append("The following images are from the source website and MUST be used in the redesign:")
-            for img in brief.original_images[:30]:
-                parts.append(f"- [{img.get('role', 'image')}]({img.get('url', '')})")
+            parts.append("Key content from the source website to include:")
+            parts.append("")
+            for section in brief.sections:
+                parts.append(f"- {section.title}: {section.content_instructions}")
             parts.append("")
 
         if brief.contact_info:
-            parts.append("## Contact Information")
+            parts.append("# CONTACT INFORMATION")
+            parts.append("")
             for key, val in brief.contact_info.items():
-                parts.append(f"- **{key.title()}:** {val}")
+                parts.append(f"- {key.title()}: {val}")
             parts.append("")
 
-        if brief.social_links:
-            parts.append("## Social Links")
-            for link in brief.social_links:
-                parts.append(f"- [{link.get('platform', '')}]({link.get('url', '')})")
-            parts.append("")
-
-        parts.append("## Output Requirements")
-        parts.append("- Single self-contained HTML file with embedded CSS")
+        # ── OUTPUT ────────────────────────────────────────────────────────
+        parts.append("# OUTPUT")
+        parts.append("")
+        parts.append("Return a production-ready premium redesign as a single self-contained HTML file with embedded CSS.")
         parts.append("- Responsive design (mobile-first)")
         parts.append("- Semantic HTML5 structure")
-        parts.append("- No external CSS/JS frameworks (use vanilla CSS)")
-        parts.append("- All images referenced by their original URLs")
-        parts.append("- Production-ready, polished, and visually premium")
+        parts.append("- No external CSS/JS frameworks — use vanilla CSS")
+        parts.append("- All images referenced by their original URLs from the source website")
+        parts.append("- Premium, polished, and visually stunning")
         parts.append("")
 
         return "\n".join(parts)

@@ -1,13 +1,16 @@
-"""FidelityValidator — validates generated HTML against source content
-to ensure no invented content, missing sections, or unapproved images.
-Includes count-based completeness checks to detect content truncation."""
+"""FidelityValidator — validates generated HTML against source content.
+
+Phase 3: Simplified to focus on business identity and content authenticity.
+Stitch is treated as an expert UI/UX designer, not an HTML generator.
+We validate that the redesign preserves the correct business and doesn't
+invent fake content — not that it matches exact section counts.
+"""
 
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set
+from typing import List, Optional
 
-from app.services.markdown_engine.asset_manifest import AssetManifest
 from app.services.website_intelligence.schemas import WebsiteProfile
 
 logger = logging.getLogger(__name__)
@@ -43,6 +46,9 @@ class FidelityIssue:
 class FidelityValidationResult:
     valid: bool
     issues: List[FidelityIssue] = field(default_factory=list)
+    completeness_score: float = 0.0
+
+    # Legacy fields kept for metadata compatibility — not actively populated
     source_section_count: int = 0
     generated_section_count: int = 0
     source_service_count: int = 0
@@ -62,16 +68,24 @@ class FidelityValidationResult:
     broken_image_refs: List[str] = field(default_factory=list)
     source_nav_items: int = 0
     preserved_nav_items: int = 0
-    completeness_score: float = 0.0
     missing_item_names: List[str] = field(default_factory=list)
 
 
 class FidelityValidator:
-    """Validates that generated HTML faithfully represents source content."""
+    """Validates that a redesigned HTML preserves business identity and contains no fakes.
 
-    def __init__(self, profile: WebsiteProfile, manifest: Optional[AssetManifest] = None):
+    Phase 3 philosophy: Stitch is an expert designer. We don't demand
+    exact section counts or product matches. We validate:
+    - Correct business name
+    - No Lorem Ipsum
+    - No fake content (dummy emails, phones, addresses)
+    - No LeadForge branding
+    - Valid HTML with visible content
+    - H1 contains business name
+    """
+
+    def __init__(self, profile: WebsiteProfile, manifest: Optional[object] = None):
         self.profile = profile
-        self.manifest = manifest
 
     def validate(self, html: str) -> FidelityValidationResult:
         result = FidelityValidationResult(valid=False)
@@ -83,6 +97,7 @@ class FidelityValidator:
             result.valid = False
             return result
 
+        # ── Content authenticity checks ───────────────────────────────────
         if _MARKDOWN_FENCE.search(html):
             result.issues.append(FidelityIssue(
                 category="markdown_fences",
@@ -132,170 +147,7 @@ class FidelityValidator:
                 detail="Generated HTML contains dummy street address",
             ))
 
-        contact = self.profile.contact
-        if contact:
-            result.source_contact_emails = list(contact.emails or [])
-            result.source_contact_phones = list(contact.phones or [])
-
-            for email in contact.emails or []:
-                if email and email in html:
-                    result.preserved_contact_emails.append(email)
-
-            for phone in contact.phones or []:
-                if phone and phone in html:
-                    result.preserved_contact_phones.append(phone)
-
-            if contact.emails and not result.preserved_contact_emails:
-                result.issues.append(FidelityIssue(
-                    category="missing_contact_email",
-                    detail=f"Source email(s) {contact.emails} not found in generated HTML",
-                ))
-            if contact.phones and not result.preserved_contact_phones:
-                result.issues.append(FidelityIssue(
-                    category="missing_contact_phone",
-                    detail=f"Source phone(s) {contact.phones} not found in generated HTML",
-                ))
-
-        result.source_product_count = len([p for p in (self.profile.products or []) if p.title])
-        for prod in (self.profile.products or []):
-            if prod.title and prod.title in html:
-                result.preserved_product_count += 1
-            elif prod.title:
-                result.missing_item_names.append(prod.title)
-
-        if result.source_product_count > 0 and result.preserved_product_count == 0:
-            result.issues.append(FidelityIssue(
-                category="missing_products",
-                detail=f"None of {result.source_product_count} source product(s) found in generated HTML",
-            ))
-        elif result.source_product_count > 0:
-            pct = result.preserved_product_count / result.source_product_count
-            if pct < 0.3:
-                result.issues.append(FidelityIssue(
-                    category="insufficient_products",
-                    detail=f"Only {result.preserved_product_count}/{result.source_product_count} products preserved ({pct:.0%})",
-                ))
-
-        result.source_service_count = len([s for s in (self.profile.services or []) if s.name])
-        for svc in (self.profile.services or []):
-            if svc.name and svc.name in html:
-                result.preserved_service_count += 1
-            elif svc.name:
-                result.missing_item_names.append(svc.name)
-
-        if result.source_service_count > 0 and result.preserved_service_count == 0:
-            result.issues.append(FidelityIssue(
-                category="missing_services",
-                detail=f"None of {result.source_service_count} source service(s) found in generated HTML",
-            ))
-        elif result.source_service_count > 0:
-            pct = result.preserved_service_count / result.source_service_count
-            if pct < 0.3:
-                result.issues.append(FidelityIssue(
-                    category="insufficient_services",
-                    detail=f"Only {result.preserved_service_count}/{result.source_service_count} services preserved ({pct:.0%})",
-                ))
-
-        result.source_testimonial_count = len(self.profile.testimonials or [])
-        for t in (self.profile.testimonials or []):
-            author = t.author or t.author_name or ""
-            content = t.content or t.review_text or ""
-            if author and author in html:
-                result.preserved_testimonial_count += 1
-            elif content and len(content) > 20 and content[:20] in html:
-                result.preserved_testimonial_count += 1
-
-        if result.source_testimonial_count > 0 and result.preserved_testimonial_count == 0:
-            result.issues.append(FidelityIssue(
-                category="missing_testimonials",
-                detail=f"None of {result.source_testimonial_count} source testimonial(s) found in generated HTML",
-            ))
-
-        result.source_faq_count = len(self.profile.faqs or [])
-        for faq in (self.profile.faqs or []):
-            if faq.question and faq.question in html:
-                result.preserved_faq_count += 1
-            elif faq.question:
-                result.missing_item_names.append(faq.question[:60])
-
-        if result.source_faq_count > 0 and result.preserved_faq_count == 0:
-            result.issues.append(FidelityIssue(
-                category="missing_faqs",
-                detail=f"None of {result.source_faq_count} source FAQ(s) found in generated HTML",
-            ))
-
-        nav_items = []
-        if self.profile.navigation_info:
-            nav_items = self.profile.navigation_info.primary_nav_items or []
-        elif self.profile.navigation:
-            nav_items = self.profile.navigation
-        result.source_nav_items = len(nav_items)
-        for item in nav_items:
-            label = item.label if hasattr(item, 'label') else str(item)
-            if label and label in html:
-                result.preserved_nav_items += 1
-
-        total_source = (
-            result.source_product_count
-            + result.source_service_count
-            + result.source_testimonial_count
-            + result.source_faq_count
-        )
-        total_preserved = (
-            result.preserved_product_count
-            + result.preserved_service_count
-            + result.preserved_testimonial_count
-            + result.preserved_faq_count
-        )
-        result.completeness_score = (
-            total_preserved / total_source if total_source > 0 else 1.0
-        )
-
-        if self.manifest:
-            approved_urls: Set[str] = set()
-            local_files: Set[str] = set()
-            for item in self.manifest.items:
-                if item.absolute_url:
-                    approved_urls.add(item.absolute_url)
-                if item.local_filename:
-                    local_files.add(item.local_filename)
-
-            result.source_meaningful_images = self.manifest.total_count
-
-            img_refs = re.findall(r'<img[^>]+src\s*=\s*["\']([^"\']+)["\']', html, re.IGNORECASE)
-            img_refs.extend(
-                re.findall(r'(?:url|src)\s*[:=]\s*["\']([^"\']+\.(?:png|jpg|jpeg|gif|svg|webp))["\']',
-                          html, re.IGNORECASE)
-            )
-
-            approved_image_count = 0
-            for ref in img_refs:
-                filename = ref.split("/")[-1].split("?")[0]
-                if ref in approved_urls or filename in local_files or any(
-                    item.original_url == ref for item in self.manifest.items
-                ):
-                    approved_image_count += 1
-                    continue
-                if any(item.absolute_url == ref for item in self.manifest.items):
-                    approved_image_count += 1
-                    continue
-                if any(item.local_filename and item.local_filename == ref for item in self.manifest.items):
-                    approved_image_count += 1
-                    continue
-                result.broken_image_refs.append(ref)
-
-            result.approved_image_count = approved_image_count
-
-            if result.broken_image_refs:
-                result.issues.append(FidelityIssue(
-                    category="unapproved_images",
-                    detail=f"{len(result.broken_image_refs)} image reference(s) not in AssetManifest: {result.broken_image_refs[:5]}",
-                ))
-        else:
-            img_refs = re.findall(r'<img[^>]+src\s*=\s*["\']([^"\']+)["\']', html, re.IGNORECASE)
-            result.source_meaningful_images = len(self.profile.images or [])
-            result.approved_image_count = len(img_refs)
-
+        # ── HTML quality checks ───────────────────────────────────────────
         text_only = re.sub(r'<[^>]+>', '', html).strip()
         visible_words = len(text_only.split())
         if visible_words < 5:
@@ -304,9 +156,7 @@ class FidelityValidator:
                 detail=f"Generated HTML contains only {visible_words} visible word(s)",
             ))
 
-        result.valid = len(result.issues) == 0
-
-        # --- H1 must contain business name ---
+        # ── H1 must contain business name ─────────────────────────────────
         h1_match = re.search(r'<h1[^>]*>(.*?)</h1>', html, re.DOTALL | re.IGNORECASE)
         if biz_name:
             if h1_match:
@@ -322,47 +172,16 @@ class FidelityValidator:
                     detail="Generated HTML has no <h1> tag",
                 ))
 
-        # --- Products/services exist in source but zero in output ---
-        if result.source_product_count > 0:
-            cards_in_html = len(re.findall(r'class="card"', html, re.IGNORECASE))
-            if cards_in_html == 0 and result.preserved_product_count == 0:
-                result.issues.append(FidelityIssue(
-                    category="zero_generated_products",
-                    detail=f"Source has {result.source_product_count} products but 0 product cards in HTML",
-                ))
-
-        if result.source_service_count > 0:
-            cards_in_html = len(re.findall(r'class="card"', html, re.IGNORECASE))
-            if cards_in_html == 0 and result.preserved_service_count == 0:
-                result.issues.append(FidelityIssue(
-                    category="zero_generated_services",
-                    detail=f"Source has {result.source_service_count} services but 0 service cards in HTML",
-                ))
-
-        # --- Duplicate image detection ---
-        img_refs = re.findall(r'<img[^>]+src\s*=\s*["\']([^"\']+)["\']', html, re.IGNORECASE)
-        if img_refs:
-            img_counter = {}
-            for ref in img_refs:
-                img_counter[ref] = img_counter.get(ref, 0) + 1
-            dupes = {k: v for k, v in img_counter.items() if v > 2}
-            if dupes:
-                total_dupes = sum(v - 1 for v in dupes.values())
-                result.issues.append(FidelityIssue(
-                    category="duplicate_images",
-                    detail=f"{total_dupes} duplicate image references across {len(dupes)} images: {list(dupes.keys())[:3]}",
-                ))
+        # ── Completeness score ────────────────────────────────────────────
+        # Simple: 1.0 if no issues, penalized per issue
+        result.completeness_score = max(0.0, 1.0 - len(result.issues) * 0.15)
 
         result.valid = len(result.issues) == 0
 
         logger.info(
-            "FidelityValidator: %s | products=%d/%d services=%d/%d "
-            "testimonials=%d/%d faqs=%d/%d completeness=%.0f%%",
+            "FidelityValidator: %s | issues=%d completeness=%.0f%%",
             "PASS" if result.valid else "FAIL",
-            result.preserved_product_count, result.source_product_count,
-            result.preserved_service_count, result.source_service_count,
-            result.preserved_testimonial_count, result.source_testimonial_count,
-            result.preserved_faq_count, result.source_faq_count,
+            len(result.issues),
             result.completeness_score * 100,
         )
         if not result.valid:
