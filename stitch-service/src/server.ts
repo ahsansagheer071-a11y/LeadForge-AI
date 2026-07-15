@@ -106,15 +106,11 @@ async function handleGenerate(
       const htmlUrl = await screen.getHtml();
       let htmlContent: string;
 
-      console.log(`[stitch-service] screen.getHtml() returned type=${typeof htmlUrl}, length=${String(htmlUrl)?.length ?? 0}, preview=${String(htmlUrl)?.substring(0, 200) ?? "(empty)"}`);
-
       if (htmlUrl && htmlUrl.startsWith("http")) {
         htmlContent = await fetchUrlAsText(htmlUrl, TIMEOUT_MS);
       } else {
         htmlContent = htmlUrl as string;
       }
-
-      console.log(`[stitch-service] htmlContent length=${htmlContent?.length ?? 0}`);
 
       // Screenshot is optional
       let screenshotUrl: string | undefined;
