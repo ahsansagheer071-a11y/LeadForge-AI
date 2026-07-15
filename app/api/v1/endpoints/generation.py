@@ -149,8 +149,9 @@ async def _run_generation_job(job_id: str, lead_id: uuid.UUID, user_id: str) -> 
             fidelity_result = fidelity_validator.validate(preview_html_raw)
 
             if not fidelity_result.valid:
+                non_critical = {"duplicate_images", "missing_h1"}
                 critical_issues = [i for i in fidelity_result.issues
-                                   if i.category not in ("duplicate_images",)]
+                                   if i.category not in non_critical]
                 if critical_issues:
                     issue_summary = "; ".join(f"{i.category}: {i.detail}" for i in critical_issues[:3])
                     await _update_job_status(
