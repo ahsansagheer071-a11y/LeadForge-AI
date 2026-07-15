@@ -1,5 +1,7 @@
 import http from "node:http";
 
+console.log("[stitch-service] Booting...");
+
 // ── Environment ────────────────────────────────────────────────────────────
 // Railway sets PORT; STITCH_SERVICE_PORT is the fallback for local dev.
 const PORT = parseInt(

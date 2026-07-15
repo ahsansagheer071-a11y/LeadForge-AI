@@ -1,4 +1,4 @@
-FROM node:22-slim AS builder
+FROM node:20-slim AS builder
 
 WORKDIR /app
 
@@ -10,7 +10,7 @@ COPY src/ ./src/
 RUN npm run build
 
 # ── Production image ──────────────────────────────────────────
-FROM node:22-slim
+FROM node:20-slim
 
 WORKDIR /app
 
@@ -20,7 +20,5 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
 COPY --from=builder /app/dist/ ./dist/
-
-EXPOSE 3100
 
 CMD ["node", "dist/server.js"]
