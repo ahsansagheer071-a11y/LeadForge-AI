@@ -353,8 +353,73 @@ class BriefGenerator:
         if brief.business_description:
             parts.append(f"Description: {brief.business_description}")
         parts.append("")
-        parts.append("Visit and study the website above before redesigning.")
+        parts.append("Use the content below from the source website. Redesign it — do not create a new business.")
         parts.append("")
+
+        # ── EXTRACTED CONTENT ────────────────────────────────────────────
+        parts.append("# EXTRACTED CONTENT FROM SOURCE WEBSITE")
+        parts.append("")
+        parts.append("Below is the content extracted from the source website. Use it as your source of truth.")
+        parts.append("")
+
+        # Hero
+        if brief.hero_section and brief.hero_section.source_content:
+            parts.append("## Hero Section")
+            for line in brief.hero_section.source_content:
+                parts.append(f"  {line}")
+            parts.append("")
+
+        # Services
+        if brief.sections:
+            for section in brief.sections:
+                if section.section_type == "services":
+                    parts.append(f"## Services ({len(section.source_content)} items)")
+                    for name in section.source_content:
+                        parts.append(f"  - {name}")
+                    parts.append("")
+                elif section.section_type == "products":
+                    parts.append(f"## Products ({len(section.source_content)} items)")
+                    for name in section.source_content:
+                        parts.append(f"  - {name}")
+                    parts.append("")
+                elif section.section_type == "testimonials":
+                    parts.append(f"## Testimonials ({section.content_instructions})")
+                    parts.append("")
+                elif section.section_type == "faq":
+                    parts.append(f"## FAQs ({section.content_instructions})")
+                    parts.append("")
+                elif section.section_type == "about":
+                    parts.append("## About")
+                    parts.append(f"  {section.content_instructions}")
+                    parts.append("")
+
+        # Navigation
+        if brief.navigation_items:
+            parts.append("## Navigation")
+            for item in brief.navigation_items:
+                parts.append(f"  - {item['label']}")
+            parts.append("")
+
+        # Contact
+        if brief.contact_info:
+            parts.append("## Contact Information")
+            for key, val in brief.contact_info.items():
+                parts.append(f"  {key.title()}: {val}")
+            parts.append("")
+
+        # Social links
+        if brief.social_links:
+            parts.append("## Social Links")
+            for link in brief.social_links:
+                parts.append(f"  - {link['platform']}: {link['url']}")
+            parts.append("")
+
+        # Images
+        if brief.original_images:
+            parts.append("## Images from Source Website")
+            for img in brief.original_images:
+                parts.append(f"  - [{img['role']}] {img['url']}")
+            parts.append("")
 
         # ── BUSINESS RULES ────────────────────────────────────────────────
         parts.append("# BUSINESS RULES")
@@ -477,9 +542,10 @@ class BriefGenerator:
         parts.append("")
         parts.append("Return a production-ready premium redesign as a single self-contained HTML file with embedded CSS.")
         parts.append("- Responsive design (mobile-first)")
-        parts.append("- Semantic HTML5 structure")
+        parts.append("- Semantic HTML5 structure with proper H1 tag for the business name")
         parts.append("- No external CSS/JS frameworks — use vanilla CSS")
-        parts.append("- All images referenced by their original URLs from the source website")
+        parts.append("- Use the original image URLs from the EXTRACTED CONTENT section above")
+        parts.append("- Include the business name, services, products, and contact info from the extracted content")
         parts.append("- Premium, polished, and visually stunning")
         parts.append("")
 
