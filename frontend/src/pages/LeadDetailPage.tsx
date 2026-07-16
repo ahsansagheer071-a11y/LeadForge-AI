@@ -1,14 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Globe, MapPin, Phone, Star, Building, Shield, AlertTriangle, CheckCircle, Search, Camera, Send, Copy, ExternalLink, ChevronRight, ChevronDown, Zap, Eye, Download, X, Maximize2, Loader2, Rocket } from 'lucide-react';
+import { ArrowLeft, Globe, MapPin, Phone, Building, Shield, AlertTriangle, CheckCircle, Search, Camera, Send, Copy, ExternalLink, ChevronDown, Eye, Download, X, Maximize2, Rocket } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { Skeleton } from '@/components/Loading';
 import { EmptyState } from '@/components/ErrorStates';
-import { PremiumCard } from '@/components/PremiumCard';
 import { ScoreGauge } from '@/components/ScoreGauge';
-import { AnimatedCounter } from '@/components/AnimatedCounter';
 import { projectsService, auditService, analysisService, screenshotService, outreachService, generationService } from '@/services/services';
 import { getApiErrorMessage } from '@/services/apiClient';
 import { usePreviewStore } from '@/store';
@@ -17,32 +15,27 @@ import { formatRelative, cn } from '@/utils';
 import { toast } from 'sonner';
 import type { AuditAndScoreResult, WebsiteAnalysisResponse, CaptureScreenshotResponse, OutreachResponse } from '@/types';
 
+/* ── Constants ───────────────────────────────────────────────── */
 const statusTone: Record<string, 'brand' | 'success' | 'warning' | 'danger' | 'info' | 'muted' | 'neutral'> = {
   NEW: 'info', SCRAPED: 'brand', ANALYZED: 'warning', OUTREACH_READY: 'success', CONTACTED: 'brand', CLOSED: 'success',
 };
 
-/* ── Workflow stages ──────────────────────────────────────────── */
 type StageId = 'lead' | 'screenshot' | 'analysis' | 'audit' | 'generation' | 'preview' | 'package' | 'outreach';
 type StageState = 'completed' | 'active' | 'pending' | 'blocked' | 'failed';
+type TabId = 'overview' | 'audit' | 'redesign' | 'website';
 
-interface StageDef {
-  id: StageId;
-  label: string;
-  icon: typeof Camera;
-  color: string;
-}
-
-const STAGES: StageDef[] = [
-  { id: 'lead', label: 'Lead', icon: Building, color: '#0ea5e9' },
-  { id: 'screenshot', label: 'Screenshot', icon: Camera, color: '#06b6d4' },
-  { id: 'analysis', label: 'Analysis', icon: Search, color: '#8b5cf6' },
-  { id: 'audit', label: 'Audit', icon: Shield, color: '#f59e0b' },
-  { id: 'generation', label: 'Generation', icon: Zap, color: '#10b981' },
-  { id: 'preview', label: 'Preview', icon: Eye, color: '#6366f1' },
-  { id: 'package', label: 'Package', icon: Download, color: '#ec4899' },
-  { id: 'outreach', label: 'Outreach', icon: Send, color: '#22d3ee' },
+const STAGES: { id: StageId; label: string }[] = [
+  { id: 'lead', label: 'Lead' },
+  { id: 'screenshot', label: 'Screenshot' },
+  { id: 'analysis', label: 'Analysis' },
+  { id: 'audit', label: 'Audit' },
+  { id: 'generation', label: 'Generation' },
+  { id: 'preview', label: 'Preview' },
+  { id: 'package', label: 'Package' },
+  { id: 'outreach', label: 'Outreach' },
 ];
 
+/* ── Stage logic ─────────────────────────────────────────────── */
 function stageDirect(
   sid: StageId,
   screenshot: CaptureScreenshotResponse | null,
@@ -68,30 +61,6 @@ function stageDirect(
   }
 }
 
-function getStageState(
-  id: StageId,
-  screenshot: CaptureScreenshotResponse | null,
-  analysis: WebsiteAnalysisResponse | null,
-  audit: AuditAndScoreResult | null,
-  website: unknown | null,
-  outreach: OutreachResponse | null,
-  mutations: Record<string, { isPending: boolean; error: unknown }>,
-): StageState {
-  if (id === 'lead') return 'completed';
-  const targetIdx = STAGES.findIndex(s => s.id === id);
-
-  const states = STAGES.map(s => stageDirect(s.id, screenshot, analysis, audit, website, outreach, mutations));
-
-  for (let i = 0; i < states.length; i++) {
-    if (states[i] === 'completed') continue;
-    if (i === targetIdx) return states[i];
-    if (i < targetIdx) return 'blocked';
-    return 'completed';
-  }
-
-  return 'completed';
-}
-
 function getActiveStage(
   screenshot: CaptureScreenshotResponse | null,
   analysis: WebsiteAnalysisResponse | null,
@@ -99,7 +68,7 @@ function getActiveStage(
   website: unknown | null,
   outreach: OutreachResponse | null,
   mutations: Record<string, { isPending: boolean; error: unknown }>,
-): StageDef | null {
+): { id: StageId; label: string } | null {
   const states = STAGES.map(s => stageDirect(s.id, screenshot, analysis, audit, website, outreach, mutations));
   for (let i = 0; i < STAGES.length; i++) {
     if (states[i] === 'completed') continue;
@@ -109,29 +78,34 @@ function getActiveStage(
   return null;
 }
 
-/* ── Score breakdown bar helper ───────────────────────────────── */
-function ScoreBar({ label, value, color }: { label: string; value: number; color?: string }) {
+/* ── Score bar ───────────────────────────────────────────────── */
+function ScoreBar({ label, value }: { label: string; value: number }) {
   const pct = Math.min(100, Math.max(0, value));
-  const barColor = color ?? (pct >= 80 ? '#22c55e' : pct >= 60 ? '#eab308' : pct >= 40 ? '#f97316' : '#dc2626');
+  const tone = pct >= 80 ? 'success' : pct >= 60 ? 'warning' : 'danger';
+  const barClass = tone === 'success' ? 'bg-[var(--color-success)]' : tone === 'warning' ? 'bg-[var(--color-warning)]' : 'bg-[var(--color-danger)]';
+  const textClass = tone === 'success' ? 'text-[var(--color-success)]' : tone === 'warning' ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]';
   return (
     <div className="space-y-1.5">
-      <div className="flex items-center justify-between text-[11px] font-mono">
-        <span className="uppercase tracking-wider text-[var(--color-text-secondary)]">{label}</span>
-        <span className="font-semibold" style={{ color: barColor }}>{Math.round(pct)}</span>
+      <div className="flex items-center justify-between text-[11px]">
+        <span className="text-[var(--color-text-secondary)]">{label}</span>
+        <span className={cn('font-semibold tabular-nums', textClass)}>{Math.round(pct)}</span>
       </div>
-      <div className="h-2 rounded-full bg-[var(--color-surface-hover)] overflow-hidden">
-        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${barColor}, ${barColor}88)` }} />
+      <div className="h-1.5 rounded-full bg-[var(--color-surface-hover)] overflow-hidden">
+        <div className={cn('h-full rounded-full transition-all duration-500', barClass)} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
 }
 
-/* ── Main component ──────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════
+   MAIN COMPONENT
+   ══════════════════════════════════════════════════════════════ */
 export function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const setHtmlContent = usePreviewStore((s) => s.setHtmlContent);
+  const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [analysisResult, setAnalysisResult] = useState<WebsiteAnalysisResponse | null>(null);
   const [auditResult, setAuditResult] = useState<AuditAndScoreResult | null>(null);
   const [screenshotResult, setScreenshotResult] = useState<CaptureScreenshotResponse | null>(null);
@@ -162,9 +136,7 @@ export function LeadDetailPage() {
           full_page_url: lead.screenshot.full_page_cloudinary_url,
         });
       }
-      if (lead.outreach) {
-        setOutreachResult(lead.outreach);
-      }
+      if (lead.outreach) setOutreachResult(lead.outreach);
       if (lead.audit && lead.score) {
         const reconstructed: Record<string, unknown> = {};
         if (lead.audit.executive_summary) reconstructed['Business Summary'] = lead.audit.executive_summary;
@@ -179,12 +151,7 @@ export function LeadDetailPage() {
     }
   }, [lead]);
 
-  const {
-    jobResult,
-    jobError,
-    isRunning: isGenerationRunning,
-    generate,
-  } = useGenerationJob({
+  const { jobResult, jobError, isRunning: isGenerationRunning, generate } = useGenerationJob({
     leadId: id!,
     onSuccess: (websiteId, htmlContent) => {
       if (htmlContent) setHtmlContent(htmlContent);
@@ -192,9 +159,7 @@ export function LeadDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['generated-website-latest', id] });
       toast.success('Website generated successfully');
     },
-    onError: (msg) => {
-      toast.error(msg);
-    },
+    onError: (msg) => { toast.error(msg); },
   });
 
   const analysisMutation = useMutation({
@@ -217,12 +182,12 @@ export function LeadDetailPage() {
 
   const outreachMutation = useMutation({
     mutationFn: () => outreachService.generate({ lead_id: id! }),
-    onSuccess: (result) => { setOutreachResult(result); queryClient.invalidateQueries({ queryKey: ['lead', id] }); toast.success('AI Outreach generated successfully'); },
+    onSuccess: (result) => { setOutreachResult(result); queryClient.invalidateQueries({ queryKey: ['lead', id] }); toast.success('Outreach generated successfully'); },
     onError: (err) => { toast.error(getApiErrorMessage(err, 'Outreach generation failed')); },
   });
 
   const copyToClipboard = async (text: string, label: string) => {
-    try { await navigator.clipboard.writeText(text); toast.success(`${label} copied to clipboard`); }
+    try { await navigator.clipboard.writeText(text); toast.success(`${label} copied`); }
     catch { toast.error('Failed to copy'); }
   };
 
@@ -237,16 +202,19 @@ export function LeadDetailPage() {
   if (isLoading) {
     return (
       <div className="space-y-6 lf-fade-in">
-        <Skeleton variant="rounded" width={200} height={24} />
-        <PremiumCard variant="featured" innerClassName="p-10">
-          <div className="flex flex-col lg:flex-row gap-8">
-            <div className="flex-1 space-y-4"><Skeleton variant="text" width={120} height={14} /><Skeleton variant="text" width="60%" height={48} /><Skeleton variant="text" width="80%" height={14} /></div>
-            <div className="text-right"><Skeleton variant="text" width={100} height={100} /></div>
-          </div>
-        </PremiumCard>
+        <Skeleton variant="text" width={140} height={20} />
+        <div className="rounded-[var(--radius-lg)] bg-[var(--color-surface)] border border-[var(--color-border)] p-6 space-y-4">
+          <Skeleton variant="text" width="40%" height={28} />
+          <Skeleton variant="text" width="60%" height={14} />
+          <div className="flex gap-2"><Skeleton variant="rounded" width={60} height={22} /><Skeleton variant="rounded" width={80} height={22} /></div>
+        </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} variant="rounded" width="100%" height={200} />)}</div>
-          <div className="space-y-6"><Skeleton variant="rounded" width="100%" height={300} /></div>
+          <div className="lg:col-span-2 space-y-4">
+            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} variant="rounded" width="100%" height={180} />)}
+          </div>
+          <div className="space-y-4">
+            <Skeleton variant="rounded" width="100%" height={260} />
+          </div>
         </div>
       </div>
     );
@@ -254,654 +222,657 @@ export function LeadDetailPage() {
 
   if (error || !lead) {
     return (
-      <EmptyState
-        title="Lead not found"
-        message="This lead does not exist or has been removed."
-        action={<Button variant="outline" onClick={() => navigate('/projects')}>Back to Projects</Button>}
-      />
+      <div className="lf-fade-in">
+        <EmptyState
+          title="Lead not found"
+          message="This lead does not exist or has been removed."
+          action={<Button variant="outline" onClick={() => navigate('/projects')}>Back to Leads</Button>}
+        />
+      </div>
     );
   }
 
+  const hasAudit = !!auditResult;
+  const hasWebsite = !!existingWebsite;
+  const hasScreenshot = !!(screenshotResult?.desktop_url || screenshotResult?.mobile_url);
+
+  const tabs: { id: TabId; label: string; show: boolean }[] = [
+    { id: 'overview', label: 'Overview', show: true },
+    { id: 'audit', label: 'Audit', show: true },
+    { id: 'redesign', label: 'Redesign', show: true },
+    { id: 'website', label: 'Website', show: hasWebsite },
+  ];
+
   return (
-    <div className="space-y-8 lf-fade-in">
-      {/* ═══════════════════════════════════════════════════════════
-         TOP IDENTITY AREA
-      ════════════════════════════════════════════════════════════ */}
-      <PremiumCard variant="featured" innerClassName="relative overflow-hidden p-8 lg:p-10">
-        <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-[rgba(14,165,233,0.06)] blur-[80px] pointer-events-none" />
-        <div className="absolute -bottom-32 -left-32 w-96 h-96 rounded-full bg-[rgba(139,92,246,0.05)] blur-[80px] pointer-events-none" />
-        <div className="absolute inset-0 pointer-events-none opacity-[0.015]" style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,0.02) 39px, rgba(255,255,255,0.02) 40px), repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,0.02) 39px, rgba(255,255,255,0.02) 40px)' }} />
-        <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.08) 2px, rgba(255,255,255,0.08) 4px)' }} />
+    <div className="space-y-5 lf-fade-in">
+      {/* ── Back nav ──────────────────────────────────────────── */}
+      <button
+        onClick={() => navigate('/projects')}
+        className="inline-flex items-center gap-1.5 text-[12px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
+      >
+        <ArrowLeft size={14} /> Leads
+      </button>
 
-        <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-6">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/projects')} className="text-[var(--color-text-muted)] hover:text-white">
-              <ArrowLeft className="size-4 mr-1" /> Pipeline
-            </Button>
+      {/* ── Record header ─────────────────────────────────────── */}
+      <div className="rounded-[var(--radius-lg)] bg-[var(--color-surface)] border border-[var(--color-border)] p-5 lg:p-6">
+        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2.5 mb-2 flex-wrap">
+              <Badge tone={statusTone[lead.status] ?? 'muted'} className="text-[11px]">{lead.status.replace(/_/g, ' ')}</Badge>
+              {lead.industry && <Badge tone="neutral" className="text-[11px]">{lead.industry}</Badge>}
+              {lead.rating != null && (
+                <Badge tone={lead.rating >= 4 ? 'success' : lead.rating >= 3 ? 'warning' : 'muted'} className="text-[11px] tabular-nums">
+                  {lead.rating.toFixed(1)}
+                </Badge>
+              )}
+            </div>
+            <h1 className="text-[22px] font-bold text-[var(--color-text)] tracking-tight mb-1.5 truncate">{lead.name}</h1>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-[var(--color-text-secondary)]">
+              {lead.industry && (
+                <span className="inline-flex items-center gap-1"><Building size={12} className="text-[var(--color-text-muted)]" />{lead.industry}</span>
+              )}
+              {(lead.city || lead.country) && (
+                <span className="inline-flex items-center gap-1"><MapPin size={12} className="text-[var(--color-text-muted)]" />{lead.city}{lead.city && lead.country ? ', ' : ''}{lead.country}</span>
+              )}
+              {lead.website && (
+                <a href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[var(--color-brand)] hover:underline">
+                  <Globe size={12} />{lead.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                </a>
+              )}
+              {lead.phone && (
+                <a href={`tel:${lead.phone}`} className="inline-flex items-center gap-1 hover:text-[var(--color-brand)] transition-colors">
+                  <Phone size={12} className="text-[var(--color-text-muted)]" />{lead.phone}
+                </a>
+              )}
+            </div>
+            {lead.address && (
+              <p className="text-[11px] text-[var(--color-text-muted)] mt-1.5">{lead.address}</p>
+            )}
           </div>
 
-          <div className="flex flex-col lg:flex-row justify-between gap-8">
-            {/* Left: Identity */}
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-3 flex-wrap">
-                <Badge tone={statusTone[lead.status] ?? 'muted'} className="font-mono text-[10px]">{lead.status.replace('_', ' ')}</Badge>
-                <Badge tone="info" className="font-mono text-[10px]">{lead.industry || 'General'}</Badge>
-                {lead.rating != null && (
-                  <Badge tone={lead.rating >= 4 ? 'success' : lead.rating >= 3 ? 'warning' : 'muted'} className="font-mono text-[10px]">
-                    <Star size={10} className="mr-1 fill-current" />{lead.rating.toFixed(1)}
-                  </Badge>
-                )}
+          <div className="flex items-center gap-3 shrink-0">
+            {lead.score?.overall_score != null && (
+              <div className="text-right mr-2">
+                <p className={cn(
+                  'text-[28px] font-bold leading-none tabular-nums',
+                  lead.score.overall_score >= 80 ? 'text-[var(--color-success)]' : lead.score.overall_score >= 60 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]',
+                )}>{lead.score.overall_score}</p>
+                <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">Audit score</p>
               </div>
-
-              <h1 className="text-[clamp(2rem,3vw,2.5rem)] font-extrabold tracking-tight text-white mb-4">{lead.name}</h1>
-
-              <div className="flex flex-wrap gap-x-6 gap-y-2 text-[13px] font-mono text-[var(--color-text-secondary)]">
-                {lead.industry && <span className="flex items-center gap-1.5"><Building size={13} className="text-[#0ea5e9]" />{lead.industry}</span>}
-                {(lead.city || lead.country) && <span className="flex items-center gap-1.5"><MapPin size={13} className="text-[#0ea5e9]" />{lead.city}{lead.city && lead.country ? ', ' : ''}{lead.country}</span>}
-                {lead.website && (
-                  <a href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-[#0ea5e9] hover:underline">
-                    <Globe size={13} />{lead.website.replace(/^https?:\/\//, '')}
-                  </a>
-                )}
-                {lead.phone && (
-                  <a href={`tel:${lead.phone}`} className="flex items-center gap-1.5 hover:text-[#0ea5e9]"><Phone size={13} />{lead.phone}</a>
-                )}
-              </div>
-
-              {lead.address && (
-                <p className="text-[12px] font-mono text-[var(--color-text-muted)] mt-2">{lead.address}</p>
-              )}
-
-              {/* Primary next action button */}
-              <div className="mt-6">
-                {activeStage ? (
-                  <Button
-                    variant="neon"
-                    onClick={() => {
-                      if (activeStage.id === 'screenshot') screenshotMutation.mutate();
-                      else if (activeStage.id === 'analysis') analysisMutation.mutate();
-                      else if (activeStage.id === 'audit') auditMutation.mutate();
-                      else if (activeStage.id === 'generation') {
-                        if (existingWebsite) navigate(`/preview/${existingWebsite.id}`);
-                        else generate();
-                      }
-                      else if (activeStage.id === 'outreach') outreachMutation.mutate();
-                    }}
-                    loading={
-                      (activeStage.id === 'screenshot' && screenshotMutation.isPending) ||
-                      (activeStage.id === 'analysis' && analysisMutation.isPending) ||
-                      (activeStage.id === 'audit' && auditMutation.isPending) ||
-                      (activeStage.id === 'generation' && isGenerationRunning) ||
-                      (activeStage.id === 'outreach' && outreachMutation.isPending)
-                    }
-                    leftIcon={<activeStage.icon size={15} />}
-                  >
-                    {activeStage.id === 'generation' && existingWebsite
-                      ? 'View Website'
-                      : activeStage.id === 'generation' && isGenerationRunning
-                      ? `Synthesizing (${jobResult ? (jobResult.progress || 'Queued') : 'Queued'})`
-                      : `Run ${activeStage.label}`}
-                  </Button>
-                ) : (
-                  <Button variant="glass" disabled><CheckCircle size={15} /> All Stages Complete</Button>
-                )}
-              </div>
-            </div>
-
-            {/* Right: Score + metrics */}
-            <div className="flex flex-col items-center lg:items-end gap-4 shrink-0">
-              <ScoreGauge score={lead.score?.overall_score ?? 0} size={120} strokeWidth={8} label="Audit Score" />
-              <div className="flex items-center gap-4 text-center">
-                <div>
-                  <p className="text-[22px] font-bold text-white"><AnimatedCounter value={lead.reviews_count ?? 0} /></p>
-                  <p className="text-[9px] font-mono text-[var(--color-text-muted)] uppercase tracking-wider">Reviews</p>
-                </div>
-                <div className="w-px h-8 bg-[var(--color-border)]" />
-                <div>
-                  <p className="text-[22px] font-bold text-white">{formatRelative(lead.updated_at)}</p>
-                  <p className="text-[9px] font-mono text-[var(--color-text-muted)] uppercase tracking-wider">Updated</p>
-                </div>
-              </div>
-            </div>
+            )}
+            {activeStage ? (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  if (activeStage.id === 'screenshot') screenshotMutation.mutate();
+                  else if (activeStage.id === 'analysis') analysisMutation.mutate();
+                  else if (activeStage.id === 'audit') auditMutation.mutate();
+                  else if (activeStage.id === 'generation') {
+                    if (existingWebsite) navigate(`/preview/${existingWebsite.id}`);
+                    else generate();
+                  }
+                  else if (activeStage.id === 'outreach') outreachMutation.mutate();
+                }}
+                loading={
+                  (activeStage.id === 'screenshot' && screenshotMutation.isPending) ||
+                  (activeStage.id === 'analysis' && analysisMutation.isPending) ||
+                  (activeStage.id === 'audit' && auditMutation.isPending) ||
+                  (activeStage.id === 'generation' && isGenerationRunning) ||
+                  (activeStage.id === 'outreach' && outreachMutation.isPending)
+                }
+              >
+                {activeStage.id === 'generation' && existingWebsite
+                  ? 'View Website'
+                  : activeStage.id === 'generation' && isGenerationRunning
+                    ? `Generating...`
+                    : activeStage.label}
+              </Button>
+            ) : (
+              <Button variant="secondary" size="sm" disabled>All complete</Button>
+            )}
           </div>
-        </div>
-      </PremiumCard>
-
-      {/* ═══════════════════════════════════════════════════════════
-         WORKFLOW RAIL
-      ════════════════════════════════════════════════════════════ */}
-      <PremiumCard innerClassName="p-4 lg:p-5 overflow-hidden">
-        <div className="hidden lg:flex items-center justify-between gap-0">
-          {STAGES.map((stage, i) => {
-            const state = getStageState(stage.id, screenshotResult, analysisResult, auditResult, existingWebsite, outreachResult, mutations);
-            const isActive = state === 'active';
-            const isCompleted = state === 'completed';
-            const isFailed = state === 'failed';
-            const isPendingS = state === 'pending' || state === 'blocked';
-            const StageIcon = stage.icon;
-            return (
-              <div key={stage.id} className="flex items-center flex-1">
-                {/* Stage node */}
-                <div className="flex flex-col items-center gap-1.5">
-                  <div
-                    className={cn(
-                      'size-11 rounded-xl flex items-center justify-center transition-all duration-300 border-2 relative',
-                      isActive && 'border-[#0ea5e9] bg-[rgba(14,165,233,0.12)] shadow-[0_0_20px_rgba(14,165,233,0.3)]',
-                      isCompleted && 'border-emerald-500/40 bg-emerald-500/10 shadow-[0_0_10px_rgba(16,185,129,0.2)]',
-                      isFailed && 'border-red-500/40 bg-red-500/10',
-                      isPendingS && 'border-[var(--color-border)] bg-[var(--color-surface-hover)] opacity-50',
-                    )}
-                  >
-                    {isActive && (
-                      <div className="absolute inset-0 rounded-xl pointer-events-none" style={{ background: 'conic-gradient(from var(--angle), #00f5a0, #00d9ff, #2563ff, #7c3aed, #ff2bd6, #00f5a0)', animation: 'lf-conic-spin 3s linear infinite', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMaskComposite: 'xor', maskComposite: 'exclude', padding: '2px' }} />
-                    )}
-                    <StageIcon size={16} className={cn(
-                      isActive && 'text-[#0ea5e9] drop-shadow-[0_0_8px_rgba(14,165,233,0.6)]',
-                      isCompleted && 'text-emerald-400',
-                      isFailed && 'text-red-400',
-                      isPendingS && 'text-[var(--color-text-muted)]',
-                    )} />
-                  </div>
-                  <span className={cn(
-                    'text-[9px] font-mono uppercase tracking-wider whitespace-nowrap',
-                    isActive && 'text-[#0ea5e9] font-bold',
-                    isCompleted && 'text-emerald-400',
-                    isFailed && 'text-red-400',
-                    isPendingS && 'text-[var(--color-text-muted)]',
-                  )}>{stage.label}</span>
-                </div>
-                {/* Connector line */}
-                {i < STAGES.length - 1 && (
-                  <div className={cn(
-                    'flex-1 h-0.5 mx-2 rounded-full transition-all duration-300',
-                    getStageState(STAGES[i + 1].id, screenshotResult, analysisResult, auditResult, existingWebsite, outreachResult, mutations) === 'completed' || (getStageState(STAGES[i + 1].id, screenshotResult, analysisResult, auditResult, existingWebsite, outreachResult, mutations) === 'active' && isCompleted)
-                      ? 'bg-emerald-500/50'
-                      : getStageState(STAGES[i + 1].id, screenshotResult, analysisResult, auditResult, existingWebsite, outreachResult, mutations) === 'failed'
-                        ? 'bg-red-500/50'
-                        : 'bg-[var(--color-border)]',
-                  )} />
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Mobile vertical rail */}
-        <div className="flex lg:hidden flex-col gap-0">
-          {STAGES.map((stage, i) => {
-            const state = getStageState(stage.id, screenshotResult, analysisResult, auditResult, existingWebsite, outreachResult, mutations);
-            const isActive = state === 'active';
-            const isCompleted = state === 'completed';
-            const isFailed = state === 'failed';
-            const isPendingS = state === 'pending' || state === 'blocked';
-            const StageIcon = stage.icon;
-            return (
-              <div key={stage.id} className="flex items-stretch gap-3">
-                <div className="flex flex-col items-center">
-                  <div className={cn(
-                    'size-9 rounded-lg flex items-center justify-center border-2 transition-all shrink-0',
-                    isActive && 'border-[#0ea5e9] bg-[rgba(14,165,233,0.12)] shadow-[0_0_12px_rgba(14,165,233,0.3)]',
-                    isCompleted && 'border-emerald-500/40 bg-emerald-500/10',
-                    isFailed && 'border-red-500/40 bg-red-500/10',
-                    isPendingS && 'border-[var(--color-border)] bg-[var(--color-surface-hover)] opacity-50',
-                  )}>
-                    <StageIcon size={14} className={cn(isActive && 'text-[#0ea5e9]', isCompleted && 'text-emerald-400', isFailed && 'text-red-400', isPendingS && 'text-[var(--color-text-muted)]')} />
-                  </div>
-                  {i < STAGES.length - 1 && (
-                    <div className={cn(
-                      'w-0.5 flex-1 min-h-[16px] my-1',
-                      getStageState(STAGES[i + 1].id, screenshotResult, analysisResult, auditResult, existingWebsite, outreachResult, mutations) === 'completed' ? 'bg-emerald-500/50' : 'bg-[var(--color-border)]',
-                    )} />
-                  )}
-                </div>
-                <div className={cn(
-                  'py-1.5 flex-1',
-                  isActive && 'text-[#0ea5e9]', isCompleted && 'text-emerald-400', isFailed && 'text-red-400', isPendingS && 'text-[var(--color-text-muted)]',
-                )}>
-                  <p className={cn('text-[12px] font-mono font-semibold', isActive && 'text-white')}>{stage.label}</p>
-                  <p className="text-[10px] font-mono opacity-60">
-                    {isActive ? 'In progress...' : isCompleted ? 'Complete' : isFailed ? 'Failed' : 'Pending'}
-                  </p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </PremiumCard>
-
-      {/* ═══════════════════════════════════════════════════════════
-         COMMAND-CENTER LAYOUT
-      ════════════════════════════════════════════════════════════ */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* ─── MAIN COLUMN ─────────────────────────────────────── */}
-        <div className="lg:col-span-2 space-y-6">
-
-          {/* Screenshot Gallery */}
-          <PremiumCard innerClassName="p-6">
-            <div className="flex items-center justify-between mb-5 border-b border-[var(--color-border)] pb-3">
-              <h3 className="text-[11px] font-mono uppercase tracking-[0.2em] text-white flex items-center gap-2">
-                <Camera size={13} className="text-[#06b6d4]" /> Visual Capture
-              </h3>
-              <div className="flex items-center gap-2">
-                {screenshotResult && <Badge tone="success" className="text-[9px]">Captured</Badge>}
-                <Button size="xs" variant={screenshotResult ? 'outline' : 'brand'} loading={screenshotMutation.isPending} onClick={() => screenshotMutation.mutate()}>
-                  {screenshotResult ? 'Recapture' : 'Capture'}
-                </Button>
-              </div>
-            </div>
-
-            {screenshotMutation.isPending ? (
-              <div className="flex flex-col items-center justify-center py-12 gap-4">
-                <div className="relative size-12">
-                  <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#0ea5e9] border-r-[#8b5cf6] animate-spin" style={{ animationDuration: '1s' }} />
-                  <div className="absolute inset-2 rounded-full border border-transparent border-b-[#06b6d4] border-l-[#06b6d4] animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }} />
-                </div>
-                <p className="text-[12px] font-mono text-[var(--color-text-muted)]">Capturing screenshots...</p>
-              </div>
-            ) : screenshotResult?.desktop_url || screenshotResult?.mobile_url ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {screenshotResult.desktop_url && (
-                  <div className="group relative">
-                    <div className="rounded-[var(--radius-md)] overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface-hover)]">
-                      <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
-                        <div className="flex gap-1"><span className="size-2 rounded-full bg-red-500/60" /><span className="size-2 rounded-full bg-amber-500/60" /><span className="size-2 rounded-full bg-emerald-500/60" /></div>
-                        <span className="text-[9px] font-mono text-[var(--color-text-muted)]">Desktop</span>
-                      </div>
-                      <img src={screenshotResult.desktop_url} alt="Desktop screenshot" className="w-full object-cover cursor-pointer" onClick={() => setFullScreenImg(screenshotResult.desktop_url!)} />
-                    </div>
-                    <button onClick={() => setFullScreenImg(screenshotResult.desktop_url!)} className="absolute top-3 right-3 size-7 rounded-md bg-black/50 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-white"><Maximize2 size={12} /></button>
-                  </div>
-                )}
-                {screenshotResult.mobile_url && (
-                  <div className="group relative">
-                    <div className="rounded-[var(--radius-md)] overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface-hover)]">
-                      <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
-                        <div className="flex gap-1"><span className="size-2 rounded-full bg-red-500/60" /><span className="size-2 rounded-full bg-amber-500/60" /><span className="size-2 rounded-full bg-emerald-500/60" /></div>
-                        <span className="text-[9px] font-mono text-[var(--color-text-muted)]">Mobile</span>
-                      </div>
-                      <img src={screenshotResult.mobile_url} alt="Mobile screenshot" className="w-full object-cover cursor-pointer" onClick={() => setFullScreenImg(screenshotResult.mobile_url!)} />
-                    </div>
-                    <button onClick={() => setFullScreenImg(screenshotResult.mobile_url!)} className="absolute top-3 right-3 size-7 rounded-md bg-black/50 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-white"><Maximize2 size={12} /></button>
-                  </div>
-                )}
-              </div>
-            ) : screenshotMutation.error ? (
-              <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
-                <AlertTriangle size={28} className="text-red-400" />
-                <p className="text-[13px] text-red-400 font-medium">Capture failed</p>
-                <p className="text-[11px] font-mono text-[var(--color-text-muted)]">{getApiErrorMessage(screenshotMutation.error)}</p>
-                <Button size="sm" variant="outline" onClick={() => screenshotMutation.mutate()}>Retry</Button>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
-                <Camera size={28} className="text-[var(--color-text-muted)]" />
-                <p className="text-[12px] font-mono text-[var(--color-text-muted)]">No screenshots captured yet. Click <span className="text-[#0ea5e9]">Capture</span> to take website screenshots.</p>
-              </div>
-            )}
-          </PremiumCard>
-
-          {/* Website Analysis */}
-          <PremiumCard innerClassName="p-6">
-            <div className="flex items-center justify-between mb-5 border-b border-[var(--color-border)] pb-3">
-              <h3 className="text-[11px] font-mono uppercase tracking-[0.2em] text-white flex items-center gap-2">
-                <Search size={13} className="text-[#8b5cf6]" /> Technical Analysis
-              </h3>
-              <div className="flex items-center gap-2">
-                {analysisResult && <Badge tone="success" className="text-[9px]">Analyzed</Badge>}
-                <Button size="xs" variant={analysisResult ? 'outline' : 'brand'} loading={analysisMutation.isPending} onClick={() => analysisMutation.mutate()}>
-                  {analysisResult ? 'Reanalyze' : 'Analyze'}
-                </Button>
-              </div>
-            </div>
-
-            {analysisMutation.isPending ? (
-              <div className="flex flex-col items-center justify-center py-12 gap-4">
-                <div className="relative size-12">
-                  <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#8b5cf6] border-r-[#06b6d4] animate-spin" style={{ animationDuration: '1s' }} />
-                  <div className="absolute inset-2 rounded-full border border-transparent border-b-[#0ea5e9] border-l-[#8b5cf6] animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }} />
-                </div>
-                <p className="text-[12px] font-mono text-[var(--color-text-muted)]">Analyzing website structure...</p>
-              </div>
-            ) : analysisResult ? (
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="p-3 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] text-center">
-                    <p className="text-[22px] font-bold text-white">{analysisResult.http_status_code ?? '—'}</p>
-                    <p className="text-[9px] font-mono text-[var(--color-text-muted)] uppercase tracking-wider">HTTP Status</p>
-                  </div>
-                  <div className="p-3 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] text-center">
-                    <p className="text-[22px] font-bold text-[#0ea5e9]">{analysisResult.response_time_ms ?? '—'}ms</p>
-                    <p className="text-[9px] font-mono text-[var(--color-text-muted)] uppercase tracking-wider">Response Time</p>
-                  </div>
-                  <div className="p-3 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] text-center">
-                    <p className="text-[22px] font-bold text-white">{analysisResult.html_size_kb?.toFixed(1) ?? '—'} KB</p>
-                    <p className="text-[9px] font-mono text-[var(--color-text-muted)] uppercase tracking-wider">Page Weight</p>
-                  </div>
-                  <div className="p-3 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] text-center">
-                    <p className={cn('text-[22px] font-bold', analysisResult.https_enabled ? 'text-emerald-400' : 'text-red-400')}>
-                      {analysisResult.https_enabled ? 'HTTPS' : 'HTTP'}
-                    </p>
-                    <p className="text-[9px] font-mono text-[var(--color-text-muted)] uppercase tracking-wider">Security</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-5 gap-3">
-                  <div className="text-center p-2"><p className="text-[18px] font-bold text-white">{analysisResult.h1_count}</p><p className="text-[9px] font-mono text-[var(--color-text-muted)]">H1</p></div>
-                  <div className="text-center p-2"><p className="text-[18px] font-bold text-white">{analysisResult.h2_count}</p><p className="text-[9px] font-mono text-[var(--color-text-muted)]">H2</p></div>
-                  <div className="text-center p-2"><p className="text-[18px] font-bold text-white">{analysisResult.total_paragraphs}</p><p className="text-[9px] font-mono text-[var(--color-text-muted)]">Paras</p></div>
-                  <div className="text-center p-2"><p className="text-[18px] font-bold text-white">{analysisResult.total_images}</p><p className="text-[9px] font-mono text-[var(--color-text-muted)]">Images</p></div>
-                  <div className="text-center p-2"><p className="text-[18px] font-bold text-white">{analysisResult.total_forms}</p><p className="text-[9px] font-mono text-[var(--color-text-muted)]">Forms</p></div>
-                </div>
-
-                {lead.website && (
-                  <div className="pt-3 border-t border-[var(--color-border)]">
-                    <a href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`} target="_blank" rel="noopener noreferrer" className="text-[12px] text-[#0ea5e9] hover:underline flex items-center gap-1.5 font-mono">
-                      <ExternalLink size={12} /> Visit {lead.website.replace(/^https?:\/\//, '')}
-                    </a>
-                  </div>
-                )}
-              </div>
-            ) : analysisMutation.error ? (
-              <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
-                <AlertTriangle size={28} className="text-red-400" />
-                <p className="text-[13px] text-red-400 font-medium">Analysis failed</p>
-                <Button size="sm" variant="outline" onClick={() => analysisMutation.mutate()}>Retry</Button>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
-                <Search size={28} className="text-[var(--color-text-muted)]" />
-                <p className="text-[12px] font-mono text-[var(--color-text-muted)]">No analysis data. Run an analysis to inspect website structure.</p>
-              </div>
-            )}
-          </PremiumCard>
-
-          {/* Audit Score Breakdown */}
-          <PremiumCard innerClassName="p-6">
-            <div className="flex items-center justify-between mb-5 border-b border-[var(--color-border)] pb-3">
-              <h3 className="text-[11px] font-mono uppercase tracking-[0.2em] text-white flex items-center gap-2">
-                <Shield size={13} className="text-[#f59e0b]" /> AI Intelligence Audit
-              </h3>
-              <div className="flex items-center gap-2">
-                {auditResult && <Badge tone={auditResult.score.category === 'Hot Lead' ? 'success' : auditResult.score.category === 'Warm Lead' ? 'warning' : 'muted'} className="text-[9px]">{auditResult.score.category}</Badge>}
-                <Button size="xs" variant={auditResult ? 'outline' : 'brand'} loading={auditMutation.isPending} onClick={() => auditMutation.mutate()}>
-                  {auditResult ? 'Re-audit' : 'Run Audit'}
-                </Button>
-              </div>
-            </div>
-
-            {auditMutation.isPending ? (
-              <div className="flex flex-col items-center justify-center py-12 gap-4">
-                <div className="relative size-12">
-                  <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#f59e0b] border-r-[#8b5cf6] animate-spin" style={{ animationDuration: '1s' }} />
-                  <div className="absolute inset-2 rounded-full border border-transparent border-b-[#0ea5e9] border-l-[#f59e0b] animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }} />
-                </div>
-                <p className="text-[12px] font-mono text-[var(--color-text-muted)]">Running AI audit...</p>
-              </div>
-            ) : auditResult ? (
-              <div className="space-y-6">
-                {/* Score bars */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-                  <ScoreBar label="Overall" value={auditResult.score.overall_score} color="#8b5cf6" />
-                  <ScoreBar label="SEO" value={auditResult.score.seo_score} />
-                  <ScoreBar label="UX" value={auditResult.score.ux_score} />
-                  <ScoreBar label="Branding" value={auditResult.score.branding_score} />
-                  <ScoreBar label="Trust" value={auditResult.score.trust_score} />
-                  <ScoreBar label="Conversion" value={auditResult.score.conversion_score} />
-                </div>
-
-                {/* Business Summary / Verdict */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-[var(--color-border)]">
-                  {auditResult.audit && typeof auditResult.audit === 'object' && 'Business Summary' in auditResult.audit && (
-                    <div className="p-4 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)]">
-                      <h4 className="text-[10px] font-mono uppercase tracking-wider text-[#0ea5e9] mb-2">Business Profile</h4>
-                      <p className="text-[13px] text-[var(--color-text-secondary)] leading-relaxed">{String(auditResult.audit['Business Summary'])}</p>
-                    </div>
-                  )}
-                  {auditResult.audit && typeof auditResult.audit === 'object' && 'Overall Summary' in auditResult.audit && (
-                    <div className="p-4 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)]">
-                      <h4 className="text-[10px] font-mono uppercase tracking-wider text-[#f59e0b] mb-2">Audit Verdict</h4>
-                      <p className="text-[13px] text-[var(--color-text-secondary)] leading-relaxed">{String(auditResult.audit['Overall Summary'])}</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Weaknesses */}
-                {auditResult.audit && typeof auditResult.audit === 'object' && 'Top Weaknesses' in auditResult.audit && Array.isArray(auditResult.audit['Top Weaknesses']) && (
-                  <div className="pt-4 border-t border-[var(--color-border)]">
-                    <h4 className="text-[10px] font-mono uppercase tracking-wider text-red-400 mb-4 flex items-center gap-2">
-                      <AlertTriangle size={12} /> Weaknesses &amp; Recommendations
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {(auditResult.audit['Top Weaknesses'] as Array<string | { title?: string; evidence?: string; impact?: string; recommendation?: string }>).map((w, i) => {
-                        if (!w) return null;
-                        const weakness = typeof w === 'string' ? { title: w } : w;
-                        return (
-                          <div key={i} className="p-4 rounded-[var(--radius-md)] bg-red-500/5 border border-red-500/15">
-                            <p className="text-[13px] font-bold text-white mb-2 flex items-start gap-2">
-                              <AlertTriangle size={13} className="text-red-400 shrink-0 mt-0.5" />{weakness.title}
-                            </p>
-                            {weakness.impact && <p className="text-[11px] text-[var(--color-text-muted)] mb-2">{weakness.impact}</p>}
-                            {weakness.recommendation && (
-                              <p className="text-[11px] text-emerald-400 font-mono flex items-start gap-1.5"><CheckCircle size={12} className="shrink-0 mt-0.5" />{weakness.recommendation}</p>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : auditMutation.error ? (
-              <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
-                <AlertTriangle size={28} className="text-red-400" />
-                <p className="text-[13px] text-red-400 font-medium">Audit failed</p>
-                <Button size="sm" variant="outline" onClick={() => auditMutation.mutate()}>Retry</Button>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
-                <Shield size={28} className="text-[var(--color-text-muted)]" />
-                <p className="text-[12px] font-mono text-[var(--color-text-muted)]">No audit data. Run an AI audit to score and analyze this lead.</p>
-              </div>
-            )}
-          </PremiumCard>
-
-          {/* Generated Website Panel */}
-          {existingWebsite && (
-            <PremiumCard innerClassName="p-6 relative overflow-hidden">
-              <div className="absolute -top-24 -right-24 w-48 h-48 rounded-full bg-[#10b981] opacity-5 blur-[60px] pointer-events-none" />
-              <div className="flex items-center justify-between mb-5 border-b border-[var(--color-border)] pb-3 relative z-10">
-                <h3 className="text-[11px] font-mono uppercase tracking-[0.2em] text-white flex items-center gap-2">
-                  <Rocket size={13} className="text-[#10b981]" /> Generated Website
-                </h3>
-                <Badge tone="success" className="text-[9px]">Ready</Badge>
-              </div>
-              <div className="relative z-10 space-y-4">
-                <div>
-                  <h4 className="text-[15px] font-bold text-white">{existingWebsite.project_name || 'Website Generated'}</h4>
-                  <p className="text-[11px] font-mono text-[var(--color-text-muted)] mt-1">ID: {existingWebsite.id}</p>
-                </div>
-                <div className="flex items-center gap-4 text-[12px] text-[var(--color-text-secondary)]">
-                  <span className="flex items-center gap-1.5"><CheckCircle size={14} className="text-emerald-400" /> {existingWebsite.status}</span>
-                  <span className="flex items-center gap-1.5"><Eye size={14} /> {formatRelative(existingWebsite.created_at)}</span>
-                </div>
-                <div className="flex items-center gap-3 pt-4 border-t border-[var(--color-border)]">
-                  <Button variant="brand" onClick={() => navigate(`/preview/${existingWebsite.id}`)}><Eye size={15} className="mr-2" /> Open Preview</Button>
-                  {existingWebsite.package_id && (
-                    <Button variant="outline" onClick={() => navigate(`/deployment/${existingWebsite.id}`)}><Download size={15} className="mr-2" /> Open Package</Button>
-                  )}
-                  <Button variant="ghost" onClick={() => copyToClipboard(`${window.location.origin}/preview/${existingWebsite.id}`, 'Preview link')} className="ml-auto"><Copy size={15} /></Button>
-                </div>
-              </div>
-            </PremiumCard>
-          )}
-        </div>
-
-        {/* ─── ACTION COLUMN (sticky) ─────────────────────────── */}
-        <div className="space-y-6 lg:sticky lg:top-24">
-          {/* Quick Actions */}
-          <PremiumCard innerClassName="p-5">
-            <h3 className="text-[11px] font-mono uppercase tracking-[0.2em] text-white mb-4 border-b border-[var(--color-border)] pb-3 flex items-center gap-2">
-              <Zap size={13} className="text-[#06b6d4]" /> Workflow Actions
-            </h3>
-            <div className="space-y-2.5">
-              <ActionButton icon={Camera} label="Screenshot" active={!!screenshotResult} loading={screenshotMutation.isPending} onClick={() => screenshotMutation.mutate()} />
-              <ActionButton icon={Search} label="Analyze Website" active={!!analysisResult} loading={analysisMutation.isPending} onClick={() => analysisMutation.mutate()} />
-              <ActionButton icon={Shield} label="AI Audit" active={!!auditResult} loading={auditMutation.isPending} onClick={() => auditMutation.mutate()} />
-              <ActionButton
-                icon={Zap}
-                label={existingWebsite ? 'View Website' : isGenerationRunning ? `Synthesizing (${jobResult ? (jobResult.progress || 'Queued') : 'Queued'})` : 'Generate Website'}
-                active={!!existingWebsite}
-                loading={isGenerationRunning}
-                onClick={() => { if (existingWebsite) navigate(`/preview/${existingWebsite.id}`); else generate(); }}
-                variant={existingWebsite ? 'preview' : 'primary'}
-              />
-              {jobError && (
-                <div className="text-[10px] font-mono text-red-400 bg-red-500/10 border border-red-500/20 p-2 rounded flex items-start gap-1 mt-1">
-                  <AlertTriangle size={11} className="shrink-0 mt-0.5" />
-                  <span>{jobError}</span>
-                </div>
-              )}
-              {existingWebsite?.package_id && (
-                <ActionButton icon={Download} label="Download Package" onClick={() => generationService.downloadPackage(existingWebsite.id)} />
-              )}
-              <ActionButton icon={Send} label="Generate Outreach" active={!!outreachResult} loading={outreachMutation.isPending} onClick={() => outreachMutation.mutate()} />
-            </div>
-          </PremiumCard>
-
-          {/* Outreach Content */}
-          <PremiumCard innerClassName="p-5">
-            <div className="flex items-center justify-between mb-4 border-b border-[var(--color-border)] pb-3">
-              <h3 className="text-[11px] font-mono uppercase tracking-[0.2em] text-white flex items-center gap-2">
-                <Send size={13} className="text-[#22d3ee]" /> Outreach
-              </h3>
-              {outreachResult && <Badge tone="success" className="text-[9px]">Generated</Badge>}
-            </div>
-
-            {outreachMutation.isPending ? (
-              <div className="flex flex-col items-center justify-center py-8 gap-3">
-                <div className="relative size-10">
-                  <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#22d3ee] border-r-[#8b5cf6] animate-spin" style={{ animationDuration: '1s' }} />
-                </div>
-                <p className="text-[11px] font-mono text-[var(--color-text-muted)]">Generating outreach...</p>
-              </div>
-            ) : outreachMutation.error ? (
-              <div className="flex flex-col items-center py-6 gap-2 text-center">
-                <AlertTriangle size={20} className="text-red-400" />
-                <p className="text-[11px] text-red-400">Generation failed</p>
-                <Button size="xs" variant="outline" onClick={() => outreachMutation.mutate()}>Retry</Button>
-              </div>
-            ) : outreachResult ? (
-              <div className="space-y-4 max-h-[500px] overflow-y-auto lf-thin-scroll">
-                {outreachResult.email_subject && (
-                  <div className="p-3 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] border border-[var(--color-border)]">
-                    <p className="text-[9px] font-mono uppercase tracking-wider text-[var(--color-text-muted)] mb-1">Subject</p>
-                    <p className="text-[12px] text-white font-medium">{outreachResult.email_subject}</p>
-                  </div>
-                )}
-                {outreachResult.cold_email && (
-                  <OutreachBlock label="Cold Email" content={outreachResult.cold_email} color="#10b981" onCopy={() => copyToClipboard(outreachResult.cold_email!, 'Cold email')} />
-                )}
-                {outreachResult.linkedin_message && (
-                  <OutreachBlock label="LinkedIn" content={outreachResult.linkedin_message} color="#0ea5e9" onCopy={() => copyToClipboard(outreachResult.linkedin_message!, 'LinkedIn message')} />
-                )}
-                {outreachResult.followup_email && (
-                  <OutreachBlock label="Follow-up" content={outreachResult.followup_email} color="#8b5cf6" onCopy={() => copyToClipboard(outreachResult.followup_email!, 'Follow-up email')} />
-                )}
-                {outreachResult.whatsapp_message && (
-                  <OutreachBlock label="WhatsApp" content={outreachResult.whatsapp_message} color="#22c55e" onCopy={() => copyToClipboard(outreachResult.whatsapp_message!, 'WhatsApp message')} />
-                )}
-                {outreachResult.short_cta && (
-                  <div className="p-3 rounded-[var(--radius-md)] bg-emerald-500/5 border border-emerald-500/15">
-                    <p className="text-[9px] font-mono uppercase tracking-wider text-emerald-400 mb-1">CTA</p>
-                    <p className="text-[12px] text-emerald-300">{outreachResult.short_cta}</p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-8 gap-3 text-center">
-                <Send size={24} className="text-[var(--color-text-muted)]" />
-                <p className="text-[11px] font-mono text-[var(--color-text-muted)]">No outreach generated yet. Click <span className="text-[#22d3ee]">Generate Outreach</span> to create AI-powered messaging.</p>
-              </div>
-            )}
-          </PremiumCard>
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════
-         FULL-SCREEN SCREENSHOT OVERLAY
-      ════════════════════════════════════════════════════════════ */}
+      {/* ── Workspace tabs ────────────────────────────────────── */}
+      <div className="flex items-center gap-0.5 border-b border-[var(--color-border)] -mb-px">
+        {tabs.filter(t => t.show).map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={cn(
+              'px-4 py-2.5 text-[13px] font-medium transition-colors duration-[var(--anim-fast)] border-b-2 -mb-px',
+              activeTab === tab.id
+                ? 'text-[var(--color-text)] border-[var(--color-brand)]'
+                : 'text-[var(--color-text-muted)] border-transparent hover:text-[var(--color-text-secondary)]',
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Tab content ───────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+        {/* Main column */}
+        <div className="lg:col-span-2 space-y-5">
+          {activeTab === 'overview' && (
+            <>
+              {/* Business info */}
+              <SectionCard title="Business Information">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+                  <InfoRow label="Name" value={lead.name} />
+                  <InfoRow label="Industry" value={lead.industry} />
+                  <InfoRow label="City" value={lead.city} />
+                  <InfoRow label="Country" value={lead.country} />
+                  <InfoRow label="Address" value={lead.address} />
+                  <InfoRow label="Phone" value={lead.phone} href={lead.phone ? `tel:${lead.phone}` : undefined} />
+                  <InfoRow label="Website" value={lead.website?.replace(/^https?:\/\//, '').replace(/\/$/, '')} href={lead.website?.startsWith('http') ? lead.website : lead.website ? `https://${lead.website}` : undefined} isLink />
+                </div>
+              </SectionCard>
+
+              {/* Lead metadata */}
+              <SectionCard title="Lead Details">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+                  <InfoRow label="Status" value={<Badge tone={statusTone[lead.status] ?? 'muted'} className="text-[11px]">{lead.status.replace(/_/g, ' ')}</Badge>} />
+                  <InfoRow label="Audit Score" value={lead.score?.overall_score != null ? `${lead.score.overall_score}/100` : null} />
+                  <InfoRow label="Reviews" value={lead.reviews_count != null ? String(lead.reviews_count) : null} />
+                  <InfoRow label="Created" value={lead.created_at ? formatRelative(lead.created_at) : null} />
+                  <InfoRow label="Updated" value={lead.updated_at ? formatRelative(lead.updated_at) : null} />
+                </div>
+              </SectionCard>
+
+              {/* Screenshot */}
+              <SectionCard
+                title="Website Screenshot"
+                action={
+                  <div className="flex items-center gap-2">
+                    {hasScreenshot && <Badge tone="success" className="text-[10px]">Captured</Badge>}
+                    <Button size="xs" variant={hasScreenshot ? 'outline' : 'primary'} loading={screenshotMutation.isPending} onClick={() => screenshotMutation.mutate()}>
+                      {hasScreenshot ? 'Recapture' : 'Capture'}
+                    </Button>
+                  </div>
+                }
+              >
+                {screenshotMutation.isPending ? (
+                  <div className="flex flex-col items-center justify-center py-10 gap-3">
+                    <div className="size-8 border-2 border-[var(--color-border)] border-t-[var(--color-brand)] rounded-full lf-spin" />
+                    <p className="text-[12px] text-[var(--color-text-muted)]">Capturing screenshots...</p>
+                  </div>
+                ) : hasScreenshot ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {screenshotResult!.desktop_url && (
+                      <ScreenshotFrame label="Desktop" url={screenshotResult!.desktop_url} onClick={() => setFullScreenImg(screenshotResult!.desktop_url!)} />
+                    )}
+                    {screenshotResult!.mobile_url && (
+                      <ScreenshotFrame label="Mobile" url={screenshotResult!.mobile_url} onClick={() => setFullScreenImg(screenshotResult!.mobile_url!)} />
+                    )}
+                  </div>
+                ) : screenshotMutation.error ? (
+                  <div className="flex flex-col items-center py-8 gap-2 text-center">
+                    <AlertTriangle size={20} className="text-red-500" />
+                    <p className="text-[12px] text-[var(--color-text-secondary)]">Capture failed</p>
+                    <Button size="xs" variant="outline" onClick={() => screenshotMutation.mutate()}>Retry</Button>
+                  </div>
+                ) : (
+                  <EmptyState
+                    title="No screenshots yet"
+                    message="Capture website screenshots to inspect the current design."
+                    icon={Camera}
+                    action={<Button size="sm" variant="primary" onClick={() => screenshotMutation.mutate()}>Capture</Button>}
+                  />
+                )}
+              </SectionCard>
+
+              {/* Technical analysis */}
+              <SectionCard
+                title="Technical Analysis"
+                action={
+                  <div className="flex items-center gap-2">
+                    {analysisResult && <Badge tone="success" className="text-[10px]">Done</Badge>}
+                    <Button size="xs" variant={analysisResult ? 'outline' : 'primary'} loading={analysisMutation.isPending} onClick={() => analysisMutation.mutate()}>
+                      {analysisResult ? 'Re-run' : 'Analyze'}
+                    </Button>
+                  </div>
+                }
+              >
+                {analysisMutation.isPending ? (
+                  <div className="flex flex-col items-center justify-center py-10 gap-3">
+                    <div className="size-8 border-2 border-[var(--color-border)] border-t-[var(--color-brand)] rounded-full lf-spin" />
+                    <p className="text-[12px] text-[var(--color-text-muted)]">Analyzing website...</p>
+                  </div>
+                ) : analysisResult ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <MetricBox label="HTTP Status" value={String(analysisResult.http_status_code ?? '\u2014')} />
+                      <MetricBox label="Response" value={`${analysisResult.response_time_ms ?? '\u2014'}ms`} />
+                      <MetricBox label="Page Weight" value={`${analysisResult.html_size_kb?.toFixed(1) ?? '\u2014'} KB`} />
+                      <MetricBox label="Security" value={analysisResult.https_enabled ? 'HTTPS' : 'HTTP'} tone={analysisResult.https_enabled ? 'success' : 'danger'} />
+                    </div>
+                    <div className="grid grid-cols-5 gap-2">
+                      <MiniMetric label="H1" value={analysisResult.h1_count} />
+                      <MiniMetric label="H2" value={analysisResult.h2_count} />
+                      <MiniMetric label="Paragraphs" value={analysisResult.total_paragraphs} />
+                      <MiniMetric label="Images" value={analysisResult.total_images} />
+                      <MiniMetric label="Forms" value={analysisResult.total_forms} />
+                    </div>
+                    {lead.website && (
+                      <div className="pt-3 border-t border-[var(--color-border)]">
+                        <a href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`} target="_blank" rel="noopener noreferrer" className="text-[12px] text-[var(--color-brand)] hover:underline inline-flex items-center gap-1">
+                          <ExternalLink size={12} /> Visit site
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                ) : analysisMutation.error ? (
+                  <div className="flex flex-col items-center py-8 gap-2 text-center">
+                    <AlertTriangle size={20} className="text-red-500" />
+                    <p className="text-[12px] text-[var(--color-text-secondary)]">Analysis failed</p>
+                    <Button size="xs" variant="outline" onClick={() => analysisMutation.mutate()}>Retry</Button>
+                  </div>
+                ) : (
+                  <EmptyState
+                    title="No analysis yet"
+                    message="Run a technical analysis to inspect website structure and performance."
+                    icon={Search}
+                    action={<Button size="sm" variant="primary" onClick={() => analysisMutation.mutate()}>Analyze</Button>}
+                  />
+                )}
+              </SectionCard>
+            </>
+          )}
+
+          {activeTab === 'audit' && (
+            <SectionCard
+              title="AI Audit"
+              action={
+                <div className="flex items-center gap-2">
+                  {hasAudit && (
+                    <Badge tone={auditResult!.score.category === 'Hot Lead' ? 'success' : auditResult!.score.category === 'Warm Lead' ? 'warning' : 'muted'} className="text-[10px]">
+                      {auditResult!.score.category}
+                    </Badge>
+                  )}
+                  <Button size="xs" variant={hasAudit ? 'outline' : 'primary'} loading={auditMutation.isPending} onClick={() => auditMutation.mutate()}>
+                    {hasAudit ? 'Re-audit' : 'Run Audit'}
+                  </Button>
+                </div>
+              }
+            >
+              {auditMutation.isPending ? (
+                <div className="flex flex-col items-center justify-center py-10 gap-3">
+                  <div className="size-8 border-2 border-[var(--color-border)] border-t-[var(--color-brand)] rounded-full lf-spin" />
+                  <p className="text-[12px] text-[var(--color-text-muted)]">Running AI audit...</p>
+                </div>
+              ) : hasAudit ? (
+                <div className="space-y-6">
+                  {/* Score overview */}
+                  <div className="flex items-center gap-6">
+                    <ScoreGauge score={auditResult!.score.overall_score} size={100} strokeWidth={7} label="Score" />
+                    <div className="flex-1 space-y-3">
+                      <ScoreBar label="SEO" value={auditResult!.score.seo_score} />
+                      <ScoreBar label="UX" value={auditResult!.score.ux_score} />
+                      <ScoreBar label="Branding" value={auditResult!.score.branding_score} />
+                      <ScoreBar label="Trust" value={auditResult!.score.trust_score} />
+                      <ScoreBar label="Conversion" value={auditResult!.score.conversion_score} />
+                    </div>
+                  </div>
+
+                  {/* Summary */}
+                  {auditResult!.audit && typeof auditResult!.audit === 'object' && ('Business Summary' in auditResult!.audit || 'Overall Summary' in auditResult!.audit) && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-4 border-t border-[var(--color-border)]">
+                      {'Business Summary' in auditResult!.audit && (
+                        <div className="p-3.5 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)]">
+                          <p className="text-[11px] font-medium text-[var(--color-text-muted)] mb-1.5">Business Summary</p>
+                          <p className="text-[12px] text-[var(--color-text-secondary)] leading-relaxed">{String(auditResult!.audit['Business Summary'])}</p>
+                        </div>
+                      )}
+                      {'Overall Summary' in auditResult!.audit && (
+                        <div className="p-3.5 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)]">
+                          <p className="text-[11px] font-medium text-[var(--color-text-muted)] mb-1.5">Audit Verdict</p>
+                          <p className="text-[12px] text-[var(--color-text-secondary)] leading-relaxed">{String(auditResult!.audit['Overall Summary'])}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Weaknesses */}
+                  {auditResult!.audit && typeof auditResult!.audit === 'object' && 'Top Weaknesses' in auditResult!.audit && Array.isArray(auditResult!.audit['Top Weaknesses']) && (
+                    <div className="pt-4 border-t border-[var(--color-border)]">
+                      <p className="text-[11px] font-medium text-[var(--color-text-muted)] mb-3">Weaknesses &amp; Recommendations</p>
+                      <div className="space-y-2.5">
+                        {(auditResult!.audit['Top Weaknesses'] as Array<string | { title?: string; evidence?: string; impact?: string; recommendation?: string }>).map((w, i) => {
+                          if (!w) return null;
+                          const weakness = typeof w === 'string' ? { title: w } : w;
+                          return (
+                            <div key={i} className="p-3.5 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] border border-[var(--color-border)]">
+                              <p className="text-[12px] font-medium text-[var(--color-text)] mb-1">{weakness.title}</p>
+                              {weakness.impact && <p className="text-[11px] text-[var(--color-text-muted)] mb-1.5">{weakness.impact}</p>}
+                              {weakness.recommendation && (
+                                <p className="text-[11px] text-[var(--color-success)] inline-flex items-start gap-1.5"><CheckCircle size={11} className="shrink-0 mt-0.5" />{weakness.recommendation}</p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : auditMutation.error ? (
+                <div className="flex flex-col items-center py-8 gap-2 text-center">
+                  <AlertTriangle size={20} className="text-red-500" />
+                  <p className="text-[12px] text-[var(--color-text-secondary)]">Audit failed</p>
+                  <Button size="xs" variant="outline" onClick={() => auditMutation.mutate()}>Retry</Button>
+                </div>
+              ) : (
+                <EmptyState
+                  title="No audit yet"
+                  message="Run an AI audit to score this lead and identify improvement opportunities."
+                  icon={Shield}
+                  action={<Button size="sm" variant="primary" onClick={() => auditMutation.mutate()}>Run Audit</Button>}
+                />
+              )}
+            </SectionCard>
+          )}
+
+          {activeTab === 'redesign' && (
+            <SectionCard title="Website Generation">
+              {isGenerationRunning ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 p-4 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] border border-[var(--color-border)]">
+                    <div className="size-5 border-2 border-[var(--color-border)] border-t-[var(--color-brand)] rounded-full lf-spin" />
+                    <div>
+                      <p className="text-[13px] font-medium text-[var(--color-text)]">Generating website...</p>
+                      <p className="text-[11px] text-[var(--color-text-muted)]">{jobResult?.progress || 'Queued'}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : hasWebsite ? (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] border border-[var(--color-border)]">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[14px] font-medium text-[var(--color-text)]">{existingWebsite!.project_name || 'Generated Website'}</p>
+                        <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5">Created {formatRelative(existingWebsite!.created_at)}</p>
+                      </div>
+                      <Badge tone="success" className="text-[10px] shrink-0">{existingWebsite!.status}</Badge>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="primary" size="sm" onClick={() => navigate(`/preview/${existingWebsite!.id}`)}>
+                      <Eye size={14} className="mr-1.5" /> Preview
+                    </Button>
+                    {existingWebsite!.package_id && (
+                      <Button variant="outline" size="sm" onClick={() => navigate(`/deployment/${existingWebsite!.id}`)}>
+                        <Download size={14} className="mr-1.5" /> Package
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="sm" onClick={() => copyToClipboard(`${window.location.origin}/preview/${existingWebsite!.id}`, 'Preview link')}>
+                      <Copy size={14} />
+                    </Button>
+                  </div>
+                </div>
+              ) : jobError ? (
+                <div className="p-4 rounded-[var(--radius-md)] bg-red-500/5 border border-red-500/15">
+                  <div className="flex items-start gap-2.5">
+                    <AlertTriangle size={14} className="text-red-500 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-[12px] font-medium text-red-600 dark:text-red-400">Generation failed</p>
+                      <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5">{jobError}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <EmptyState
+                  title="No website generated yet"
+                  message="Generate a premium website redesign for this lead using AI."
+                  icon={Rocket}
+                  action={<Button size="sm" variant="primary" onClick={() => generate()}>Generate Website</Button>}
+                />
+              )}
+            </SectionCard>
+          )}
+
+          {activeTab === 'website' && hasWebsite && (
+            <SectionCard title="Generated Website">
+              <div className="space-y-4">
+                <div className="p-4 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] border border-[var(--color-border)]">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div>
+                      <p className="text-[14px] font-medium text-[var(--color-text)]">{existingWebsite!.project_name || 'Generated Website'}</p>
+                      <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5">ID: {existingWebsite!.id}</p>
+                    </div>
+                    <Badge tone="success" className="text-[10px] shrink-0">{existingWebsite!.status}</Badge>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--color-text-muted)]">
+                    <span>Created {formatRelative(existingWebsite!.created_at)}</span>
+                    {existingWebsite!.updated_at && <span>Updated {formatRelative(existingWebsite!.updated_at)}</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="primary" size="sm" onClick={() => navigate(`/preview/${existingWebsite!.id}`)}>
+                    <Eye size={14} className="mr-1.5" /> Open Preview
+                  </Button>
+                  {existingWebsite!.package_id && (
+                    <Button variant="outline" size="sm" onClick={() => navigate(`/deployment/${existingWebsite!.id}`)}>
+                      <Download size={14} className="mr-1.5" /> Open Package
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={() => copyToClipboard(`${window.location.origin}/preview/${existingWebsite!.id}`, 'Preview link')}>
+                    <Copy size={14} />
+                  </Button>
+                </div>
+              </div>
+            </SectionCard>
+          )}
+        </div>
+
+        {/* ── Sidebar ──────────────────────────────────────────── */}
+        <div className="space-y-4 lg:sticky lg:top-24">
+          {/* Context panel */}
+          <SectionCard title="Details">
+            <div className="space-y-3">
+              <InfoRow label="Status" value={<Badge tone={statusTone[lead.status] ?? 'muted'} className="text-[11px]">{lead.status.replace(/_/g, ' ')}</Badge>} />
+              <InfoRow label="Audit Score" value={lead.score?.overall_score != null ? `${lead.score.overall_score}/100` : null} />
+              <InfoRow label="Reviews" value={lead.reviews_count != null ? String(lead.reviews_count) : null} />
+              <InfoRow label="Created" value={lead.created_at ? formatRelative(lead.created_at) : null} />
+              <InfoRow label="Updated" value={lead.updated_at ? formatRelative(lead.updated_at) : null} />
+            </div>
+          </SectionCard>
+
+          {/* Quick actions */}
+          <SectionCard title="Actions">
+            <div className="space-y-1.5">
+              <SidebarAction icon={Camera} label="Capture Screenshot" active={hasScreenshot} loading={screenshotMutation.isPending} onClick={() => screenshotMutation.mutate()} />
+              <SidebarAction icon={Search} label="Analyze Website" active={!!analysisResult} loading={analysisMutation.isPending} onClick={() => analysisMutation.mutate()} />
+              <SidebarAction icon={Shield} label="Run Audit" active={hasAudit} loading={auditMutation.isPending} onClick={() => auditMutation.mutate()} />
+              <SidebarAction
+                icon={Rocket}
+                label={hasWebsite ? 'View Website' : isGenerationRunning ? 'Generating...' : 'Generate Website'}
+                active={hasWebsite}
+                loading={isGenerationRunning}
+                onClick={() => { if (hasWebsite) navigate(`/preview/${existingWebsite!.id}`); else generate(); }}
+                highlight={!hasWebsite && !isGenerationRunning}
+              />
+              {hasWebsite && existingWebsite!.package_id && (
+                <SidebarAction icon={Download} label="Download Package" onClick={() => generationService.downloadPackage(existingWebsite!.id)} />
+              )}
+              <SidebarAction icon={Send} label="Generate Outreach" active={!!outreachResult} loading={outreachMutation.isPending} onClick={() => outreachMutation.mutate()} />
+            </div>
+          </SectionCard>
+
+          {/* Outreach */}
+          <SectionCard
+            title="Outreach"
+            action={outreachResult ? <Badge tone="success" className="text-[10px]">Generated</Badge> : undefined}
+          >
+            {outreachMutation.isPending ? (
+              <div className="flex flex-col items-center py-6 gap-2">
+                <div className="size-6 border-2 border-[var(--color-border)] border-t-[var(--color-brand)] rounded-full lf-spin" />
+                <p className="text-[11px] text-[var(--color-text-muted)]">Generating...</p>
+              </div>
+            ) : outreachMutation.error ? (
+              <div className="flex flex-col items-center py-6 gap-2 text-center">
+                <AlertTriangle size={16} className="text-red-500" />
+                <p className="text-[11px] text-[var(--color-text-secondary)]">Failed</p>
+                <Button size="xs" variant="outline" onClick={() => outreachMutation.mutate()}>Retry</Button>
+              </div>
+            ) : outreachResult ? (
+              <div className="space-y-2.5 max-h-[400px] overflow-y-auto lf-thin-scroll">
+                {outreachResult.email_subject && (
+                  <OutreachBlock label="Subject" content={outreachResult.email_subject} onCopy={() => copyToClipboard(outreachResult.email_subject!, 'Subject')} />
+                )}
+                {outreachResult.cold_email && (
+                  <OutreachBlock label="Cold Email" content={outreachResult.cold_email} onCopy={() => copyToClipboard(outreachResult.cold_email!, 'Cold email')} />
+                )}
+                {outreachResult.linkedin_message && (
+                  <OutreachBlock label="LinkedIn" content={outreachResult.linkedin_message} onCopy={() => copyToClipboard(outreachResult.linkedin_message!, 'LinkedIn message')} />
+                )}
+                {outreachResult.followup_email && (
+                  <OutreachBlock label="Follow-up" content={outreachResult.followup_email} onCopy={() => copyToClipboard(outreachResult.followup_email!, 'Follow-up')} />
+                )}
+                {outreachResult.whatsapp_message && (
+                  <OutreachBlock label="WhatsApp" content={outreachResult.whatsapp_message} onCopy={() => copyToClipboard(outreachResult.whatsapp_message!, 'WhatsApp')} />
+                )}
+                {outreachResult.short_cta && (
+                  <div className="p-3 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] border border-[var(--color-border)]">
+                    <p className="text-[10px] font-medium text-[var(--color-text-muted)] mb-1">CTA</p>
+                    <p className="text-[12px] text-[var(--color-text-secondary)]">{outreachResult.short_cta}</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-[12px] text-[var(--color-text-muted)] text-center py-4">No outreach generated yet.</p>
+            )}
+          </SectionCard>
+        </div>
+      </div>
+
+      {/* ── Fullscreen screenshot overlay ──────────────────────── */}
       {fullScreenImg && (
-        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center" onClick={() => setFullScreenImg(null)}>
-          <button onClick={() => setFullScreenImg(null)} className="absolute top-6 right-6 size-10 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/20 transition-all"><X size={20} /></button>
-          <img src={fullScreenImg} alt="Full size screenshot" className="max-w-[95vw] max-h-[95vh] object-contain rounded-[var(--radius-lg)]" onClick={(e) => e.stopPropagation()} />
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setFullScreenImg(null)}>
+          <button onClick={() => setFullScreenImg(null)} className="absolute top-4 right-4 size-9 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+            <X size={18} />
+          </button>
+          <img src={fullScreenImg} alt="Full size screenshot" className="max-w-full max-h-full object-contain rounded-[var(--radius-lg)]" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
     </div>
   );
 }
 
-/* ── Action button sub-component ─────────────────────────────── */
-function ActionButton({ icon: Icon, label, active, loading, onClick, variant }: {
-  icon: typeof Camera; label: string; active?: boolean; loading?: boolean; onClick: () => void; variant?: 'primary' | 'preview';
+/* ═══════════════════════════════════════════════════════════════
+   SUB-COMPONENTS
+   ══════════════════════════════════════════════════════════════ */
+
+function SectionCard({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="rounded-[var(--radius-lg)] bg-[var(--color-surface)] border border-[var(--color-border)]">
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--color-border)]">
+        <h3 className="text-[13px] font-semibold text-[var(--color-text)]">{title}</h3>
+        {action}
+      </div>
+      <div className="p-5">{children}</div>
+    </div>
+  );
+}
+
+function InfoRow({ label, value, href, isLink }: { label: string; value: React.ReactNode | null | undefined; href?: string; isLink?: boolean }) {
+  if (value == null || value === '') return null;
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <span className="text-[11px] text-[var(--color-text-muted)] shrink-0">{label}</span>
+      {href ? (
+        <a href={href} target="_blank" rel="noopener noreferrer" className={cn('text-[12px] text-right truncate', isLink ? 'text-[var(--color-brand)] hover:underline' : 'text-[var(--color-text-secondary)]')}>
+          {value}
+        </a>
+      ) : typeof value === 'string' ? (
+        <span className="text-[12px] text-[var(--color-text-secondary)] text-right truncate">{value}</span>
+      ) : (
+        <span className="text-right">{value}</span>
+      )}
+    </div>
+  );
+}
+
+function MetricBox({ label, value, tone }: { label: string; value: string; tone?: 'success' | 'danger' }) {
+  return (
+    <div className="p-3 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] text-center">
+      <p className={cn(
+        'text-[18px] font-bold tabular-nums',
+        tone === 'success' ? 'text-[var(--color-success)]' : tone === 'danger' ? 'text-[var(--color-danger)]' : 'text-[var(--color-text)]',
+      )}>{value}</p>
+      <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">{label}</p>
+    </div>
+  );
+}
+
+function MiniMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="text-center py-2">
+      <p className="text-[16px] font-bold text-[var(--color-text)] tabular-nums">{value}</p>
+      <p className="text-[10px] text-[var(--color-text-muted)]">{label}</p>
+    </div>
+  );
+}
+
+function ScreenshotFrame({ label, url, onClick }: { label: string; url: string; onClick: () => void }) {
+  return (
+    <div className="group relative rounded-[var(--radius-md)] overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface-hover)]">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
+        <div className="flex gap-1"><span className="size-1.5 rounded-full bg-red-400/60" /><span className="size-1.5 rounded-full bg-amber-400/60" /><span className="size-1.5 rounded-full bg-emerald-400/60" /></div>
+        <span className="text-[10px] text-[var(--color-text-muted)]">{label}</span>
+      </div>
+      <img src={url} alt={`${label} screenshot`} className="w-full object-cover cursor-pointer" onClick={onClick} />
+      <button onClick={onClick} className="absolute top-2 right-2 size-7 rounded-[var(--radius-md)] bg-black/50 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
+        <Maximize2 size={12} />
+      </button>
+    </div>
+  );
+}
+
+function SidebarAction({ icon: Icon, label, active, loading, onClick, highlight }: {
+  icon: typeof Camera; label: string; active?: boolean; loading?: boolean; onClick: () => void; highlight?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
       disabled={loading}
       className={cn(
-        'w-full flex items-center gap-3 px-4 py-3 rounded-[var(--radius-md)] transition-all text-left',
-        variant === 'preview'
-          ? 'bg-gradient-to-r from-[#8b5cf6]/20 to-[#d946ef]/20 border border-[#8b5cf6]/30 text-white hover:from-[#8b5cf6]/30 hover:to-[#d946ef]/30'
-          : variant === 'primary'
-            ? 'bg-gradient-to-r from-[#0ea5e9]/20 to-[#2563eb]/20 border border-[#0ea5e9]/30 text-white hover:from-[#0ea5e9]/30 hover:to-[#2563eb]/30'
-            : active
-              ? 'bg-emerald-500/10 border border-emerald-500/25 text-white hover:bg-emerald-500/15'
-              : 'bg-[var(--color-surface-hover)] border border-transparent text-[var(--color-text-secondary)] hover:bg-[color-mix(in_oklab,var(--color-surface-hover)_80%,#0ea5e9)] hover:text-white',
+        'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--radius-md)] transition-colors duration-[var(--anim-fast)] text-left group',
+        highlight
+          ? 'bg-[var(--color-brand-subtle)] border border-[var(--color-brand-border)] text-[var(--color-text)] hover:bg-[var(--color-brand-soft)]'
+          : active
+            ? 'bg-[var(--color-surface-hover)] text-[var(--color-text)] hover:bg-[var(--color-border)]'
+            : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]',
       )}
     >
-      <div className={cn(
-        'size-8 rounded-[var(--radius-sm)] flex items-center justify-center shrink-0',
-        variant === 'preview' ? 'bg-[#8b5cf6]/20' : active ? 'bg-emerald-500/15' : 'bg-[var(--color-glass)]',
-      )}>
-        <Icon size={14} className={cn(
-          variant === 'preview' && 'text-[#d946ef]',
-          active && !variant && 'text-emerald-400',
-          !active && !variant && 'text-[var(--color-text-muted)]',
-        )} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className={cn(
-          'text-[12px] font-semibold truncate',
-          active && 'text-emerald-400',
-        )}>{label}</p>
-        {active && !variant && <p className="text-[9px] font-mono text-emerald-400/60">Complete</p>}
-      </div>
-      {loading && <Loader2 size={14} className="lf-spin text-[var(--color-text-muted)]" />}
-      {!loading && variant === 'primary' && <ChevronRight size={14} className="text-[#0ea5e9]" />}
-      {!loading && variant === 'preview' && <ExternalLink size={14} className="text-[#d946ef]" />}
+      <Icon size={14} className={cn(active ? 'text-[var(--color-success)]' : highlight ? 'text-[var(--color-brand)]' : 'text-[var(--color-text-muted)]')} />
+      <span className="flex-1 text-[12px] font-medium truncate">{label}</span>
+      {active && !loading && <CheckCircle size={12} className="text-[var(--color-success)] shrink-0" />}
+      {loading && <div className="size-3.5 border-2 border-[var(--color-border)] border-t-[var(--color-brand)] rounded-full lf-spin shrink-0" />}
     </button>
   );
 }
 
-/* ── Outreach content block sub-component ────────────────────── */
-function OutreachBlock({ label, content, color, onCopy }: { label: string; content: string; color: string; onCopy: () => void }) {
+function OutreachBlock({ label, content, onCopy }: { label: string; content: string; onCopy: () => void }) {
   const [expanded, setExpanded] = useState(false);
-  const truncated = content.length > 280;
+  const truncated = content.length > 200;
   return (
     <div className="p-3 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] border border-[var(--color-border)]">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[9px] font-mono uppercase tracking-wider" style={{ color }}>{label}</span>
-        <div className="flex items-center gap-1.5">
-          <button onClick={onCopy} className="size-6 rounded-md bg-[var(--color-glass)] flex items-center justify-center text-[var(--color-text-muted)] hover:text-white transition-all"><Copy size={10} /></button>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[10px] font-medium text-[var(--color-text-muted)]">{label}</span>
+        <div className="flex items-center gap-1">
+          <button onClick={onCopy} className="size-5 rounded flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"><Copy size={10} /></button>
           {truncated && (
-            <button onClick={() => setExpanded(!expanded)} className="size-6 rounded-md bg-[var(--color-glass)] flex items-center justify-center text-[var(--color-text-muted)] hover:text-white transition-all">
+            <button onClick={() => setExpanded(!expanded)} className="size-5 rounded flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
               {expanded ? <X size={10} /> : <ChevronDown size={10} />}
             </button>
           )}
         </div>
       </div>
       <p className="text-[11px] text-[var(--color-text-secondary)] whitespace-pre-wrap leading-relaxed">
-        {truncated && !expanded ? `${content.slice(0, 280)}...` : content}
+        {truncated && !expanded ? `${content.slice(0, 200)}...` : content}
       </p>
     </div>
   );
