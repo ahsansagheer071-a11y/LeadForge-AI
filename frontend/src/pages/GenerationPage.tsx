@@ -1,17 +1,18 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Globe, Loader2, CheckCircle2, AlertCircle, Camera, Search, Shield, Zap } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, AlertTriangle, Camera, Search, Shield, Zap, Eye, Download, ExternalLink } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/Badge';
+import { Button } from '@/components/Button';
 import { Skeleton } from '@/components/Loading';
 import { EmptyState } from '@/components/ErrorStates';
-import { PremiumCard } from '@/components/PremiumCard';
-import { projectsService } from '@/services/services';
+import { projectsService, generationService } from '@/services/services';
 import { usePreviewStore } from '@/store';
 import { useGenerationJob } from '@/hooks/useGenerationJob';
 import { cn } from '@/utils';
 import { toast } from 'sonner';
 
+/* ── Constants ───────────────────────────────────────────────── */
 const statusBadgeTone = (status: string): 'success' | 'info' | 'brand' | 'muted' => {
   if (status.includes('READY')) return 'success';
   if (status.includes('ANALYZED') || status.includes('SCORED')) return 'info';
@@ -19,30 +20,27 @@ const statusBadgeTone = (status: string): 'success' | 'info' | 'brand' | 'muted'
   return 'muted';
 };
 
-/* ── Prerequisite check items ────────────────────────────────── */
 interface Prereq {
   id: string;
   label: string;
   icon: typeof Camera;
-  color: string;
   check: (lead: { screenshot?: unknown; audit?: unknown; score?: unknown } | null) => boolean;
 }
 
 const PREREQS: Prereq[] = [
-  { id: 'screenshot', label: 'Screenshot Captured', icon: Camera, color: '#06b6d4', check: (l) => !!l?.screenshot },
-  { id: 'analysis', label: 'Website Analyzed', icon: Search, color: '#8b5cf6', check: () => true },
-  { id: 'audit', label: 'Audit Complete', icon: Shield, color: '#f59e0b', check: (l) => !!l?.audit && !!l?.score },
+  { id: 'screenshot', label: 'Screenshot captured', icon: Camera, check: (l) => !!l?.screenshot },
+  { id: 'analysis', label: 'Website analyzed', icon: Search, check: () => true },
+  { id: 'audit', label: 'Audit complete', icon: Shield, check: (l) => !!l?.audit && !!l?.score },
 ];
 
-// Progress messages to rotate through during generation
 const PROGRESS_LABELS: Record<string, string> = {
-  Queued: 'Queued — waiting to start…',
-  'Loading lead data': 'Loading lead data…',
-  'Crawling website': 'Crawling website (this may take 30–60 s)…',
-  'Crawling website (fresh)': 'Crawling website — fresh scan…',
-  'Building markdown context': 'Building AI context from site data…',
-  'Generating HTML with AI': 'Generating HTML with AI (this may take 60–120 s)…',
-  'Saving result': 'Saving generated website…',
+  Queued: 'Queued \u2014 waiting to start\u2026',
+  'Loading lead data': 'Loading lead data\u2026',
+  'Crawling website': 'Crawling website (this may take 30\u201360 s)\u2026',
+  'Crawling website (fresh)': 'Crawling website \u2014 fresh scan\u2026',
+  'Building markdown context': 'Building AI context from site data\u2026',
+  'Generating HTML with AI': 'Generating HTML with AI (this may take 60\u2013120 s)\u2026',
+  'Saving result': 'Saving generated website\u2026',
   Complete: 'Complete!',
 };
 
@@ -50,6 +48,9 @@ function friendlyProgress(raw: string): string {
   return PROGRESS_LABELS[raw] ?? raw;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   MAIN COMPONENT
+   ══════════════════════════════════════════════════════════════ */
 export function GenerationPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -70,6 +71,14 @@ export function GenerationPage() {
     enabled: !!selectedId,
   });
 
+  const { data: existingWebsite } = useQuery({
+    queryKey: ['generated-website-latest', selectedId],
+    queryFn: () => generationService.getLatestByLeadId(selectedId),
+    enabled: !!selectedId,
+    staleTime: 30_000,
+    retry: false,
+  });
+
   const {
     jobResult,
     jobError,
@@ -84,313 +93,417 @@ export function GenerationPage() {
       if (htmlContent) setHtmlContent(htmlContent);
       queryClient.invalidateQueries({ queryKey: ['lead', selectedId] });
       queryClient.invalidateQueries({ queryKey: ['generated-website-latest', selectedId] });
-      toast.success('Website generated successfully!');
+      toast.success('Website generated successfully');
     },
-    onError: (msg) => {
-      toast.error(msg);
-    },
+    onError: (msg) => { toast.error(msg); },
   });
 
-  const handleGenerate = () => {
-    generate();
-  };
-
-  const handleReset = () => {
-    reset();
-  };
+  const handleGenerate = () => generate();
+  const handleReset = () => reset();
 
   const prereqsMet = PREREQS.every((p) => p.check(leadDetail ?? null));
-  const canGenerate = !!selectedId && prereqsMet && !isRunning && !isSuccess;
 
   return (
-    <div className="space-y-8 lf-fade-in">
-      {/* Header */}
-      <div>
-        <h1 className="text-[28px] font-extrabold tracking-tight text-white mb-1">AI Synthesis Lab</h1>
-        <p className="text-[13px] font-mono text-[var(--color-text-secondary)] uppercase tracking-widest">Generate premium websites from intelligence profiles</p>
+    <div className="space-y-5 lf-fade-in">
+      {/* ── Back nav ──────────────────────────────────────────── */}
+      <button
+        onClick={() => navigate(selectedId ? `/project/${selectedId}` : '/projects')}
+        className="inline-flex items-center gap-1.5 text-[12px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
+      >
+        <ArrowLeft size={14} /> {selectedId ? 'Lead Workspace' : 'Leads'}
+      </button>
+
+      {/* ── Page header ───────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div>
+          <p className="text-[13px] text-[var(--color-text-muted)] font-mono mb-1">Generation</p>
+          <h1 className="lf-display text-[var(--color-text)]">Redesign Studio</h1>
+          {selectedLead && (
+            <div className="flex items-center gap-2 mt-1.5">
+              <span className="text-[13px] font-medium text-[var(--color-text-secondary)]">{selectedLead.name}</span>
+              {selectedLead.website && (
+                <span className="text-[12px] text-[var(--color-text-muted)]">
+                  {'\u00B7'} {selectedLead.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                </span>
+              )}
+              <Badge tone={statusBadgeTone(selectedLead.status)} className="text-[10px]">{selectedLead.status.replace(/_/g, ' ')}</Badge>
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {isSuccess && jobResult?.website_id && (
+            <Button variant="primary" size="sm" onClick={() => navigate(`/preview/${jobResult.website_id}`)}>
+              <Eye size={14} className="mr-1" /> Open Preview
+            </Button>
+          )}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* ── Lead selector + prerequisites ────────────────────── */}
-        <PremiumCard innerClassName="p-6 flex flex-col" className="lg:col-span-1">
-          <div className="mb-4 pb-4 border-b border-[var(--color-border)]">
-            <h3 className="text-[14px] font-mono uppercase tracking-widest text-[#0ea5e9]">Target Selection</h3>
-          </div>
-
-          <div className="flex-1 overflow-y-auto space-y-2 lf-thin-scroll pr-2 min-h-0">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+        {/* ═══════════════════════════════════════════════════════
+           MAIN COLUMN
+           ══════════════════════════════════════════════════════ */}
+        <div className="lg:col-span-2 space-y-5">
+          {/* ── Source section ─────────────────────────────────── */}
+          <SectionCard title="Source">
             {isLoading ? (
-              <div className="space-y-2">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Skeleton key={i} variant="rounded" width="100%" height={64} delay={i * 60} />
+              <div className="space-y-3">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} variant="rounded" width="100%" height={52} delay={i * 40} />
                 ))}
               </div>
             ) : leads.length > 0 ? (
-              leads.map((lead) => (
-                <button
-                  key={lead.id}
-                  onClick={() => { setSelectedId(lead.id); handleReset(); }}
-                  className={cn(
-                    'w-full text-left px-4 py-3 rounded-[var(--radius-md)] transition-all duration-200 group border',
-                    selectedId === lead.id
-                      ? 'bg-gradient-to-r from-[#0ea5e9]/15 to-[#8b5cf6]/15 border-[#0ea5e9]/30 shadow-[0_0_15px_rgba(14,165,233,0.1)]'
-                      : 'bg-[var(--color-surface-hover)] border-transparent hover:border-[var(--color-border-strong)]',
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={cn("font-bold truncate text-[14px]", selectedId === lead.id ? "text-white" : "text-[var(--color-text)]")}>{lead.name}</span>
-                    <Badge tone={statusBadgeTone(lead.status)} className="scale-90 font-mono origin-right shrink-0">{lead.status.replace(/_/g, ' ')}</Badge>
-                  </div>
-                  <div className="flex items-center gap-2 mt-1">
-                    {lead.website && <span className="text-[11px] font-mono text-[var(--color-text-muted)] truncate">{lead.website}</span>}
-                    {lead.rating != null && <span className="text-[11px] font-mono text-amber-400 shrink-0">★ {lead.rating.toFixed(1)}</span>}
-                  </div>
-                </button>
-              ))
-            ) : (
-              <EmptyState title="No active targets" message="Discover and process targets first." />
-            )}
-          </div>
-
-          {/* Prerequisite checklist */}
-          {selectedId && (
-            <div className="pt-5 mt-4 border-t border-[var(--color-border)] space-y-3">
-              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--color-text-muted)]">Prerequisites</p>
-              {PREREQS.map((p) => {
-                const met = p.check(leadDetail ?? null);
-                const Icon = p.icon;
-                return (
-                  <div key={p.id} className="flex items-center gap-3">
-                    <div className={cn(
-                      'size-7 rounded-md flex items-center justify-center shrink-0 transition-all',
-                      met ? 'bg-emerald-500/15 border border-emerald-500/30' : 'bg-[var(--color-surface-hover)] border border-[var(--color-border)]',
-                    )}>
-                      {met ? <CheckCircle2 size={13} className="text-emerald-400" /> : <Icon size={13} className="text-[var(--color-text-muted)]" />}
+              <div className="space-y-1.5">
+                {leads.map((lead) => (
+                  <button
+                    key={lead.id}
+                    onClick={() => { setSelectedId(lead.id); handleReset(); }}
+                    className={cn(
+                      'w-full text-left px-3.5 py-2.5 rounded-[var(--radius-md)] transition-colors duration-[var(--anim-fast)] border group',
+                      selectedId === lead.id
+                        ? 'bg-[var(--color-brand-subtle)] border-[var(--color-brand-border)]'
+                        : 'bg-transparent border-transparent hover:bg-[var(--color-surface-hover)] hover:border-[var(--color-border)]',
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={cn('text-[13px] font-medium truncate', selectedId === lead.id ? 'text-[var(--color-text)]' : 'text-[var(--color-text-secondary)]')}>
+                        {lead.name}
+                      </span>
+                      <Badge tone={statusBadgeTone(lead.status)} className="text-[10px] shrink-0">{lead.status.replace(/_/g, ' ')}</Badge>
                     </div>
-                    <span className={cn('text-[12px] font-mono', met ? 'text-emerald-400' : 'text-[var(--color-text-muted)]')}>{p.label}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Generate button */}
-          {leads.length > 0 && (
-            <div className="pt-5 mt-4 border-t border-[var(--color-border)]">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[11px] font-mono text-[var(--color-text-muted)] truncate">{selectedLead?.name || 'Awaiting Selection'}</span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {lead.website && <span className="text-[11px] text-[var(--color-text-muted)] truncate">{lead.website.replace(/^https?:\/\//, '')}</span>}
+                      {lead.rating != null && <span className="text-[11px] text-[var(--color-text-muted)] tabular-nums shrink-0">{lead.rating.toFixed(1)}</span>}
+                    </div>
+                  </button>
+                ))}
               </div>
-              <button
-                disabled={!canGenerate}
-                onClick={handleGenerate}
-                className={cn(
-                  'w-full flex items-center justify-center gap-2 py-3.5 rounded-[var(--radius-md)] text-[13px] font-mono uppercase tracking-widest font-bold transition-all duration-300',
-                  canGenerate
-                    ? 'bg-gradient-to-r from-[#8b5cf6] to-[#d946ef] text-white shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:shadow-[0_0_30px_rgba(139,92,246,0.5)] hover:-translate-y-0.5'
-                    : 'bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] cursor-not-allowed',
-                )}
-              >
-                {isRunning ? (
-                  <><Loader2 className="size-4 lf-spin" /> Synthesizing...</>
+            ) : (
+              <EmptyState title="No leads available" message="Discover and process leads first." />
+            )}
+          </SectionCard>
+
+          {/* ── Direction / prompt section ─────────────────────── */}
+          {selectedId && (
+            <SectionCard
+              title="Direction"
+              action={
+                prereqsMet ? (
+                  <Badge tone="success" className="text-[10px]">Prerequisites met</Badge>
                 ) : (
-                  <><Sparkles className="size-4" /> Initiate Generation</>
-                )}
-              </button>
-              {isError && !isRunning && (
-                <button
-                  onClick={handleReset}
-                  className="w-full mt-2 py-2 text-[11px] font-mono text-[var(--color-text-muted)] hover:text-white transition-colors"
-                >
-                  Reset &amp; try again
-                </button>
-              )}
-              {selectedId && !prereqsMet && (
-                <p className="text-[10px] font-mono text-[var(--color-text-muted)] text-center mt-2">Complete prerequisites above to enable generation</p>
-              )}
-            </div>
-          )}
-        </PremiumCard>
-
-        {/* ── AI Processing Core ──────────────────────────────── */}
-        <PremiumCard
-          variant={isRunning ? 'featured' : isSuccess ? 'standard' : 'standard'}
-          className="lg:col-span-2"
-          innerClassName="relative overflow-hidden p-8 flex flex-col items-center justify-center min-h-[500px] lg:min-h-[600px]"
-        >
-          {/* Background effects */}
-          {isRunning && (
-            <>
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(139,92,246,0.12),transparent_60%)] pointer-events-none" />
-              <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,0.03) 39px, rgba(255,255,255,0.03) 40px), repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,0.03) 39px, rgba(255,255,255,0.03) 40px)' }} />
-              {/* Animated data lines */}
-              <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
-                <div className="absolute top-1/4 left-0 w-full h-px bg-gradient-to-r from-transparent via-[#8b5cf6] to-transparent animate-[lf-slide-right_2s_linear_infinite]" />
-                <div className="absolute top-2/4 left-0 w-full h-px bg-gradient-to-r from-transparent via-[#0ea5e9] to-transparent animate-[lf-slide-right_2.5s_linear_infinite]" />
-                <div className="absolute top-3/4 left-0 w-full h-px bg-gradient-to-r from-transparent via-[#d946ef] to-transparent animate-[lf-slide-right_3s_linear_infinite]" />
-              </div>
-            </>
-          )}
-
-          <div className="relative z-10 w-full flex flex-col items-center justify-center text-center">
-            {/* ── Idle state ──────────────────────────────────── */}
-            {!selectedId && (
-              <div className="flex flex-col items-center lf-fade-in">
-                <div className="size-20 rounded-full bg-[var(--color-surface-hover)] border border-[var(--color-border)] flex items-center justify-center mb-6">
-                  <Globe className="size-10 text-[var(--color-text-muted)]" />
-                </div>
-                <p className="text-[13px] font-mono text-[var(--color-text-muted)] uppercase tracking-widest max-w-xs leading-relaxed">
-                  Select a target profile to initiate AI web synthesis.
-                </p>
-              </div>
-            )}
-
-            {/* ── Pre-flight (selected, prerequisites shown) ──── */}
-            {selectedId && !isRunning && !isSuccess && !isError && (
-              <div className="flex flex-col items-center lf-fade-in">
-                <div className="relative mb-8">
-                  <div className="size-24 rounded-full bg-gradient-to-br from-[#8b5cf6]/20 to-[#d946ef]/20 border border-[#8b5cf6]/30 flex items-center justify-center shadow-[0_0_30px_rgba(139,92,246,0.15)]">
-                    <Zap className="size-10 text-[#8b5cf6]" />
+                  <Badge tone="warning" className="text-[10px]">Missing prerequisites</Badge>
+                )
+              }
+            >
+              <div className="space-y-4">
+                {/* Prerequisites */}
+                <div className="space-y-2">
+                  <p className="text-[11px] text-[var(--color-text-muted)]">Prerequisites</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {PREREQS.map((p) => {
+                      const met = p.check(leadDetail ?? null);
+                      const Icon = p.icon;
+                      return (
+                        <div key={p.id} className={cn(
+                          'flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--radius-md)] border transition-colors',
+                          met
+                            ? 'bg-emerald-500/5 border-emerald-500/15'
+                            : 'bg-[var(--color-surface-hover)] border-[var(--color-border)]',
+                        )}>
+                          {met ? (
+                            <CheckCircle2 size={14} className="text-[var(--color-success)] shrink-0" />
+                          ) : (
+                            <Icon size={14} className="text-[var(--color-text-muted)] shrink-0" />
+                          )}
+                          <span className={cn('text-[12px]', met ? 'text-[var(--color-success)]' : 'text-[var(--color-text-muted)]')}>{p.label}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-                <h3 className="text-[22px] font-bold text-white mb-2">{selectedLead?.name || 'Target Selected'}</h3>
-                <p className="text-[12px] font-mono text-[var(--color-text-secondary)] mb-4 max-w-md">
-                  {prereqsMet
-                    ? 'All prerequisites verified. Premium website generation is being upgraded to a new design engine.'
-                    : 'Complete the prerequisite checklist on the left panel to enable generation.'}
-                </p>
-                <div className="bg-amber-500/10 border border-amber-500/25 rounded-[var(--radius-md)] px-5 py-3 mb-6 max-w-md">
-                  <p className="text-[11px] font-mono text-amber-400 text-center leading-relaxed">
-                    Premium visual generation is being upgraded. Clicking Generate will attempt to create a website
-                    but may return an upgrade notice. Previously generated websites remain fully accessible.
-                  </p>
-                </div>
-                {prereqsMet && (
-                  <button
-                    onClick={handleGenerate}
-                    className="bg-gradient-to-r from-[#8b5cf6] to-[#d946ef] text-white px-8 py-3.5 rounded-[var(--radius-md)] font-bold font-mono uppercase tracking-widest text-[13px] shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:shadow-[0_0_30px_rgba(139,92,246,0.5)] hover:-translate-y-0.5 transition-all flex items-center gap-2"
-                  >
-                    <Sparkles size={16} /> Generate Website
-                  </button>
+
+                {/* Business context */}
+                {leadDetail && (
+                  <div className="pt-3 border-t border-[var(--color-border)]">
+                    <p className="text-[11px] text-[var(--color-text-muted)] mb-2">Business context</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <MiniInfo label="Name" value={leadDetail.name} />
+                      <MiniInfo label="Industry" value={leadDetail.industry} />
+                      <MiniInfo label="Location" value={leadDetail.city || leadDetail.country || '\u2014'} />
+                      <MiniInfo label="Audit Score" value={leadDetail.score?.overall_score != null ? `${leadDetail.score.overall_score}/100` : null} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Screenshot preview */}
+                {leadDetail?.screenshot?.desktop_cloudinary_url && (
+                  <div className="pt-3 border-t border-[var(--color-border)]">
+                    <p className="text-[11px] text-[var(--color-text-muted)] mb-2">Current website</p>
+                    <div className="rounded-[var(--radius-md)] overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface-hover)]">
+                      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
+                        <div className="flex gap-1"><span className="size-1.5 rounded-full bg-red-400/60" /><span className="size-1.5 rounded-full bg-amber-400/60" /><span className="size-1.5 rounded-full bg-emerald-400/60" /></div>
+                        <span className="text-[10px] text-[var(--color-text-muted)] truncate">{leadDetail.website?.replace(/^https?:\/\//, '')}</span>
+                      </div>
+                      <img src={leadDetail.screenshot.desktop_cloudinary_url} alt="Current website" className="w-full max-h-48 object-cover object-top" />
+                    </div>
+                  </div>
                 )}
               </div>
-            )}
+            </SectionCard>
+          )}
 
-            {/* ── Loading/generating state ────────────────────── */}
-            {isRunning && (
-              <div className="flex flex-col items-center">
-                <div className="relative mb-8">
-                  <div className="absolute inset-0 rounded-full bg-[#8b5cf6]/20 blur-2xl animate-pulse" />
-                  <div className="absolute inset-0 border-t-2 border-[#d946ef] rounded-full animate-spin" style={{ animationDuration: '3s' }} />
-                  <div className="absolute inset-2 border-b-2 border-[#0ea5e9] rounded-full animate-spin" style={{ animationDuration: '2s', animationDirection: 'reverse' }} />
-                  <div className="relative size-24 rounded-full bg-[var(--color-glass-strong)] border border-[var(--color-border-strong)] flex items-center justify-center backdrop-blur-md">
-                    <Loader2 className="size-8 text-white lf-spin" />
-                  </div>
-                </div>
-                <h3 className="text-[20px] font-bold text-white mb-2">Synthesizing Digital Presence</h3>
-                <p className="text-[12px] font-mono text-[#0ea5e9] uppercase tracking-widest animate-pulse mb-1">
-                  {jobResult ? friendlyProgress(jobResult.progress) : 'Queuing job…'}
-                </p>
-                <p className="text-[10px] font-mono text-[var(--color-text-muted)]">
-                  Generation takes 60–180 s. You can safely leave this page.
-                </p>
-              </div>
-            )}
-
-            {/* ── Success state ───────────────────────────────── */}
-            {isSuccess && (
-              <div className="flex flex-col items-center lf-fade-in">
-                <div className="relative mb-6">
-                  <div className="absolute inset-0 rounded-full bg-emerald-500/20 blur-xl" />
-                  <div className="relative size-20 rounded-full bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center shadow-[0_0_30px_rgba(16,185,129,0.2)]">
-                    <CheckCircle2 className="size-10 text-emerald-400" />
-                  </div>
-                </div>
-                <h3 className="text-[24px] font-bold text-white mb-2">Synthesis Complete</h3>
-                <p className="text-[13px] font-mono text-[var(--color-text-secondary)] mb-8 uppercase tracking-widest">Web property generated successfully</p>
-                <div className="flex flex-wrap gap-3 justify-center">
-                  <button
-                    onClick={() => { if (jobResult?.website_id) navigate(`/preview/${jobResult.website_id}`); }}
-                    className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-8 py-3 rounded-[var(--radius-md)] font-mono uppercase tracking-widest text-[13px] font-bold hover:bg-emerald-500/20 hover:shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all flex items-center gap-2"
-                  >
-                    <CheckCircle2 size={15} /> Enter Preview Studio
-                  </button>
-                  {jobResult?.package_id && (
-                    <button
-                      onClick={() => { if (jobResult?.website_id) navigate(`/deployment/${jobResult.website_id}`); }}
-                      className="bg-[#0ea5e9]/10 text-[#0ea5e9] border border-[#0ea5e9]/30 px-8 py-3 rounded-[var(--radius-md)] font-mono uppercase tracking-widest text-[13px] font-bold hover:bg-[#0ea5e9]/20 hover:shadow-[0_0_20px_rgba(14,165,233,0.3)] transition-all flex items-center gap-2"
-                    >
-                      Open Package
-                    </button>
+          {/* ── Generation / job progress section ──────────────── */}
+          {selectedId && (
+            <SectionCard title="Generation">
+              {/* Idle state */}
+              {!isRunning && !isSuccess && !isError && (
+                <div className="space-y-4">
+                  {prereqsMet ? (
+                    <div className="flex flex-col items-center py-8 text-center">
+                      <div className="size-14 rounded-full bg-[var(--color-brand-subtle)] border border-[var(--color-brand-border)] flex items-center justify-center mb-4">
+                        <Zap className="size-6 text-[var(--color-brand)]" />
+                      </div>
+                      <p className="text-[14px] font-medium text-[var(--color-text)] mb-1">Ready to generate</p>
+                      <p className="text-[12px] text-[var(--color-text-muted)] mb-5 max-w-sm">
+                        All prerequisites are met. Start the AI generation to create a premium website redesign.
+                      </p>
+                      <Button variant="primary" size="md" onClick={handleGenerate} leftIcon={<Zap size={15} />}>
+                        Generate Redesign
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center py-8 text-center">
+                      <div className="size-14 rounded-full bg-[var(--color-surface-hover)] border border-[var(--color-border)] flex items-center justify-center mb-4">
+                        <AlertTriangle className="size-6 text-[var(--color-text-muted)]" />
+                      </div>
+                      <p className="text-[14px] font-medium text-[var(--color-text)] mb-1">Prerequisites required</p>
+                      <p className="text-[12px] text-[var(--color-text-muted)] max-w-sm">
+                        Complete the screenshot, analysis, and audit steps before generating a redesign.
+                      </p>
+                    </div>
                   )}
-                  <button
-                    onClick={() => navigate('/projects')}
-                    className="bg-[var(--color-glass)] backdrop-blur-md text-[var(--color-text)] border border-[var(--color-glass-border)] px-6 py-3 rounded-[var(--radius-md)] font-medium hover:bg-[var(--color-glass-strong)] transition-all font-mono text-[12px]"
-                  >
-                    Back to Pipeline
-                  </button>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* ── Error state ─────────────────────────────────── */}
-            {isError && !isRunning && (
-              <div className="flex flex-col items-center lf-fade-in">
-                <div className="relative mb-6">
-                  <div className="absolute inset-0 rounded-full bg-red-500/20 blur-xl" />
-                  <div className="relative size-20 rounded-full bg-red-500/15 border border-red-500/40 flex items-center justify-center">
-                    <AlertCircle className="size-10 text-red-400" />
+              {/* Running state */}
+              {isRunning && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 p-4 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] border border-[var(--color-border)]">
+                    <div className="size-5 border-2 border-[var(--color-border)] border-t-[var(--color-brand)] rounded-full lf-spin shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-medium text-[var(--color-text)]">Generating website</p>
+                      <p className="text-[12px] text-[var(--color-text-muted)] truncate">
+                        {jobResult ? friendlyProgress(jobResult.progress) : 'Queuing job\u2026'}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-[var(--color-text-muted)]">
+                    Generation takes 60\u2013180 s. You can safely leave this page.
+                  </p>
+                </div>
+              )}
+
+              {/* Success state */}
+              {isSuccess && (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-[var(--radius-md)] bg-emerald-500/5 border border-emerald-500/15">
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2 size={16} className="text-[var(--color-success)] shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-[13px] font-medium text-[var(--color-text)]">Generation complete</p>
+                        <p className="text-[12px] text-[var(--color-text-muted)] mt-0.5">Website generated successfully</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="primary" size="sm" onClick={() => { if (jobResult?.website_id) navigate(`/preview/${jobResult.website_id}`); }}>
+                      <Eye size={14} className="mr-1.5" /> Open Preview
+                    </Button>
+                    {jobResult?.package_id && jobResult?.website_id && (
+                      <Button variant="outline" size="sm" onClick={() => navigate(`/deployment/${jobResult.website_id}`)}>
+                        <Download size={14} className="mr-1.5" /> Open Package
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="sm" onClick={() => navigate(selectedId ? `/project/${selectedId}` : '/projects')}>
+                      Back to Lead
+                    </Button>
                   </div>
                 </div>
-                <h3 className="text-[20px] font-bold text-white mb-2">Synthesis Failed</h3>
-                <p className="text-[13px] text-[var(--color-text-secondary)] mb-6 font-mono text-center max-w-sm">
-                  {jobError || jobResult?.error || 'An unexpected error occurred.'}
-                </p>
-                <div className="flex flex-wrap gap-3 justify-center">
-                  <button
-                    onClick={() => { handleReset(); handleGenerate(); }}
-                    className="bg-red-500/10 text-red-400 border border-red-500/30 px-6 py-2.5 rounded-[var(--radius-md)] font-mono uppercase tracking-widest text-[12px] font-bold hover:bg-red-500/20 transition-all flex items-center gap-2"
-                  >
-                    <Loader2 size={14} /> Retry Generation
-                  </button>
-                  <button
-                    onClick={() => { handleReset(); setSelectedId(''); }}
-                    className="bg-[var(--color-glass)] text-[var(--color-text)] border border-[var(--color-glass-border)] px-6 py-2.5 rounded-[var(--radius-md)] font-mono text-[12px] hover:bg-[var(--color-glass-strong)] transition-all"
-                  >
-                    Select Different Target
-                  </button>
+              )}
+
+              {/* Error state */}
+              {isError && !isRunning && (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-[var(--radius-md)] bg-red-500/5 border border-red-500/15">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle size={16} className="text-red-500 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-[13px] font-medium text-red-600 dark:text-red-400">Generation failed</p>
+                        <p className="text-[12px] text-[var(--color-text-muted)] mt-0.5">{jobError || jobResult?.error || 'An unexpected error occurred.'}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" onClick={() => { handleReset(); handleGenerate(); }}>
+                      Retry Generation
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => { handleReset(); setSelectedId(''); }}>
+                      Select different lead
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </SectionCard>
+          )}
+
+          {/* ── Completed website result ───────────────────────── */}
+          {isSuccess && existingWebsite && (
+            <SectionCard title="Generated Website">
+              <div className="space-y-4">
+                <div className="p-4 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] border border-[var(--color-border)]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[14px] font-medium text-[var(--color-text)]">{existingWebsite.project_name || 'Generated Website'}</p>
+                      <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5">ID: {existingWebsite.id}</p>
+                    </div>
+                    <Badge tone="success" className="text-[10px] shrink-0">{existingWebsite.status}</Badge>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="primary" size="sm" onClick={() => navigate(`/preview/${existingWebsite.id}`)}>
+                    <Eye size={14} className="mr-1.5" /> Open Preview
+                  </Button>
+                  {existingWebsite.package_id && (
+                    <Button variant="outline" size="sm" onClick={() => navigate(`/deployment/${existingWebsite.id}`)}>
+                      <Download size={14} className="mr-1.5" /> Open Package
+                    </Button>
+                  )}
+                  {leadDetail?.website && (
+                    <a
+                      href={leadDetail.website.startsWith('http') ? leadDetail.website : `https://${leadDetail.website}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[12px] text-[var(--color-brand)] hover:underline ml-auto"
+                    >
+                      <ExternalLink size={12} /> Visit source
+                    </a>
+                  )}
                 </div>
               </div>
-            )}
-          </div>
-        </PremiumCard>
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════
-         PREREQUISITE DETAIL (mobile/secondary)
-      ════════════════════════════════════════════════════════════ */}
-      {selectedId && !isRunning && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {PREREQS.map((p) => {
-            const met = p.check(leadDetail ?? null);
-            const Icon = p.icon;
-            return (
-              <PremiumCard key={p.id} variant={met ? 'standard' : 'subtle'} innerClassName="p-4 flex items-center gap-4">
-                <div className={cn(
-                  'size-10 rounded-[var(--radius-md)] flex items-center justify-center shrink-0',
-                  met ? 'bg-emerald-500/10 border border-emerald-500/25' : 'bg-[var(--color-surface-hover)] border border-[var(--color-border)]',
-                )}>
-                  {met ? <CheckCircle2 size={18} className="text-emerald-400" /> : <Icon size={18} className="text-[var(--color-text-muted)]" />}
-                </div>
-                <div>
-                  <p className={cn('text-[13px] font-semibold', met ? 'text-emerald-400' : 'text-[var(--color-text-secondary)]')}>
-                    {met ? 'Completed' : p.label}
-                  </p>
-                  <p className="text-[10px] font-mono text-[var(--color-text-muted)]">{met ? 'Ready' : 'Required'}</p>
-                </div>
-              </PremiumCard>
-            );
-          })}
+            </SectionCard>
+          )}
         </div>
+
+        {/* ═══════════════════════════════════════════════════════
+           SIDEBAR
+           ══════════════════════════════════════════════════════ */}
+        <div className="space-y-4 lg:sticky lg:top-24">
+          {/* Context */}
+          {selectedLead && (
+            <SectionCard title="Context">
+              <div className="space-y-3">
+                <InfoRow label="Business" value={selectedLead.name} />
+                <InfoRow label="Industry" value={selectedLead.industry} />
+                <InfoRow label="Location" value={selectedLead.city || selectedLead.country || null} />
+                <InfoRow label="Website" value={selectedLead.website?.replace(/^https?:\/\//, '').replace(/\/$/, '')} href={selectedLead.website?.startsWith('http') ? selectedLead.website : selectedLead.website ? `https://${selectedLead.website}` : undefined} />
+                <InfoRow label="Status" value={<Badge tone={statusBadgeTone(selectedLead.status)} className="text-[10px]">{selectedLead.status.replace(/_/g, ' ')}</Badge>} />
+                <InfoRow label="Audit Score" value={selectedLead.rating != null ? `${selectedLead.rating.toFixed(1)}` : null} />
+              </div>
+            </SectionCard>
+          )}
+
+          {/* Job details */}
+          {jobResult && (
+            <SectionCard title="Job">
+              <div className="space-y-3">
+                <InfoRow label="Status" value={
+                  <Badge tone={isSuccess ? 'success' : isError ? 'danger' : isRunning ? 'info' : 'muted'} className="text-[10px]">
+                    {isSuccess ? 'Completed' : isError ? 'Failed' : isRunning ? 'Running' : 'Pending'}
+                  </Badge>
+                } />
+                <InfoRow label="Job ID" value={jobResult.job_id ? jobResult.job_id.slice(0, 8) + '\u2026' : null} mono />
+                {jobResult.generation_time > 0 && (
+                  <InfoRow label="Duration" value={`${jobResult.generation_time}s`} />
+                )}
+                {jobResult.website_id && (
+                  <InfoRow label="Website ID" value={jobResult.website_id.slice(0, 8) + '\u2026'} mono />
+                )}
+              </div>
+            </SectionCard>
+          )}
+
+          {/* Workflow steps */}
+          <SectionCard title="Workflow">
+            <div className="space-y-1.5">
+              <WorkflowStep label="Select lead" done={!!selectedId} active={!selectedId} />
+              <WorkflowStep label="Prerequisites" done={prereqsMet && !!selectedId} active={!!selectedId && !prereqsMet} />
+              <WorkflowStep label="Generate" done={isSuccess} active={isRunning} />
+              <WorkflowStep label="Preview" done={false} active={isSuccess} />
+            </div>
+          </SectionCard>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SUB-COMPONENTS
+   ══════════════════════════════════════════════════════════════ */
+
+function SectionCard({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="rounded-[var(--radius-lg)] bg-[var(--color-surface)] border border-[var(--color-border)]">
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--color-border)]">
+        <h3 className="text-[13px] font-semibold text-[var(--color-text)]">{title}</h3>
+        {action}
+      </div>
+      <div className="p-5">{children}</div>
+    </div>
+  );
+}
+
+function InfoRow({ label, value, href, mono }: { label: string; value: React.ReactNode | null | undefined; href?: string; mono?: boolean }) {
+  if (value == null || value === '') return null;
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <span className="text-[11px] text-[var(--color-text-muted)] shrink-0">{label}</span>
+      {href ? (
+        <a href={href} target="_blank" rel="noopener noreferrer" className="text-[12px] text-[var(--color-brand)] hover:underline text-right truncate">
+          {value}
+        </a>
+      ) : typeof value === 'string' ? (
+        <span className={cn('text-[12px] text-[var(--color-text-secondary)] text-right truncate', mono && 'font-mono')}>{value}</span>
+      ) : (
+        <span className="text-right">{value}</span>
       )}
+    </div>
+  );
+}
+
+function MiniInfo({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value) return null;
+  return (
+    <div>
+      <p className="text-[10px] text-[var(--color-text-muted)] mb-0.5">{label}</p>
+      <p className="text-[12px] text-[var(--color-text-secondary)] truncate">{value}</p>
+    </div>
+  );
+}
+
+function WorkflowStep({ label, done, active }: { label: string; done: boolean; active: boolean }) {
+  return (
+    <div className="flex items-center gap-2.5 py-1.5">
+      <div className={cn(
+        'size-5 rounded-full flex items-center justify-center shrink-0 transition-colors',
+        done ? 'bg-[var(--color-success)]' : active ? 'bg-[var(--color-brand)]' : 'bg-[var(--color-surface-hover)] border border-[var(--color-border)]',
+      )}>
+        {done && <CheckCircle2 size={12} className="text-white" />}
+        {active && <div className="size-1.5 rounded-full bg-white lf-pulse" />}
+      </div>
+      <span className={cn('text-[12px]', done ? 'text-[var(--color-text)]' : active ? 'text-[var(--color-text)] font-medium' : 'text-[var(--color-text-muted)]')}>
+        {label}
+      </span>
     </div>
   );
 }
