@@ -113,12 +113,9 @@ export function PageLoader({
       aria-live="polite"
       className="flex flex-col items-center justify-center w-full h-full p-12 gap-4"
     >
-      <div className="relative">
-        <div className="absolute inset-0 rounded-full bg-[var(--color-brand-soft)] blur-xl" />
-        <div className="relative h-12 w-12 rounded-full bg-[var(--color-brand-soft)] flex items-center justify-center">
-          <Spinner size={20} icon={Loader2} />
+      <div className="relative h-12 w-12 rounded-full bg-[var(--color-brand-subtle)] flex items-center justify-center">
+          <Spinner size={20} icon={Loader2} className="text-[var(--color-brand)]" />
         </div>
-      </div>
       <p className="text-[12.5px] text-[var(--color-text-muted)]">{label}…</p>
     </div>
   );

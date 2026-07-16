@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, Globe, MapPin, Phone, Star, ArrowRight, ChevronLeft, ChevronRight, X, Filter, Sparkles, Zap, AlertTriangle } from 'lucide-react';
+import { Search, Globe, MapPin, ArrowRight, ChevronLeft, ChevronRight, X, Filter, Star, Plus, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { Input, Label } from '@/components/Input';
@@ -14,6 +14,7 @@ import { formatRelative, scoreTier, cn } from '@/utils';
 import type { LeadDiscoveryRequest } from '@/types';
 import { toast } from 'sonner';
 
+/* ── Constants ───────────────────────────────────────────────── */
 const STATUS_OPTIONS = ['NEW', 'SCRAPED', 'ANALYZED', 'OUTREACH_READY', 'CONTACTED', 'CLOSED', 'draft', 'archived', 'failed'] as const;
 
 const statusTone: Record<string, 'brand' | 'success' | 'warning' | 'danger' | 'info' | 'muted' | 'neutral'> = {
@@ -32,59 +33,6 @@ const statusTone: Record<string, 'brand' | 'success' | 'warning' | 'danger' | 'i
   archived: 'neutral',
 };
 
-const scoreGlow: Record<string, string> = {
-  hot: 'shadow-[0_0_12px_rgba(16,185,129,0.5)] border-emerald-500/40',
-  warm: 'shadow-[0_0_12px_rgba(245,158,11,0.4)] border-amber-500/40',
-  cold: 'shadow-[0_0_8px_rgba(107,114,128,0.3)] border-gray-500/30',
-};
-
-function ScoreBadge({ score }: { score: number | null | undefined }) {
-  if (score == null) return <span className="inline-flex items-center justify-center size-7 rounded-md text-[10px] font-bold bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] border border-[var(--color-border)]">&mdash;</span>;
-  const tier = scoreTier(score);
-  const cls = tier === 'hot' ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30'
-    : tier === 'warm' ? 'bg-amber-500/15 text-amber-500 border-amber-500/30'
-    : 'bg-gray-500/15 text-gray-500 border-gray-500/30';
-  const glow = scoreGlow[tier] ?? '';
-  return (
-    <span className={`inline-flex items-center justify-center size-7 rounded-md text-[11px] font-bold border ${cls} ${glow}`}>
-      {Math.round(score)}
-    </span>
-  );
-}
-
-function StatusPill({ status }: { status: string }) {
-  return <Badge tone={statusTone[status] ?? 'muted'} className="font-mono text-[10px] uppercase tracking-wider">{status.replace(/_/g, ' ')}</Badge>;
-}
-
-function PipelineStage({ status }: { status: string }) {
-  const stages = ['NEW', 'SCRAPED', 'ANALYZED', 'OUTREACH_READY', 'CONTACTED', 'CLOSED'];
-  const idx = stages.indexOf(status);
-  if (idx === -1) return null;
-  return (
-    <div className="flex items-center gap-1">
-      {stages.map((s, i) => (
-        <div
-          key={s}
-          className={cn(
-            'h-1.5 rounded-full transition-all duration-300',
-            i <= idx ? 'bg-[#0ea5e9] shadow-[0_0_6px_rgba(14,165,233,0.4)]' : 'bg-[var(--color-surface-hover)]',
-            i === idx ? 'w-4' : 'w-2',
-          )}
-        />
-      ))}
-    </div>
-  );
-}
-
-function getInitials(name: string): string {
-  return name
-    .split(/\s+/)
-    .map((p) => p[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase() || '?';
-}
-
 /* ── Filter state ────────────────────────────────────────────── */
 interface Filters {
   search: string;
@@ -94,16 +42,73 @@ interface Filters {
 
 const defaultFilters: Filters = { search: '', status: '', minScore: '' };
 
-/* ── Skeleton rows ───────────────────────────────────────────── */
+/* ── Score cell ──────────────────────────────────────────────── */
+function ScoreCell({ score }: { score: number | null | undefined }) {
+  if (score == null) {
+    return <span className="text-[12px] text-[var(--color-text-muted)]">&mdash;</span>;
+  }
+  const tier = scoreTier(score);
+  const toneClass = tier === 'hot'
+    ? 'text-[var(--color-success)]'
+    : tier === 'warm'
+      ? 'text-[var(--color-warning)]'
+      : 'text-[var(--color-text-muted)]';
+  return (
+    <span className={cn('text-[13px] font-semibold tabular-nums', toneClass)}>
+      {Math.round(score)}
+    </span>
+  );
+}
+
+/* ── Status badge ────────────────────────────────────────────── */
+function StatusBadge({ status }: { status: string }) {
+  return (
+    <Badge tone={statusTone[status] ?? 'muted'} className="text-[11px]">
+      {status.replace(/_/g, ' ')}
+    </Badge>
+  );
+}
+
+/* ── Pipeline dots ───────────────────────────────────────────── */
+function PipelineDots({ status }: { status: string }) {
+  const stages = ['NEW', 'SCRAPED', 'ANALYZED', 'OUTREACH_READY', 'CONTACTED', 'CLOSED'];
+  const idx = stages.indexOf(status);
+  if (idx === -1) return null;
+  return (
+    <div className="flex items-center gap-0.5">
+      {stages.map((_, i) => (
+        <div
+          key={i}
+          className={cn(
+            'size-1.5 rounded-full transition-colors duration-150',
+            i <= idx ? 'bg-[var(--color-brand)]' : 'bg-[var(--color-border)]',
+          )}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ── Initials helper ─────────────────────────────────────────── */
+function getInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .map((p) => p[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || '?';
+}
+
+/* ── Table skeleton ──────────────────────────────────────────── */
 function TableSkeleton({ rows = 6 }: { rows?: number }) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-px">
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="flex items-center gap-4 p-4 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)]/30">
-          <Skeleton variant="circular" width={36} height={36} />
-          <div className="flex-1 grid grid-cols-7 gap-4">
-            {Array.from({ length: 7 }).map((_, j) => (
-              <Skeleton key={j} variant="text" width="100%" height={14} delay={j * 30} />
+        <div key={i} className="flex items-center gap-4 px-4 py-3.5">
+          <Skeleton variant="circular" width={32} height={32} />
+          <div className="flex-1 grid grid-cols-6 gap-4">
+            {Array.from({ length: 6 }).map((_, j) => (
+              <Skeleton key={j} variant="text" width="100%" height={12} delay={j * 20} />
             ))}
           </div>
         </div>
@@ -112,30 +117,33 @@ function TableSkeleton({ rows = 6 }: { rows?: number }) {
   );
 }
 
+/* ── Card skeleton (mobile) ──────────────────────────────────── */
 function CardSkeletonMobile({ rows = 4 }: { rows?: number }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {Array.from({ length: rows }).map((_, i) => (
-        <PremiumCard key={i} innerClassName="p-5 space-y-4">
+        <div key={i} className="rounded-[var(--radius-lg)] bg-[var(--color-surface)] border border-[var(--color-border)] p-4 space-y-3">
           <div className="flex items-center gap-3">
-            <Skeleton variant="circular" width={40} height={40} />
+            <Skeleton variant="circular" width={36} height={36} />
             <div className="flex-1 space-y-2">
-              <Skeleton variant="text" width="60%" height={16} />
-              <Skeleton variant="text" width="40%" height={12} />
+              <Skeleton variant="text" width="55%" height={14} />
+              <Skeleton variant="text" width="35%" height={11} />
             </div>
-            <Skeleton variant="rounded" width={36} height={28} />
+            <Skeleton variant="text" width={28} height={14} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Skeleton variant="text" width="100%" height={12} />
-            <Skeleton variant="text" width="100%" height={12} />
+          <div className="flex items-center gap-3">
+            <Skeleton variant="rounded" width={60} height={20} />
+            <Skeleton variant="text" width={48} height={11} />
           </div>
-          <Skeleton variant="rounded" width="100%" height={8} />
-        </PremiumCard>
+        </div>
       ))}
     </div>
   );
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   MAIN PAGE
+   ══════════════════════════════════════════════════════════════ */
 export function ProjectsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -205,34 +213,37 @@ export function ProjectsPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const clearFilters = () => {
-    setFilters(defaultFilters);
-  };
+  const clearFilters = () => setFilters(defaultFilters);
 
   /* ── Empty state (no leads at all) ────────────────────────── */
   if (!isLoading && !error && totalItems === 0) {
     return (
-      <div className="space-y-8 lf-fade-in">
-        {/* Hero */}
-        <PremiumCard variant="featured" innerClassName="relative overflow-hidden p-10 lg:p-14">
-          <div className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full bg-[rgba(14,165,233,0.06)] blur-[100px] pointer-events-none" />
-          <div className="absolute -bottom-40 -left-40 w-[500px] h-[500px] rounded-full bg-[rgba(139,92,246,0.05)] blur-[100px] pointer-events-none" />
-          <div className="absolute inset-0 pointer-events-none opacity-[0.02]" style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,0.02) 39px, rgba(255,255,255,0.02) 40px), repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,0.02) 39px, rgba(255,255,255,0.02) 40px)' }} />
-          <div className="relative z-10 text-center max-w-2xl mx-auto">
-            <div className="size-20 rounded-full bg-gradient-to-br from-[#0ea5e9]/20 to-[#8b5cf6]/20 border border-[#0ea5e9]/30 flex items-center justify-center mx-auto mb-6 shadow-[0_0_30px_rgba(14,165,233,0.2)]">
-              <Sparkles className="size-8 text-[#0ea5e9]" />
-            </div>
-            <h1 className="lf-display text-white mb-3">Lead Intelligence</h1>
-            <p className="text-[14px] text-[var(--color-text-secondary)] font-mono max-w-lg mx-auto leading-relaxed mb-8">
-              Your pipeline is empty. Discover businesses on Google Maps, run AI audits, and convert leads with automated outreach.
-            </p>
-            <Button variant="neon" size="lg" onClick={() => document.getElementById('discovery-section')?.scrollIntoView({ behavior: 'smooth' })}>
-              <Search size={16} /> Initialize Discovery
-            </Button>
+      <div className="space-y-6 lf-fade-in">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div>
+            <p className="text-[13px] text-[var(--color-text-muted)] font-mono mb-1">Lead Pipeline</p>
+            <h1 className="lf-display text-[var(--color-text)]">Leads</h1>
           </div>
+        </div>
+
+        <PremiumCard innerClassName="p-12 text-center max-w-xl mx-auto">
+          <div className="size-14 rounded-full bg-[var(--color-brand-subtle)] border border-[var(--color-brand-border)] flex items-center justify-center mx-auto mb-5">
+            <Plus className="size-6 text-[var(--color-brand)]" />
+          </div>
+          <h2 className="text-[18px] font-bold text-[var(--color-text)] mb-2">No leads yet</h2>
+          <p className="text-[13px] text-[var(--color-text-secondary)] mb-6 max-w-sm mx-auto leading-relaxed">
+            Discover businesses, run AI audits, generate websites, and convert leads — all from one workspace.
+          </p>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => document.getElementById('discovery-section')?.scrollIntoView({ behavior: 'smooth' })}
+            leftIcon={<Search size={15} />}
+          >
+            Discover Leads
+          </Button>
         </PremiumCard>
 
-        {/* Discovery form (always visible) */}
         <div id="discovery-section">
           <DiscoveryPanel
             discoveryForm={discoveryForm}
@@ -249,67 +260,49 @@ export function ProjectsPage() {
   if (error && !isLoading && totalItems === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full lf-fade-in">
-        <PremiumCard variant="danger" innerClassName="p-10 text-center max-w-lg">
-          <div className="size-16 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center mx-auto mb-5">
-            <AlertTriangle className="size-7 text-red-400" />
+        <PremiumCard innerClassName="p-10 text-center max-w-lg">
+          <div className="size-14 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-5">
+            <AlertTriangle className="size-6 text-red-500" />
           </div>
-          <h2 className="text-[20px] font-bold text-white mb-2">Connection Interrupted</h2>
-          <p className="text-[13px] text-[var(--color-text-muted)] mb-6 max-w-sm mx-auto">
-            Unable to load the intelligence database. Verify your connection and try again.
+          <h2 className="text-[18px] font-bold text-[var(--color-text)] mb-2">Unable to load leads</h2>
+          <p className="text-[13px] text-[var(--color-text-secondary)] mb-6 max-w-sm mx-auto">
+            Something went wrong while fetching your leads. Check your connection and try again.
           </p>
-          <Button variant="danger" onClick={() => refetch()}>
-            Re-establish Link
-          </Button>
+          <Button variant="outline" onClick={() => refetch()}>Retry</Button>
         </PremiumCard>
       </div>
     );
   }
 
+  /* ═════════════════════════════════════════════════════════════
+     MAIN RENDER
+     ════════════════════════════════════════════════════════════ */
   return (
-    <div className="space-y-8 lf-fade-in">
-      {/* ═══════════════════════════════════════════════════════════
-         PAGE HERO
-      ════════════════════════════════════════════════════════════ */}
-      <PremiumCard variant="featured" innerClassName="relative overflow-hidden p-8 lg:p-10">
-        <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-[rgba(14,165,233,0.06)] blur-[80px] pointer-events-none" />
-        <div className="absolute -bottom-32 -left-32 w-96 h-96 rounded-full bg-[rgba(139,92,246,0.05)] blur-[80px] pointer-events-none" />
-        <div className="absolute inset-0 pointer-events-none opacity-[0.015]" style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,0.02) 39px, rgba(255,255,255,0.02) 40px), repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,0.02) 39px, rgba(255,255,255,0.02) 40px)' }} />
-        <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.08) 2px, rgba(255,255,255,0.08) 4px)' }} />
-
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-end justify-between gap-6">
-          <div>
-            <div className="flex items-center gap-3 mb-3">
-              <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#0ea5e9] flex items-center gap-2">
-                <span className="size-1.5 rounded-full bg-[#0ea5e9] shadow-[0_0_6px_#0ea5e9]" />
-                Lead Intelligence
-              </span>
-            </div>
-            <h1 className="text-[clamp(2rem,4vw,2.5rem)] font-extrabold tracking-tight text-white mb-2">
-              Target <span className="bg-gradient-to-r from-[#0ea5e9] to-[#8b5cf6] bg-clip-text text-transparent">Command Center</span>
-            </h1>
-            <p className="text-[14px] text-[var(--color-text-secondary)] font-mono max-w-xl leading-relaxed">
-              {totalItems > 0
-                ? `${totalItems} target${totalItems !== 1 ? 's' : ''} in the network. ${paginated?.items.filter(l => l.status === 'NEW').length ?? 0} new signal${paginated?.items.filter(l => l.status === 'NEW').length !== 1 ? 's' : ''} detected.`
-                : 'Awaiting initial target acquisition.'}
-            </p>
-          </div>
-          <div className="flex items-center gap-4 shrink-0">
-            <div className="flex flex-col items-end">
-              <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--color-text-muted)]">Active Pipeline</span>
-              <span className="text-[28px] font-bold text-white leading-none">{isLoading ? <Skeleton variant="text" width={60} height={32} /> : totalItems}</span>
-            </div>
+    <div className="space-y-6 lf-fade-in">
+      {/* ── Page header ──────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div>
+          <p className="text-[13px] text-[var(--color-text-muted)] font-mono mb-1">Lead Pipeline</p>
+          <h1 className="lf-display text-[var(--color-text)]">
+            Leads
             {!isLoading && totalItems > 0 && (
-              <Button variant="neon" onClick={() => document.getElementById('discovery-section')?.scrollIntoView({ behavior: 'smooth' })}>
-                <Search size={14} /> New Discovery
-              </Button>
+              <span className="text-[16px] font-normal text-[var(--color-text-muted)] ml-3">{totalItems}</span>
             )}
-          </div>
+          </h1>
         </div>
-      </PremiumCard>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => document.getElementById('discovery-section')?.scrollIntoView({ behavior: 'smooth' })}
+            leftIcon={<Search size={14} />}
+          >
+            Discover Leads
+          </Button>
+        </div>
+      </div>
 
-      {/* ═══════════════════════════════════════════════════════════
-         AI LEAD DISCOVERY CONSOLE
-      ════════════════════════════════════════════════════════════ */}
+      {/* ── Discovery panel ──────────────────────────────────── */}
       <div id="discovery-section">
         <DiscoveryPanel
           discoveryForm={discoveryForm}
@@ -319,274 +312,268 @@ export function ProjectsPage() {
         />
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════
-         FILTER & SEARCH TOOLBAR
-      ════════════════════════════════════════════════════════════ */}
-      <div className="sticky top-0 z-20 -mx-4 px-4 py-3 backdrop-blur-xl bg-[rgba(4,8,16,0.85)] border-y border-[var(--color-border)]">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[var(--color-text-muted)]" />
-            <Input
-              placeholder="Search by name, industry, or location..."
-              value={filters.search}
-              onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-              className="pl-9 h-9 text-[13px]"
-            />
-            {filters.search && (
-              <button
-                onClick={() => setFilters(prev => ({ ...prev, search: '' }))}
-                className="absolute right-2 top-1/2 -translate-y-1/2 size-5 rounded-full bg-[var(--color-surface-hover)] flex items-center justify-center text-[var(--color-text-muted)] hover:text-white"
-              >
-                <X size={12} />
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Filter size={14} className="text-[var(--color-text-muted)]" />
-            <select
-              value={filters.status}
-              onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-              className="h-9 rounded-[var(--radius-md)] px-3 text-[12px] bg-[var(--color-input-bg)] text-[var(--color-text)] border border-[var(--color-input-border)] outline-none focus:border-[var(--color-brand)] font-mono"
+      {/* ── Filter toolbar ───────────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-2.5">
+        <div className="relative flex-1 min-w-[180px] max-w-xs">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[var(--color-text-muted)]" />
+          <Input
+            placeholder="Search leads..."
+            value={filters.search}
+            onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+            className="pl-8 h-8 text-[12px]"
+          />
+          {filters.search && (
+            <button
+              onClick={() => setFilters(prev => ({ ...prev, search: '' }))}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 size-5 rounded-full bg-[var(--color-surface-hover)] flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
             >
-              <option value="">All Statuses</option>
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Star size={14} className="text-[var(--color-text-muted)]" />
-            <select
-              value={filters.minScore}
-              onChange={(e) => setFilters(prev => ({ ...prev, minScore: e.target.value }))}
-              className="h-9 rounded-[var(--radius-md)] px-3 text-[12px] bg-[var(--color-input-bg)] text-[var(--color-text)] border border-[var(--color-input-border)] outline-none focus:border-[var(--color-brand)] font-mono"
-            >
-              <option value="">Any Score</option>
-              <option value="80">Hot (80+)</option>
-              <option value="60">Warm (60+)</option>
-              <option value="40">Moderate (40+)</option>
-            </select>
-          </div>
-
-          {hasActiveFilters && (
-            <Button variant="ghost" size="sm" onClick={clearFilters}>
-              <X size={14} /> Clear
-            </Button>
+              <X size={11} />
+            </button>
           )}
+        </div>
 
-          <div className="ml-auto text-[11px] font-mono text-[var(--color-text-muted)]">
-            {!isLoading && (
-              <span>{filtered.length} of {totalItems} target{totalItems !== 1 ? 's' : ''}</span>
-            )}
-          </div>
+        <div className="flex items-center gap-1.5">
+          <Filter size={13} className="text-[var(--color-text-muted)]" />
+          <select
+            value={filters.status}
+            onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+            className="h-8 rounded-[var(--radius-md)] px-2.5 text-[12px] bg-[var(--color-input-bg)] text-[var(--color-text)] border border-[var(--color-input-border)] outline-none focus:border-[var(--color-brand)] transition-colors"
+          >
+            <option value="">All statuses</option>
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <Star size={13} className="text-[var(--color-text-muted)]" />
+          <select
+            value={filters.minScore}
+            onChange={(e) => setFilters(prev => ({ ...prev, minScore: e.target.value }))}
+            className="h-8 rounded-[var(--radius-md)] px-2.5 text-[12px] bg-[var(--color-input-bg)] text-[var(--color-text)] border border-[var(--color-input-border)] outline-none focus:border-[var(--color-brand)] transition-colors"
+          >
+            <option value="">Any score</option>
+            <option value="80">80+ hot</option>
+            <option value="60">60+ warm</option>
+            <option value="40">40+ moderate</option>
+          </select>
+        </div>
+
+        {hasActiveFilters && (
+          <Button variant="ghost" size="xs" onClick={clearFilters}>
+            <X size={12} /> Clear
+          </Button>
+        )}
+
+        <div className="ml-auto text-[11px] font-mono text-[var(--color-text-muted)]">
+          {!isLoading && (
+            <span>{filtered.length} of {totalItems}</span>
+          )}
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════
-         DESKTOP LEAD TABLE
-      ════════════════════════════════════════════════════════════ */}
+      {/* ── Desktop table ────────────────────────────────────── */}
       <div className="hidden lg:block">
         {isLoading ? (
           <TableSkeleton rows={6} />
         ) : error ? (
-          <PremiumCard variant="danger" innerClassName="p-6 text-center">
-            <p className="text-[13px] text-red-400 mb-4">Failed to load targets. The intelligence feed may be temporarily offline.</p>
-            <Button variant="outline" onClick={() => refetch()}>Retry Connection</Button>
+          <PremiumCard innerClassName="p-6 text-center">
+            <p className="text-[13px] text-[var(--color-text-secondary)] mb-3">Failed to load leads.</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
           </PremiumCard>
         ) : filtered.length === 0 ? (
-          <PremiumCard innerClassName="p-10 text-center">
+          <PremiumCard innerClassName="p-10">
             <EmptyState
-              title="No targets match your filters"
-              message="Try adjusting your search or clear filters to see all targets."
+              title="No leads match your filters"
+              message="Try adjusting your search or clear filters to see all leads."
               icon={Search}
-              action={hasActiveFilters ? <Button variant="outline" onClick={clearFilters}>Clear Filters</Button> : undefined}
+              action={hasActiveFilters ? <Button variant="outline" size="sm" onClick={clearFilters}>Clear filters</Button> : undefined}
             />
           </PremiumCard>
         ) : (
-          <PremiumCard innerClassName="p-0 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-[var(--color-border)] bg-[var(--color-surface-hover)]/30">
-                    <th className="py-3.5 px-4 text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--color-text-muted)] font-semibold">Target</th>
-                    <th className="py-3.5 px-4 text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--color-text-muted)] font-semibold">Industry</th>
-                    <th className="py-3.5 px-4 text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--color-text-muted)] font-semibold">Location</th>
-                    <th className="py-3.5 px-4 text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--color-text-muted)] font-semibold">Website</th>
-                    <th className="py-3.5 px-4 text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--color-text-muted)] font-semibold">Contact</th>
-                    <th className="py-3.5 px-4 text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--color-text-muted)] font-semibold">Score</th>
-                    <th className="py-3.5 px-4 text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--color-text-muted)] font-semibold">Pipeline</th>
-                    <th className="py-3.5 px-4 text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--color-text-muted)] font-semibold">Status</th>
-                    <th className="py-3.5 px-4 text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--color-text-muted)] font-semibold">Updated</th>
-                    <th className="py-3.5 px-4 w-10" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((lead) => (
-                    <tr
-                      key={lead.id}
-                      onClick={() => navigate(`/project/${lead.id}`)}
-                      className="border-b border-[var(--color-border)]/50 transition-all duration-150 hover:bg-[color-mix(in_oklab,var(--color-surface-hover)_60%,transparent)] cursor-pointer group"
-                    >
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-3">
-                          <div className="size-9 rounded-lg bg-gradient-to-br from-[#0ea5e9]/20 to-[#8b5cf6]/20 border border-[#0ea5e9]/25 flex items-center justify-center text-[12px] font-bold text-[#0ea5e9] shrink-0 shadow-[0_0_8px_rgba(14,165,233,0.15)]">
-                            {getInitials(lead.name)}
-                          </div>
-                          <span className="text-[13px] font-semibold text-white truncate max-w-[180px] group-hover:text-[#0ea5e9] transition-colors">
-                            {lead.name}
-                          </span>
+          <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-[var(--color-border)] bg-[var(--color-surface-hover)]">
+                  <th className="py-2.5 px-4 text-[11px] font-medium text-[var(--color-text-muted)]">Business</th>
+                  <th className="py-2.5 px-4 text-[11px] font-medium text-[var(--color-text-muted)]">Website</th>
+                  <th className="py-2.5 px-4 text-[11px] font-medium text-[var(--color-text-muted)]">Location</th>
+                  <th className="py-2.5 px-4 text-[11px] font-medium text-[var(--color-text-muted)] hidden xl:table-cell">Industry</th>
+                  <th className="py-2.5 px-4 text-[11px] font-medium text-[var(--color-text-muted)] text-right">Score</th>
+                  <th className="py-2.5 px-4 text-[11px] font-medium text-[var(--color-text-muted)] hidden xl:table-cell">Pipeline</th>
+                  <th className="py-2.5 px-4 text-[11px] font-medium text-[var(--color-text-muted)]">Status</th>
+                  <th className="py-2.5 px-4 text-[11px] font-medium text-[var(--color-text-muted)] text-right hidden md:table-cell">Activity</th>
+                  <th className="py-2.5 px-4 w-10" />
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((lead) => (
+                  <tr
+                    key={lead.id}
+                    onClick={() => navigate(`/project/${lead.id}`)}
+                    className="border-b border-[var(--color-border)] last:border-b-0 transition-colors duration-[var(--anim-fast)] hover:bg-[var(--color-surface-hover)] cursor-pointer group"
+                  >
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-3">
+                        <div className="size-8 rounded-[var(--radius-md)] bg-[var(--color-brand-subtle)] border border-[var(--color-brand-border)] flex items-center justify-center text-[11px] font-semibold text-[var(--color-brand)] shrink-0">
+                          {getInitials(lead.name)}
                         </div>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className="text-[12px] text-[var(--color-text-secondary)]">{lead.industry || '—'}</span>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className="text-[12px] text-[var(--color-text-secondary)] flex items-center gap-1.5">
-                          <MapPin size={11} className="text-[var(--color-text-muted)] shrink-0" />
-                          {lead.city || lead.country ? `${lead.city}${lead.city && lead.country ? ', ' : ''}${lead.country}` : '—'}
+                        <span className="text-[13px] font-medium text-[var(--color-text)] truncate max-w-[180px] group-hover:text-[var(--color-brand)] transition-colors">
+                          {lead.name}
                         </span>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        {lead.website ? (
-                          <a
-                            href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-[12px] text-[#0ea5e9] hover:underline flex items-center gap-1.5 truncate max-w-[160px]"
-                          >
-                            <Globe size={11} className="shrink-0" />
-                            <span className="truncate">{lead.website.replace(/^https?:\/\//, '')}</span>
-                          </a>
-                        ) : <span className="text-[12px] text-[var(--color-text-muted)]">—</span>}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        {lead.phone ? (
-                          <a
-                            href={`tel:${lead.phone}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-[12px] text-[var(--color-text-secondary)] flex items-center gap-1.5 hover:text-[#0ea5e9]"
-                          >
-                            <Phone size={11} className="text-[var(--color-text-muted)] shrink-0" />
-                            {lead.phone}
-                          </a>
-                        ) : <span className="text-[12px] text-[var(--color-text-muted)]">—</span>}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <ScoreBadge score={lead.rating} />
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <PipelineStage status={lead.status} />
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <StatusPill status={lead.status} />
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className="text-[11px] font-mono text-[var(--color-text-muted)]">{formatRelative(lead.updated_at)}</span>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); navigate(`/project/${lead.id}`); }}
-                          className="size-8 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center hover:bg-[color-mix(in_oklab,var(--color-surface-hover)_80%,#0ea5e9)]"
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      {lead.website ? (
+                        <a
+                          href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-[12px] text-[var(--color-brand)] hover:underline inline-flex items-center gap-1 truncate max-w-[160px]"
                         >
-                          <ArrowRight size={14} className="text-[#0ea5e9]" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </PremiumCard>
+                          <Globe size={11} className="shrink-0" />
+                          <span className="truncate">{lead.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}</span>
+                        </a>
+                      ) : (
+                        <span className="text-[12px] text-[var(--color-text-muted)]">&mdash;</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="text-[12px] text-[var(--color-text-secondary)] inline-flex items-center gap-1 truncate max-w-[140px]">
+                        <MapPin size={11} className="text-[var(--color-text-muted)] shrink-0" />
+                        {lead.city || lead.country
+                          ? `${lead.city || ''}${lead.city && lead.country ? ', ' : ''}${lead.country || ''}`
+                          : '\u2014'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 hidden xl:table-cell">
+                      {lead.industry ? (
+                        <Badge tone="neutral" className="text-[11px]">{lead.industry}</Badge>
+                      ) : (
+                        <span className="text-[12px] text-[var(--color-text-muted)]">&mdash;</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <ScoreCell score={lead.rating} />
+                    </td>
+                    <td className="py-3 px-4 hidden xl:table-cell">
+                      <PipelineDots status={lead.status} />
+                    </td>
+                    <td className="py-3 px-4">
+                      <StatusBadge status={lead.status} />
+                    </td>
+                    <td className="py-3 px-4 text-right hidden md:table-cell">
+                      <span className="text-[11px] font-mono text-[var(--color-text-muted)]">{formatRelative(lead.updated_at)}</span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); navigate(`/project/${lead.id}`); }}
+                        className="size-7 rounded-[var(--radius-md)] flex items-center justify-center text-[var(--color-text-muted)] opacity-0 group-hover:opacity-100 transition-all duration-[var(--anim-fast)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-brand)]"
+                      >
+                        <ArrowRight size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════
-         MOBILE LEAD CARDS
-      ════════════════════════════════════════════════════════════ */}
+      {/* ── Mobile cards ─────────────────────────────────────── */}
       <div className="block lg:hidden">
         {isLoading ? (
           <CardSkeletonMobile rows={4} />
         ) : error ? (
-          <PremiumCard variant="danger" innerClassName="p-6 text-center">
-            <p className="text-[13px] text-red-400 mb-4">Failed to load targets.</p>
-            <Button variant="outline" onClick={() => refetch()}>Retry</Button>
+          <PremiumCard innerClassName="p-6 text-center">
+            <p className="text-[13px] text-[var(--color-text-secondary)] mb-3">Failed to load leads.</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
           </PremiumCard>
         ) : filtered.length === 0 ? (
-          <PremiumCard innerClassName="p-8 text-center">
+          <PremiumCard innerClassName="p-8">
             <EmptyState
-              title="No targets match your filters"
+              title="No leads match your filters"
               message="Try adjusting your search or clear filters."
               icon={Search}
-              action={hasActiveFilters ? <Button variant="outline" onClick={clearFilters}>Clear Filters</Button> : undefined}
+              action={hasActiveFilters ? <Button variant="outline" size="sm" onClick={clearFilters}>Clear filters</Button> : undefined}
             />
           </PremiumCard>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-2">
             {filtered.map((lead) => (
-              <PremiumCard key={lead.id} innerClassName="p-5">
-                <div onClick={() => navigate(`/project/${lead.id}`)} className="cursor-pointer">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="size-10 rounded-lg bg-gradient-to-br from-[#0ea5e9]/20 to-[#8b5cf6]/20 border border-[#0ea5e9]/25 flex items-center justify-center text-[13px] font-bold text-[#0ea5e9] shrink-0">
-                        {getInitials(lead.name)}
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className="text-[15px] font-bold text-white truncate">{lead.name}</h3>
-                        <p className="text-[11px] font-mono text-[var(--color-text-secondary)] truncate">{lead.industry || lead.city || '—'}</p>
-                      </div>
+              <div
+                key={lead.id}
+                onClick={() => navigate(`/project/${lead.id}`)}
+                className="rounded-[var(--radius-lg)] bg-[var(--color-surface)] border border-[var(--color-border)] p-4 cursor-pointer transition-colors duration-[var(--anim-fast)] hover:border-[var(--color-border-strong)]"
+              >
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="size-9 rounded-[var(--radius-md)] bg-[var(--color-brand-subtle)] border border-[var(--color-brand-border)] flex items-center justify-center text-[12px] font-semibold text-[var(--color-brand)] shrink-0">
+                      {getInitials(lead.name)}
                     </div>
-                    <ScoreBadge score={lead.rating} />
+                    <div className="min-w-0">
+                      <p className="text-[14px] font-medium text-[var(--color-text)] truncate">{lead.name}</p>
+                      {(lead.city || lead.country) && (
+                        <p className="text-[11px] text-[var(--color-text-muted)] truncate">
+                          {lead.city || ''}{lead.city && lead.country ? ', ' : ''}{lead.country || ''}
+                        </p>
+                      )}
+                    </div>
                   </div>
-
-                  {lead.website && (
-                    <a
-                      href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="text-[12px] text-[#0ea5e9] hover:underline flex items-center gap-1.5 mb-3 truncate"
-                    >
-                      <Globe size={12} />
-                      {lead.website.replace(/^https?:\/\//, '')}
-                    </a>
-                  )}
-
-                  <div className="flex items-center justify-between mb-3">
-                    <StatusPill status={lead.status} />
-                    <span className="text-[10px] font-mono text-[var(--color-text-muted)]">{formatRelative(lead.updated_at)}</span>
-                  </div>
-
-                  <PipelineStage status={lead.status} />
+                  <ScoreCell score={lead.rating} />
                 </div>
-              </PremiumCard>
+
+                <div className="flex items-center justify-between gap-2 mt-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <StatusBadge status={lead.status} />
+                    {lead.industry && (
+                      <Badge tone="neutral" className="text-[10px] hidden sm:inline-flex">{lead.industry}</Badge>
+                    )}
+                  </div>
+                  <span className="text-[10px] font-mono text-[var(--color-text-muted)] shrink-0">
+                    {formatRelative(lead.updated_at)}
+                  </span>
+                </div>
+
+                {lead.website && (
+                  <a
+                    href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-[11px] text-[var(--color-brand)] hover:underline inline-flex items-center gap-1 mt-2.5 truncate max-w-full"
+                  >
+                    <Globe size={10} className="shrink-0" />
+                    <span className="truncate">{lead.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}</span>
+                  </a>
+                )}
+              </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════
-         PAGINATION
-      ════════════════════════════════════════════════════════════ */}
+      {/* ── Pagination ───────────────────────────────────────── */}
       {totalPages > 1 && !isLoading && !error && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
           <span className="text-[11px] font-mono text-[var(--color-text-muted)]">
-            Showing page {page} of {totalPages} &middot; {totalItems} total target{totalItems !== 1 ? 's' : ''}
+            Page {page} of {totalPages} &middot; {totalItems} leads
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <button
               onClick={() => handlePageChange(page - 1)}
               disabled={page <= 1}
               className={cn(
-                'size-9 rounded-[var(--radius-md)] flex items-center justify-center transition-all text-[12px]',
+                'size-8 rounded-[var(--radius-md)] flex items-center justify-center transition-colors duration-[var(--anim-fast)]',
                 page <= 1
-                  ? 'bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] opacity-40 cursor-not-allowed'
-                  : 'bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)] hover:bg-[color-mix(in_oklab,var(--color-surface-hover)_80%,#0ea5e9)] hover:text-[#0ea5e9]',
+                  ? 'text-[var(--color-text-muted)] opacity-40 cursor-not-allowed'
+                  : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]',
               )}
             >
-              <ChevronLeft size={16} />
+              <ChevronLeft size={15} />
             </button>
 
             {Array.from({ length: Math.min(totalPages, 7) }).map((_, i) => {
@@ -606,10 +593,10 @@ export function ProjectsPage() {
                   key={pageNum}
                   onClick={() => handlePageChange(pageNum)}
                   className={cn(
-                    'size-9 rounded-[var(--radius-md)] flex items-center justify-center transition-all text-[12px] font-mono font-semibold',
+                    'size-8 rounded-[var(--radius-md)] flex items-center justify-center transition-colors duration-[var(--anim-fast)] text-[12px] font-mono font-medium',
                     isActive
-                      ? 'bg-gradient-to-br from-[#0ea5e9] to-[#2563eb] text-white shadow-[0_0_12px_rgba(14,165,233,0.4)]'
-                      : 'bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)] hover:bg-[color-mix(in_oklab,var(--color-surface-hover)_80%,#0ea5e9)] hover:text-[#0ea5e9]',
+                      ? 'bg-[var(--color-brand)] text-white'
+                      : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]',
                   )}
                 >
                   {pageNum}
@@ -621,13 +608,13 @@ export function ProjectsPage() {
               onClick={() => handlePageChange(page + 1)}
               disabled={page >= totalPages}
               className={cn(
-                'size-9 rounded-[var(--radius-md)] flex items-center justify-center transition-all text-[12px]',
+                'size-8 rounded-[var(--radius-md)] flex items-center justify-center transition-colors duration-[var(--anim-fast)]',
                 page >= totalPages
-                  ? 'bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] opacity-40 cursor-not-allowed'
-                  : 'bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)] hover:bg-[color-mix(in_oklab,var(--color-surface-hover)_80%,#0ea5e9)] hover:text-[#0ea5e9]',
+                  ? 'text-[var(--color-text-muted)] opacity-40 cursor-not-allowed'
+                  : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]',
               )}
             >
-              <ChevronRight size={16} />
+              <ChevronRight size={15} />
             </button>
           </div>
         </div>
@@ -636,7 +623,9 @@ export function ProjectsPage() {
   );
 }
 
-/* ── Discovery Panel Sub-component ──────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════
+   DISCOVERY PANEL
+   ══════════════════════════════════════════════════════════════ */
 function DiscoveryPanel({
   discoveryForm,
   handleDiscoveryChange,
@@ -649,110 +638,96 @@ function DiscoveryPanel({
   discoveryMutation: { isPending: boolean; mutate: (data: LeadDiscoveryRequest) => void; error: Error | null; data?: { created: number; skipped_duplicates: number } | undefined };
 }) {
   return (
-    <PremiumCard variant="featured" innerClassName="relative overflow-hidden p-6 lg:p-8">
-      {/* Rotating RGB background accent */}
-      <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-[rgba(14,165,233,0.04)] blur-[60px] pointer-events-none animate-[lf-orbit_8s_linear_infinite]" />
-      <div className="absolute -bottom-20 -left-20 w-64 h-64 rounded-full bg-[rgba(139,92,246,0.04)] blur-[60px] pointer-events-none animate-[lf-orbit_12s_linear_infinite_reverse]" />
+    <PremiumCard innerClassName="p-5 lg:p-6">
+      <div className="flex items-center gap-3 mb-5">
+        <div className="size-9 rounded-[var(--radius-lg)] bg-[var(--color-brand-subtle)] border border-[var(--color-brand-border)] flex items-center justify-center">
+          <Search className="size-4 text-[var(--color-brand)]" />
+        </div>
+        <div>
+          <h2 className="text-[14px] font-semibold text-[var(--color-text)]">Discover Leads</h2>
+          <p className="text-[12px] text-[var(--color-text-muted)]">Search Google Maps for businesses to audit and convert</p>
+        </div>
+      </div>
 
-      <div className="relative z-10">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="size-11 rounded-[14px] bg-gradient-to-br from-[#0ea5e9] to-[#8b5cf6] flex items-center justify-center shadow-[0_0_20px_rgba(14,165,233,0.35)]">
-            <Search className="text-white size-5" />
+      <form onSubmit={handleDiscoverySubmit} className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div>
+            <Label htmlFor="business_type" className="mb-1.5 block">Business type</Label>
+            <Input
+              id="business_type"
+              name="business_type"
+              value={discoveryForm.business_type}
+              onChange={handleDiscoveryChange}
+              placeholder="e.g. Dental clinic"
+              required
+              className="h-9 text-[13px]"
+            />
           </div>
           <div>
-            <h2 className="text-[16px] font-bold text-white uppercase tracking-wider font-mono">AI Lead Discovery Console</h2>
-            <p className="text-[12px] text-[var(--color-text-secondary)] font-mono">Configure scan parameters to locate high-value targets on Google Maps</p>
+            <Label htmlFor="city" className="mb-1.5 block">City</Label>
+            <Input
+              id="city"
+              name="city"
+              value={discoveryForm.city}
+              onChange={handleDiscoveryChange}
+              placeholder="e.g. New York"
+              required
+              className="h-9 text-[13px]"
+            />
+          </div>
+          <div>
+            <Label htmlFor="country" className="mb-1.5 block">Country</Label>
+            <Input
+              id="country"
+              name="country"
+              value={discoveryForm.country}
+              onChange={handleDiscoveryChange}
+              placeholder="e.g. USA"
+              required
+              className="h-9 text-[13px]"
+            />
+          </div>
+          <div className="flex items-end">
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              fullWidth
+              disabled={discoveryMutation.isPending}
+              loading={discoveryMutation.isPending}
+            >
+              {discoveryMutation.isPending ? 'Searching...' : 'Search'}
+            </Button>
           </div>
         </div>
+      </form>
 
-        <form onSubmit={handleDiscoverySubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="md:col-span-1">
-              <Label htmlFor="business_type" className="text-[11px] uppercase font-mono tracking-wider text-[#0ea5e9] mb-2 block">Business Vertical</Label>
-              <Input
-                id="business_type"
-                name="business_type"
-                value={discoveryForm.business_type}
-                onChange={handleDiscoveryChange}
-                placeholder="e.g. Cyber Security, Healthcare"
-                required
-                className="bg-[#0f172a] border-slate-700 h-11 text-[13px]"
-              />
-            </div>
-            <div className="md:col-span-1">
-              <Label htmlFor="city" className="text-[11px] uppercase font-mono tracking-wider text-[#0ea5e9] mb-2 block">City / Region</Label>
-              <Input
-                id="city"
-                name="city"
-                value={discoveryForm.city}
-                onChange={handleDiscoveryChange}
-                placeholder="e.g. New York"
-                required
-                className="bg-[#0f172a] border-slate-700 h-11 text-[13px]"
-              />
-            </div>
-            <div className="md:col-span-1">
-              <Label htmlFor="country" className="text-[11px] uppercase font-mono tracking-wider text-[#0ea5e9] mb-2 block">Territory</Label>
-              <Input
-                id="country"
-                name="country"
-                value={discoveryForm.country}
-                onChange={handleDiscoveryChange}
-                placeholder="e.g. USA"
-                required
-                className="bg-[#0f172a] border-slate-700 h-11 text-[13px]"
-              />
-            </div>
-            <div className="md:col-span-1 flex items-end">
-              <Button
-                type="submit"
-                variant="neon"
-                size="lg"
-                fullWidth
-                disabled={discoveryMutation.isPending}
-                loading={discoveryMutation.isPending}
-                leftIcon={discoveryMutation.isPending ? undefined : <Zap size={15} />}
-              >
-                {discoveryMutation.isPending ? 'Scanning...' : 'Execute Scan'}
-              </Button>
-            </div>
-          </div>
-        </form>
+      {discoveryMutation.isPending && (
+        <div className="mt-4 p-3 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] border border-[var(--color-border)] flex items-center gap-3">
+          <div className="size-5 border-2 border-[var(--color-border)] border-t-[var(--color-brand)] rounded-full lf-spin" />
+          <p className="text-[12px] text-[var(--color-text-secondary)]">
+            Searching for {discoveryForm.business_type} in {discoveryForm.city}, {discoveryForm.country}...
+          </p>
+        </div>
+      )}
 
-        {/* Loading state */}
-        {discoveryMutation.isPending && (
-          <div className="mt-6 p-4 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] border border-[var(--color-border)] flex items-center gap-4">
-            <div className="relative size-8">
-              <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#0ea5e9] border-r-[#8b5cf6] animate-spin" style={{ animationDuration: '1s' }} />
-              <div className="absolute inset-1 rounded-full border border-transparent border-b-[#06b6d4] border-l-[#06b6d4] animate-spin" style={{ animationDuration: '1.5s', animationDirection: 'reverse' }} />
-            </div>
-            <div>
-              <p className="text-[13px] font-semibold text-white">Scan in progress</p>
-              <p className="text-[11px] font-mono text-[var(--color-text-muted)]">Searching Google Maps for {discoveryForm.business_type} in {discoveryForm.city}, {discoveryForm.country}...</p>
-            </div>
+      {discoveryMutation.data && (
+        <div className="mt-4 p-3 rounded-[var(--radius-md)] bg-emerald-500/5 border border-emerald-500/15 flex items-center gap-2.5">
+          <div className="size-5 rounded-full bg-emerald-500/10 flex items-center justify-center">
+            <span className="text-[10px] text-emerald-600 dark:text-emerald-400">&#10003;</span>
           </div>
-        )}
+          <p className="text-[12px] text-emerald-600 dark:text-emerald-400">
+            Discovered {discoveryMutation.data.created} lead(s), skipped {discoveryMutation.data.skipped_duplicates} duplicate(s).
+          </p>
+        </div>
+      )}
 
-        {/* Success state */}
-        {discoveryMutation.data && (
-          <div className="mt-6 p-4 rounded-[var(--radius-md)] bg-emerald-500/5 border border-emerald-500/20 flex items-center gap-3">
-            <div className="size-8 rounded-full bg-emerald-500/15 flex items-center justify-center">
-              <Sparkles size={16} className="text-emerald-400" />
-            </div>
-            <p className="text-[13px] text-emerald-400 font-semibold">
-              Discovered {discoveryMutation.data.created} lead(s), skipped {discoveryMutation.data.skipped_duplicates} duplicate(s).
-            </p>
-          </div>
-        )}
-
-        {/* Error state */}
-        {discoveryMutation.error && (
-          <div className="mt-6 p-4 rounded-[var(--radius-md)] bg-red-500/5 border border-red-500/20 flex items-center gap-3">
-            <AlertTriangle size={16} className="text-red-400 shrink-0" />
-            <p className="text-[13px] text-red-400">{getApiErrorMessage(discoveryMutation.error, 'Discovery failed')}</p>
-          </div>
-        )}
-      </div>
+      {discoveryMutation.error && (
+        <div className="mt-4 p-3 rounded-[var(--radius-md)] bg-red-500/5 border border-red-500/15 flex items-center gap-2.5">
+          <AlertTriangle size={14} className="text-red-500 shrink-0" />
+          <p className="text-[12px] text-red-600 dark:text-red-400">{getApiErrorMessage(discoveryMutation.error, 'Discovery failed')}</p>
+        </div>
+      )}
     </PremiumCard>
   );
 }
