@@ -17,6 +17,8 @@ import { useLocalStorage } from '@/hooks/hooks';
 
 const LoginPage = lazy(() => import('@/pages/LoginPage').then((m) => ({ default: m.LoginPage })));
 const RegisterPage = lazy(() => import('@/pages/RegisterPage').then((m) => ({ default: m.RegisterPage })));
+const ForgotPasswordPage = lazy(() => import('@/pages/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })));
+const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })));
 const DashboardPage = lazy(() => import('@/pages/DashboardPage').then((m) => ({ default: m.DashboardPage })));
 const ProjectsPage = lazy(() => import('@/pages/ProjectsPage').then((m) => ({ default: m.ProjectsPage })));
 const GenerationPage = lazy(() => import('@/pages/GenerationPage').then((m) => ({ default: m.GenerationPage })));
@@ -56,6 +58,8 @@ function DashboardShell() {
 const router = createBrowserRouter([
   { path: '/login', element: <PublicRoute><LoginPage /></PublicRoute> },
   { path: '/register', element: <PublicRoute><RegisterPage /></PublicRoute> },
+  { path: '/forgot-password', element: <PublicRoute><ForgotPasswordPage /></PublicRoute> },
+  { path: '/reset-password', element: <PublicRoute><ResetPasswordPage /></PublicRoute> },
   {
     path: '/',
     element: <DashboardShell />,
