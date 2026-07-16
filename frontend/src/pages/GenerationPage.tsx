@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, AlertTriangle, Camera, Search, Shield, Zap, Eye, Download, ExternalLink } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, AlertTriangle, Camera, Search, Shield, Zap, Eye, Download, ExternalLink, Globe } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
@@ -56,6 +56,7 @@ export function GenerationPage() {
   const queryClient = useQueryClient();
   const setHtmlContent = usePreviewStore((s) => s.setHtmlContent);
   const [selectedId, setSelectedId] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const { data: page, isLoading } = useQuery({
     queryKey: ['leads'],
@@ -63,6 +64,17 @@ export function GenerationPage() {
   });
 
   const leads = page?.items ?? [];
+  const filteredLeads = (() => {
+    if (!searchQuery.trim()) return leads;
+    const q = searchQuery.toLowerCase();
+    return leads.filter(
+      (l) =>
+        l.name.toLowerCase().includes(q) ||
+        l.industry.toLowerCase().includes(q) ||
+        (l.website && l.website.toLowerCase().includes(q)),
+    );
+  })();
+
   const selectedLead = leads.find((l) => l.id === selectedId) ?? null;
 
   const { data: leadDetail } = useQuery({
@@ -89,8 +101,8 @@ export function GenerationPage() {
     reset,
   } = useGenerationJob({
     leadId: selectedId,
-    onSuccess: (websiteId, htmlContent) => {
-      if (htmlContent) setHtmlContent(htmlContent);
+    onSuccess: (websiteId, html) => {
+      if (html) setHtmlContent(html);
       queryClient.invalidateQueries({ queryKey: ['lead', selectedId] });
       queryClient.invalidateQueries({ queryKey: ['generated-website-latest', selectedId] });
       toast.success('Website generated successfully');
@@ -100,8 +112,29 @@ export function GenerationPage() {
 
   const handleGenerate = () => generate();
   const handleReset = () => reset();
-
   const prereqsMet = PREREQS.every((p) => p.check(leadDetail ?? null));
+
+  /* ── Loading ──────────────────────────────────────────────── */
+  if (isLoading && leads.length === 0) {
+    return (
+      <div className="space-y-5 lf-fade-in">
+        <div className="h-8"><Skeleton variant="text" width={200} height={16} /></div>
+        <div className="h-10"><Skeleton variant="text" width={300} height={24} /></div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <div className="lg:col-span-2 space-y-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} variant="rounded" width="100%" height={200} delay={i * 60} />
+            ))}
+          </div>
+          <div className="space-y-4">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <Skeleton key={i} variant="rounded" width="100%" height={160} delay={i * 60} />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 lf-fade-in">
@@ -113,30 +146,21 @@ export function GenerationPage() {
         <ArrowLeft size={14} /> {selectedId ? 'Lead Workspace' : 'Leads'}
       </button>
 
-      {/* ── Page header ───────────────────────────────────────── */}
+      {/* ── Page header (Stitch style) ────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <p className="text-[13px] text-[var(--color-text-muted)] font-mono mb-1">Generation</p>
-          <h1 className="lf-display text-[var(--color-text)]">Redesign Studio</h1>
-          {selectedLead && (
-            <div className="flex items-center gap-2 mt-1.5">
-              <span className="text-[13px] font-medium text-[var(--color-text-secondary)]">{selectedLead.name}</span>
-              {selectedLead.website && (
-                <span className="text-[12px] text-[var(--color-text-muted)]">
-                  {'\u00B7'} {selectedLead.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
-                </span>
-              )}
-              <Badge tone={statusBadgeTone(selectedLead.status)} className="text-[10px]">{selectedLead.status.replace(/_/g, ' ')}</Badge>
-            </div>
-          )}
+          <h1 className="text-[24px] md:text-[28px] font-semibold tracking-tight text-[var(--color-text)]">Redesigns</h1>
+          <p className="text-[13px] text-[var(--color-text-secondary)] mt-0.5">
+            {selectedLead
+              ? `Generating website redesign for ${selectedLead.name}`
+              : 'Generate premium website redesigns from lead data'}
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          {isSuccess && jobResult?.website_id && (
-            <Button variant="primary" size="sm" onClick={() => navigate(`/preview/${jobResult.website_id}`)}>
-              <Eye size={14} className="mr-1" /> Open Preview
-            </Button>
-          )}
-        </div>
+        {isSuccess && jobResult?.website_id && (
+          <Button variant="primary" size="sm" onClick={() => navigate(`/preview/${jobResult.website_id}`)} rightIcon={<Eye size={13} />}>
+            Open Preview
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
@@ -144,22 +168,28 @@ export function GenerationPage() {
            MAIN COLUMN
            ══════════════════════════════════════════════════════ */}
         <div className="lg:col-span-2 space-y-5">
-          {/* ── Source section ─────────────────────────────────── */}
-          <SectionCard title="Source">
-            {isLoading ? (
-              <div className="space-y-3">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <Skeleton key={i} variant="rounded" width="100%" height={52} delay={i * 40} />
-                ))}
-              </div>
-            ) : leads.length > 0 ? (
-              <div className="space-y-1.5">
-                {leads.map((lead) => (
+          {/* ── Lead selector (Attio-style dense list) ───────── */}
+          <Panel title="Source">
+            {/* Search */}
+            <div className="relative mb-3">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search leads..."
+                className="w-full h-8 pl-8 pr-3 text-[12px] bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-brand-border)] transition-colors"
+              />
+            </div>
+
+            {filteredLeads.length > 0 ? (
+              <div className="space-y-0.5 max-h-[320px] overflow-y-auto lf-thin-scroll">
+                {filteredLeads.map((lead) => (
                   <button
                     key={lead.id}
                     onClick={() => { setSelectedId(lead.id); handleReset(); }}
                     className={cn(
-                      'w-full text-left px-3.5 py-2.5 rounded-[var(--radius-md)] transition-colors duration-[var(--anim-fast)] border group',
+                      'w-full text-left px-3 py-2.5 rounded-[var(--radius-md)] transition-colors duration-[var(--anim-fast)] border group',
                       selectedId === lead.id
                         ? 'bg-[var(--color-brand-subtle)] border-[var(--color-brand-border)]'
                         : 'bg-transparent border-transparent hover:bg-[var(--color-surface-hover)] hover:border-[var(--color-border)]',
@@ -172,60 +202,47 @@ export function GenerationPage() {
                       <Badge tone={statusBadgeTone(lead.status)} className="text-[10px] shrink-0">{lead.status.replace(/_/g, ' ')}</Badge>
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
-                      {lead.website && <span className="text-[11px] text-[var(--color-text-muted)] truncate">{lead.website.replace(/^https?:\/\//, '')}</span>}
+                      {lead.website && <span className="text-[11px] text-[var(--color-text-muted)] truncate flex items-center gap-1"><Globe size={10} />{lead.website.replace(/^https?:\/\//, '')}</span>}
                       {lead.rating != null && <span className="text-[11px] text-[var(--color-text-muted)] tabular-nums shrink-0">{lead.rating.toFixed(1)}</span>}
                     </div>
                   </button>
                 ))}
               </div>
             ) : (
-              <EmptyState title="No leads available" message="Discover and process leads first." />
+              <EmptyState title="No leads available" message="Discover and process leads first." className="py-8" />
             )}
-          </SectionCard>
+          </Panel>
 
-          {/* ── Direction / prompt section ─────────────────────── */}
+          {/* ── Direction / prerequisites (when lead selected) ── */}
           {selectedId && (
-            <SectionCard
-              title="Direction"
-              action={
-                prereqsMet ? (
-                  <Badge tone="success" className="text-[10px]">Prerequisites met</Badge>
-                ) : (
-                  <Badge tone="warning" className="text-[10px]">Missing prerequisites</Badge>
-                )
-              }
-            >
+            <Panel title="Direction">
               <div className="space-y-4">
                 {/* Prerequisites */}
-                <div className="space-y-2">
-                  <p className="text-[11px] text-[var(--color-text-muted)]">Prerequisites</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {PREREQS.map((p) => {
-                      const met = p.check(leadDetail ?? null);
-                      const Icon = p.icon;
-                      return (
-                        <div key={p.id} className={cn(
-                          'flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--radius-md)] border transition-colors',
-                          met
-                            ? 'bg-emerald-500/5 border-emerald-500/15'
-                            : 'bg-[var(--color-surface-hover)] border-[var(--color-border)]',
-                        )}>
-                          {met ? (
-                            <CheckCircle2 size={14} className="text-[var(--color-success)] shrink-0" />
-                          ) : (
-                            <Icon size={14} className="text-[var(--color-text-muted)] shrink-0" />
-                          )}
-                          <span className={cn('text-[12px]', met ? 'text-[var(--color-success)]' : 'text-[var(--color-text-muted)]')}>{p.label}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {PREREQS.map((p) => {
+                    const met = p.check(leadDetail ?? null);
+                    const Icon = p.icon;
+                    return (
+                      <div key={p.id} className={cn(
+                        'flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--radius-md)] border transition-colors',
+                        met
+                          ? 'bg-emerald-500/5 border-emerald-500/15'
+                          : 'bg-[var(--color-surface-hover)] border-[var(--color-border)]',
+                      )}>
+                        {met ? (
+                          <CheckCircle2 size={14} className="text-[var(--color-success)] shrink-0" />
+                        ) : (
+                          <Icon size={14} className="text-[var(--color-text-muted)] shrink-0" />
+                        )}
+                        <span className={cn('text-[12px]', met ? 'text-[var(--color-success)]' : 'text-[var(--color-text-muted)]')}>{p.label}</span>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Business context */}
                 {leadDetail && (
                   <div className="pt-3 border-t border-[var(--color-border)]">
-                    <p className="text-[11px] text-[var(--color-text-muted)] mb-2">Business context</p>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       <MiniInfo label="Name" value={leadDetail.name} />
                       <MiniInfo label="Industry" value={leadDetail.industry} />
@@ -249,53 +266,56 @@ export function GenerationPage() {
                   </div>
                 )}
               </div>
-            </SectionCard>
+            </Panel>
           )}
 
-          {/* ── Generation / job progress section ──────────────── */}
+          {/* ── Generation / job progress ─────────────────────── */}
           {selectedId && (
-            <SectionCard title="Generation">
-              {/* Idle state */}
-              {!isRunning && !isSuccess && !isError && (
-                <div className="space-y-4">
-                  {prereqsMet ? (
-                    <div className="flex flex-col items-center py-8 text-center">
-                      <div className="size-14 rounded-full bg-[var(--color-brand-subtle)] border border-[var(--color-brand-border)] flex items-center justify-center mb-4">
-                        <Zap className="size-6 text-[var(--color-brand)]" />
-                      </div>
-                      <p className="text-[14px] font-medium text-[var(--color-text)] mb-1">Ready to generate</p>
-                      <p className="text-[12px] text-[var(--color-text-muted)] mb-5 max-w-sm">
-                        All prerequisites are met. Start the AI generation to create a premium website redesign.
-                      </p>
-                      <Button variant="primary" size="md" onClick={handleGenerate} leftIcon={<Zap size={15} />}>
-                        Generate Redesign
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center py-8 text-center">
-                      <div className="size-14 rounded-full bg-[var(--color-surface-hover)] border border-[var(--color-border)] flex items-center justify-center mb-4">
-                        <AlertTriangle className="size-6 text-[var(--color-text-muted)]" />
-                      </div>
-                      <p className="text-[14px] font-medium text-[var(--color-text)] mb-1">Prerequisites required</p>
-                      <p className="text-[12px] text-[var(--color-text-muted)] max-w-sm">
-                        Complete the screenshot, analysis, and audit steps before generating a redesign.
-                      </p>
-                    </div>
-                  )}
+            <Panel title="Generation">
+              {/* Idle: prerequisites not met */}
+              {!isRunning && !isSuccess && !isError && !prereqsMet && (
+                <div className="flex flex-col items-center py-8 text-center">
+                  <div className="size-12 rounded-full bg-[var(--color-surface-hover)] border border-[var(--color-border)] flex items-center justify-center mb-3">
+                    <AlertTriangle className="size-5 text-[var(--color-text-muted)]" />
+                  </div>
+                  <p className="text-[13px] font-medium text-[var(--color-text)] mb-1">Prerequisites required</p>
+                  <p className="text-[12px] text-[var(--color-text-muted)] max-w-sm">
+                    Complete the screenshot, analysis, and audit steps before generating a redesign.
+                  </p>
                 </div>
               )}
 
-              {/* Running state */}
+              {/* Idle: ready to generate */}
+              {!isRunning && !isSuccess && !isError && prereqsMet && (
+                <div className="flex flex-col items-center py-8 text-center">
+                  <div className="size-12 rounded-full bg-[var(--color-brand-subtle)] border border-[var(--color-brand-border)] flex items-center justify-center mb-3">
+                    <Zap className="size-5 text-[var(--color-brand)]" />
+                  </div>
+                  <p className="text-[13px] font-medium text-[var(--color-text)] mb-1">Ready to generate</p>
+                  <p className="text-[12px] text-[var(--color-text-muted)] mb-5 max-w-sm">
+                    All prerequisites are met. Start the AI generation to create a premium website redesign.
+                  </p>
+                  <Button variant="primary" size="md" onClick={handleGenerate} leftIcon={<Zap size={14} />}>
+                    Generate Redesign
+                  </Button>
+                </div>
+              )}
+
+              {/* Running — Stitch-style signal progress */}
               {isRunning && (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3 p-4 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] border border-[var(--color-border)]">
-                    <div className="size-5 border-2 border-[var(--color-border)] border-t-[var(--color-brand)] rounded-full lf-spin shrink-0" />
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 p-3 rounded-[var(--radius-md)] bg-[var(--color-brand-subtle)] border border-[var(--color-brand-border)]">
+                    <div className="size-4 border-2 border-[var(--color-brand-border)] border-t-[var(--color-brand)] rounded-full animate-spin shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-medium text-[var(--color-text)]">Generating website</p>
-                      <p className="text-[12px] text-[var(--color-text-muted)] truncate">
+                      <p className="text-[11px] text-[var(--color-text-muted)] truncate font-mono">
                         {jobResult ? friendlyProgress(jobResult.progress) : 'Queuing job\u2026'}
                       </p>
                     </div>
+                  </div>
+                  {/* Signal progress bar */}
+                  <div className="relative w-full h-[2px] bg-[var(--color-border)] rounded-full overflow-hidden">
+                    <div className="absolute top-0 left-0 h-full bg-[var(--color-brand)] rounded-full animate-pulse" style={{ width: '60%' }} />
                   </div>
                   <p className="text-[11px] text-[var(--color-text-muted)]">
                     Generation takes 60\u2013180 s. You can safely leave this page.
@@ -303,12 +323,12 @@ export function GenerationPage() {
                 </div>
               )}
 
-              {/* Success state */}
+              {/* Success */}
               {isSuccess && (
-                <div className="space-y-4">
-                  <div className="p-4 rounded-[var(--radius-md)] bg-emerald-500/5 border border-emerald-500/15">
-                    <div className="flex items-start gap-3">
-                      <CheckCircle2 size={16} className="text-[var(--color-success)] shrink-0 mt-0.5" />
+                <div className="space-y-3">
+                  <div className="p-3 rounded-[var(--radius-md)] bg-emerald-500/5 border border-emerald-500/15">
+                    <div className="flex items-start gap-2.5">
+                      <CheckCircle2 size={15} className="text-[var(--color-success)] shrink-0 mt-0.5" />
                       <div>
                         <p className="text-[13px] font-medium text-[var(--color-text)]">Generation complete</p>
                         <p className="text-[12px] text-[var(--color-text-muted)] mt-0.5">Website generated successfully</p>
@@ -316,12 +336,12 @@ export function GenerationPage() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button variant="primary" size="sm" onClick={() => { if (jobResult?.website_id) navigate(`/preview/${jobResult.website_id}`); }}>
-                      <Eye size={14} className="mr-1.5" /> Open Preview
+                    <Button variant="primary" size="sm" onClick={() => { if (jobResult?.website_id) navigate(`/preview/${jobResult.website_id}`); }} leftIcon={<Eye size={13} />}>
+                      Open Preview
                     </Button>
                     {jobResult?.package_id && jobResult?.website_id && (
-                      <Button variant="outline" size="sm" onClick={() => navigate(`/deployment/${jobResult.website_id}`)}>
-                        <Download size={14} className="mr-1.5" /> Open Package
+                      <Button variant="outline" size="sm" onClick={() => navigate(`/deployment/${jobResult.website_id}`)} leftIcon={<Download size={13} />}>
+                        Open Package
                       </Button>
                     )}
                     <Button variant="ghost" size="sm" onClick={() => navigate(selectedId ? `/project/${selectedId}` : '/projects')}>
@@ -331,12 +351,12 @@ export function GenerationPage() {
                 </div>
               )}
 
-              {/* Error state */}
+              {/* Error */}
               {isError && !isRunning && (
-                <div className="space-y-4">
-                  <div className="p-4 rounded-[var(--radius-md)] bg-red-500/5 border border-red-500/15">
-                    <div className="flex items-start gap-3">
-                      <AlertTriangle size={16} className="text-red-500 shrink-0 mt-0.5" />
+                <div className="space-y-3">
+                  <div className="p-3 rounded-[var(--radius-md)] bg-red-500/5 border border-red-500/15">
+                    <div className="flex items-start gap-2.5">
+                      <AlertTriangle size={15} className="text-red-500 shrink-0 mt-0.5" />
                       <div>
                         <p className="text-[13px] font-medium text-red-600 dark:text-red-400">Generation failed</p>
                         <p className="text-[12px] text-[var(--color-text-muted)] mt-0.5">{jobError || jobResult?.error || 'An unexpected error occurred.'}</p>
@@ -353,55 +373,61 @@ export function GenerationPage() {
                   </div>
                 </div>
               )}
-            </SectionCard>
+            </Panel>
           )}
 
           {/* ── Completed website result ───────────────────────── */}
           {isSuccess && existingWebsite && (
-            <SectionCard title="Generated Website">
-              <div className="space-y-4">
-                <div className="p-4 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] border border-[var(--color-border)]">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[14px] font-medium text-[var(--color-text)]">{existingWebsite.project_name || 'Generated Website'}</p>
-                      <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5">ID: {existingWebsite.id}</p>
-                    </div>
-                    <Badge tone="success" className="text-[10px] shrink-0">{existingWebsite.status}</Badge>
-                  </div>
+            <Panel title="Generated Website">
+              <div className="flex items-start justify-between gap-3 p-3 rounded-[var(--radius-md)] bg-[var(--color-surface-hover)] border border-[var(--color-border)]">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-medium text-[var(--color-text)] truncate">{existingWebsite.project_name || 'Generated Website'}</p>
+                  <p className="text-[11px] text-[var(--color-text-muted)] font-mono mt-0.5 truncate">ID: {existingWebsite.id}</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="primary" size="sm" onClick={() => navigate(`/preview/${existingWebsite.id}`)}>
-                    <Eye size={14} className="mr-1.5" /> Open Preview
-                  </Button>
-                  {existingWebsite.package_id && (
-                    <Button variant="outline" size="sm" onClick={() => navigate(`/deployment/${existingWebsite.id}`)}>
-                      <Download size={14} className="mr-1.5" /> Open Package
-                    </Button>
-                  )}
-                  {leadDetail?.website && (
-                    <a
-                      href={leadDetail.website.startsWith('http') ? leadDetail.website : `https://${leadDetail.website}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[12px] text-[var(--color-brand)] hover:underline ml-auto"
-                    >
-                      <ExternalLink size={12} /> Visit source
-                    </a>
-                  )}
-                </div>
+                <Badge tone="success" className="text-[10px] shrink-0">{existingWebsite.status}</Badge>
               </div>
-            </SectionCard>
+              <div className="flex items-center gap-2 mt-3">
+                <Button variant="primary" size="sm" onClick={() => navigate(`/preview/${existingWebsite.id}`)} leftIcon={<Eye size={13} />}>
+                  Open Preview
+                </Button>
+                {existingWebsite.package_id && (
+                  <Button variant="outline" size="sm" onClick={() => navigate(`/deployment/${existingWebsite.id}`)} leftIcon={<Download size={13} />}>
+                    Open Package
+                  </Button>
+                )}
+                {leadDetail?.website && (
+                  <a
+                    href={leadDetail.website.startsWith('http') ? leadDetail.website : `https://${leadDetail.website}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[12px] text-[var(--color-brand)] hover:underline ml-auto"
+                  >
+                    <ExternalLink size={12} /> Visit source
+                  </a>
+                )}
+              </div>
+            </Panel>
           )}
         </div>
 
         {/* ═══════════════════════════════════════════════════════
-           SIDEBAR
+           SIDEBAR (workflow steps + context)
            ══════════════════════════════════════════════════════ */}
         <div className="space-y-4 lg:sticky lg:top-24">
+          {/* Workflow steps */}
+          <Panel title="Workflow">
+            <div className="space-y-1">
+              <WorkflowStep label="Select lead" done={!!selectedId} active={!selectedId} />
+              <WorkflowStep label="Prerequisites" done={prereqsMet && !!selectedId} active={!!selectedId && !prereqsMet} />
+              <WorkflowStep label="Generate" done={isSuccess} active={isRunning} />
+              <WorkflowStep label="Preview" done={false} active={isSuccess} />
+            </div>
+          </Panel>
+
           {/* Context */}
           {selectedLead && (
-            <SectionCard title="Context">
-              <div className="space-y-3">
+            <Panel title="Context">
+              <div className="space-y-2.5">
                 <InfoRow label="Business" value={selectedLead.name} />
                 <InfoRow label="Industry" value={selectedLead.industry} />
                 <InfoRow label="Location" value={selectedLead.city || selectedLead.country || null} />
@@ -409,13 +435,13 @@ export function GenerationPage() {
                 <InfoRow label="Status" value={<Badge tone={statusBadgeTone(selectedLead.status)} className="text-[10px]">{selectedLead.status.replace(/_/g, ' ')}</Badge>} />
                 <InfoRow label="Audit Score" value={selectedLead.rating != null ? `${selectedLead.rating.toFixed(1)}` : null} />
               </div>
-            </SectionCard>
+            </Panel>
           )}
 
           {/* Job details */}
           {jobResult && (
-            <SectionCard title="Job">
-              <div className="space-y-3">
+            <Panel title="Job">
+              <div className="space-y-2.5">
                 <InfoRow label="Status" value={
                   <Badge tone={isSuccess ? 'success' : isError ? 'danger' : isRunning ? 'info' : 'muted'} className="text-[10px]">
                     {isSuccess ? 'Completed' : isError ? 'Failed' : isRunning ? 'Running' : 'Pending'}
@@ -429,18 +455,8 @@ export function GenerationPage() {
                   <InfoRow label="Website ID" value={jobResult.website_id.slice(0, 8) + '\u2026'} mono />
                 )}
               </div>
-            </SectionCard>
+            </Panel>
           )}
-
-          {/* Workflow steps */}
-          <SectionCard title="Workflow">
-            <div className="space-y-1.5">
-              <WorkflowStep label="Select lead" done={!!selectedId} active={!selectedId} />
-              <WorkflowStep label="Prerequisites" done={prereqsMet && !!selectedId} active={!!selectedId && !prereqsMet} />
-              <WorkflowStep label="Generate" done={isSuccess} active={isRunning} />
-              <WorkflowStep label="Preview" done={false} active={isSuccess} />
-            </div>
-          </SectionCard>
         </div>
       </div>
     </div>
@@ -451,14 +467,13 @@ export function GenerationPage() {
    SUB-COMPONENTS
    ══════════════════════════════════════════════════════════════ */
 
-function SectionCard({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
+function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-[var(--radius-lg)] bg-[var(--color-surface)] border border-[var(--color-border)]">
-      <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--color-border)]">
-        <h3 className="text-[13px] font-semibold text-[var(--color-text)]">{title}</h3>
-        {action}
+    <div className="rounded-[var(--radius-xl)] bg-[var(--color-surface)] border border-[var(--color-border)] transition-colors hover:border-[var(--color-border-strong)]">
+      <div className="px-4 py-3 border-b border-[var(--color-border)]">
+        <h3 className="text-[12px] font-bold text-[var(--color-text)] font-mono uppercase tracking-wider">{title}</h3>
       </div>
-      <div className="p-5">{children}</div>
+      <div className="p-4">{children}</div>
     </div>
   );
 }
@@ -499,7 +514,7 @@ function WorkflowStep({ label, done, active }: { label: string; done: boolean; a
         done ? 'bg-[var(--color-success)]' : active ? 'bg-[var(--color-brand)]' : 'bg-[var(--color-surface-hover)] border border-[var(--color-border)]',
       )}>
         {done && <CheckCircle2 size={12} className="text-white" />}
-        {active && <div className="size-1.5 rounded-full bg-white lf-pulse" />}
+        {active && <div className="size-1.5 rounded-full bg-white animate-pulse" />}
       </div>
       <span className={cn('text-[12px]', done ? 'text-[var(--color-text)]' : active ? 'text-[var(--color-text)] font-medium' : 'text-[var(--color-text-muted)]')}>
         {label}
